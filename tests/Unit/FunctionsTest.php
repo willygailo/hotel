@@ -111,4 +111,38 @@ class FunctionsTest extends TestCase
         $err3 = validatePersonName('Willy<script>', 'Gailo');
         $this->assertStringContainsString('valid letters', $err3);
     }
+
+    public function testDatesOverlap()
+    {
+        // Existing booking: Nov 15 to Nov 18
+        $bookedIn = '2026-11-15';
+        $bookedOut = '2026-11-18';
+
+        // 1. Exact match overlaps
+        $this->assertTrue(datesOverlap('2026-11-15', '2026-11-18', $bookedIn, $bookedOut));
+
+        // 2. Partial overlap inside
+        $this->assertTrue(datesOverlap('2026-11-16', '2026-11-17', $bookedIn, $bookedOut));
+
+        // 3. Partial overlap starting earlier and ending inside
+        $this->assertTrue(datesOverlap('2026-11-14', '2026-11-16', $bookedIn, $bookedOut));
+
+        // 4. Partial overlap starting inside and ending later
+        $this->assertTrue(datesOverlap('2026-11-17', '2026-11-19', $bookedIn, $bookedOut));
+
+        // 5. Total enclosure (surrounding)
+        $this->assertTrue(datesOverlap('2026-11-10', '2026-11-20', $bookedIn, $bookedOut));
+
+        // 6. Adjacent non-overlap: Guest leaves on Nov 15 morning, new guest arrives Nov 15 afternoon
+        $this->assertFalse(datesOverlap('2026-11-10', '2026-11-15', $bookedIn, $bookedOut));
+
+        // 7. Adjacent non-overlap: Guest leaves on Nov 18 morning, new guest arrives Nov 18 afternoon
+        $this->assertFalse(datesOverlap('2026-11-18', '2026-11-20', $bookedIn, $bookedOut));
+
+        // 8. Completely separate before
+        $this->assertFalse(datesOverlap('2026-11-01', '2026-11-05', $bookedIn, $bookedOut));
+
+        // 9. Completely separate after
+        $this->assertFalse(datesOverlap('2026-11-25', '2026-11-28', $bookedIn, $bookedOut));
+    }
 }

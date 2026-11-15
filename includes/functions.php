@@ -42,19 +42,141 @@ function calculateNights(string $checkIn, string $checkOut): int {
     return max(1, (int) $d1->diff($d2)->days);
 }
 
+// ---- Check date range overlap (standard half-open interval [in, out)) ----
+function datesOverlap(string $in1, string $out1, string $in2, string $out2): bool {
+    return ($in1 < $out2 && $out1 > $in2);
+}
+
+// ---- Find specific conflicting booking (if any) ----
+function findConflictingBooking(int $roomId, string $checkIn, string $checkOut, ?int $excludeBookingId = null): ?array {
+    $sql = "SELECT b.id, b.booking_code, b.room_id, b.check_in, b.check_out, b.status, r.name as room_name, r.room_number
+            FROM bookings b
+            JOIN rooms r ON b.room_id = r.id
+            WHERE b.room_id = ? 
+              AND b.status NOT IN ('cancelled','rejected')
+              AND b.check_in < ? AND b.check_out > ?";
+    $params = [$roomId, $checkOut, $checkIn];
+    if ($excludeBookingId) {
+        $sql .= " AND b.id != ?";
+        $params[] = $excludeBookingId;
+    }
+    $sql .= " ORDER BY b.check_in ASC LIMIT 1";
+    return dbRow($sql, $params);
+}
+
 // ---- Get room availability ----
 function isRoomAvailable(int $roomId, string $checkIn, string $checkOut, ?int $excludeBookingId = null): bool {
-    $sql = "SELECT COUNT(*) as cnt FROM bookings 
-            WHERE room_id = ? 
-              AND status NOT IN ('cancelled','rejected')
-              AND check_in < ? AND check_out > ?";
-    $params = [$roomId, $checkOut, $checkIn];
+    return findConflictingBooking($roomId, $checkIn, $checkOut, $excludeBookingId) === null;
+}
+
+// ---- Get active future/current bookings for a specific room ----
+function getRoomActiveBookings(int $roomId, ?int $excludeBookingId = null): array {
+    $sql = "SELECT id, booking_code, check_in, check_out, status, nights
+            FROM bookings
+            WHERE room_id = ?
+              AND status NOT IN ('cancelled', 'rejected')
+              AND check_out >= CURDATE()
+            ORDER BY check_in ASC";
+    $params = [$roomId];
     if ($excludeBookingId) {
         $sql .= " AND id != ?";
         $params[] = $excludeBookingId;
     }
-    $row = dbRow($sql, $params);
-    return ($row['cnt'] ?? 0) === 0;
+    $rows = dbRows($sql, $params);
+    foreach ($rows as &$r) {
+        $r['display_dates'] = formatDate($r['check_in'], 'M d, Y') . ' — ' . formatDate($r['check_out'], 'M d, Y');
+    }
+    unset($r);
+    return $rows;
+}
+
+// ---- Get active bookings map for all rooms (indexed by room_id) ----
+function getAllRoomsActiveBookingsMap(): array {
+    $rows = dbRows("SELECT b.id, b.room_id, b.booking_code, b.check_in, b.check_out, b.status, b.nights
+                    FROM bookings b
+                    WHERE b.status NOT IN ('cancelled', 'rejected')
+                      AND b.check_out >= CURDATE()
+                    ORDER BY b.check_in ASC");
+    $map = [];
+    foreach ($rows as $r) {
+        $rid = (int)$r['room_id'];
+        if (!isset($map[$rid])) {
+            $map[$rid] = [];
+        }
+        $r['display_dates'] = formatDate($r['check_in'], 'M d, Y') . ' — ' . formatDate($r['check_out'], 'M d, Y');
+        $map[$rid][] = $r;
+    }
+    return $map;
+}
+
+// ---- Determine real-time occupancy and booking status of a room ----
+function getRoomOccupancyStatus(int $roomId, string $roomBaseStatus = 'available', ?array $preloadedBookings = null): array {
+    if ($roomBaseStatus === 'maintenance') {
+        return [
+            'state'        => 'maintenance',
+            'badge_class'  => 'badge-warning',
+            'label'        => 'Maintenance',
+            'subtitle'     => 'Temporarily closed for maintenance',
+            'tag_html'     => '<span class="badge badge-warning"><i class="fa-solid fa-wrench"></i> Maintenance</span>',
+            'is_bookable'  => false,
+            'active_now'   => false,
+            'next_booking' => null,
+            'bookings'     => [],
+        ];
+    }
+
+    $activeBookings = $preloadedBookings !== null ? $preloadedBookings : getRoomActiveBookings($roomId);
+    $today = date('Y-m-d');
+
+    // 1. Is it currently occupied today? (check_in <= today < check_out)
+    foreach ($activeBookings as $b) {
+        if ($b['check_in'] <= $today && $b['check_out'] > $today) {
+            $untilDate = formatDate($b['check_out'], 'M d, Y');
+            return [
+                'state'         => 'occupied',
+                'badge_class'   => 'badge-danger',
+                'label'         => 'Occupied / Booked',
+                'subtitle'      => 'Occupied until ' . $untilDate,
+                'tag_html'      => '<span class="badge badge-danger" title="Currently occupied until ' . $untilDate . '"><i class="fa-solid fa-bed"></i> Booked until ' . formatDate($b['check_out'], 'M d') . '</span>',
+                'is_bookable'   => true, // Can still be reserved for future dates after check_out
+                'active_now'    => true,
+                'current_until' => $b['check_out'],
+                'next_booking'  => $b,
+                'bookings'      => $activeBookings,
+            ];
+        }
+    }
+
+    // 2. Does it have upcoming reservations?
+    if (!empty($activeBookings)) {
+        $next = $activeBookings[0];
+        $fromDate = formatDate($next['check_in'], 'M d');
+        $toDate   = formatDate($next['check_out'], 'M d');
+        return [
+            'state'        => 'reserved',
+            'badge_class'  => 'badge-warning',
+            'label'        => 'Reserved (' . $fromDate . ' - ' . $toDate . ')',
+            'subtitle'     => 'Reserved: ' . $fromDate . ' - ' . $toDate . ' · Other dates open',
+            'tag_html'     => '<span class="badge" style="background:rgba(234,179,8,0.22);color:#fde047;border:1px solid rgba(234,179,8,0.4);" title="Reserved ' . $fromDate . ' - ' . $toDate . '"><i class="fa-solid fa-calendar-check"></i> Booked ' . $fromDate . '–' . $toDate . '</span>',
+            'is_bookable'  => true,
+            'active_now'   => false,
+            'next_booking' => $next,
+            'bookings'     => $activeBookings,
+        ];
+    }
+
+    // 3. Fully available now
+    return [
+        'state'        => 'available',
+        'badge_class'  => 'badge-success',
+        'label'        => 'Available',
+        'subtitle'     => 'Ready for instant check-in',
+        'tag_html'     => '<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> Available</span>',
+        'is_bookable'  => true,
+        'active_now'   => false,
+        'next_booking' => null,
+        'bookings'     => [],
+    ];
 }
 
 // ---- Build status badge HTML ----

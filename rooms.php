@@ -38,6 +38,7 @@ if (!empty($searchQuery)) {
 $sql .= " ORDER BY r.price_per_night ASC";
 $rooms = dbRows($sql, $params);
 $roomTypes = dbRows("SELECT * FROM room_types");
+$allBookingsMap = getAllRoomsActiveBookingsMap();
 $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
 ?>
 <!DOCTYPE html>
@@ -139,14 +140,13 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
       <?php else: ?>
         <?php foreach ($rooms as $r): 
           $amenities = safeJson($r['amenities']);
+          $occ = getRoomOccupancyStatus((int)$r['id'], $r['status'], $allBookingsMap[(int)$r['id']] ?? []);
         ?>
           <div class="room-card">
             <div class="room-card-img">
               <img src="<?= roomThumbUrl($r['thumbnail']) ?>" loading="lazy" decoding="async" onerror="this.src='assets/images/rooms/default-room.jpg'">
               <div class="room-card-badge">
-                <span class="badge badge-<?= $r['status'] === 'available' ? 'success' : 'warning' ?>">
-                  <?= ucfirst($r['status']) ?>
-                </span>
+                <?= $occ['tag_html'] ?>
               </div>
             </div>
             <div class="room-card-body">
@@ -154,8 +154,18 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
                 <h3 class="room-card-name"><?= h($r['name']) ?></h3>
                 <span class="badge badge-gold"><?= h($r['type_name']) ?></span>
               </div>
-              <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">Floor <?= $r['floor'] ?> · Up to <?= $r['capacity'] ?> Pax</p>
+              <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;">Floor <?= $r['floor'] ?> · Up to <?= $r['capacity'] ?> Pax</p>
               
+              <?php if ($occ['state'] === 'occupied'): ?>
+                <div style="font-size:0.75rem;color:#f87171;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:5px 9px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                  <i class="fa-solid fa-bed"></i> Currently occupied until <?= formatDate($occ['current_until']) ?>. Advance bookings open!
+                </div>
+              <?php elseif ($occ['state'] === 'reserved'): ?>
+                <div style="font-size:0.75rem;color:#fbbf24;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:5px 9px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                  <i class="fa-solid fa-calendar-check"></i> Booked <?= formatDate($occ['next_booking']['check_in'], 'M d') ?> – <?= formatDate($occ['next_booking']['check_out'], 'M d') ?>. Other dates available!
+                </div>
+              <?php endif; ?>
+
               <div class="room-card-amenities">
                 <?php foreach (array_slice($amenities, 0, 4) as $am): ?>
                   <span class="room-amenity-tag"><i class="fa-solid fa-check" style="color:var(--gold);font-size:0.6rem;"></i> <?= h($am) ?></span>

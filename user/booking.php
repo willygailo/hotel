@@ -24,7 +24,13 @@ if (!$kyc['is_verified']) {
 }
 
 $selectedRoomId = (int)($_GET['room_id'] ?? 0);
-$rooms = dbRows("SELECT * FROM rooms WHERE status = 'available' ORDER BY price_per_night ASC");
+$rooms = dbRows("SELECT * FROM rooms WHERE status != 'maintenance' ORDER BY price_per_night ASC");
+$allBookingsMap = getAllRoomsActiveBookingsMap();
+
+$roomOccupancyMap = [];
+foreach ($rooms as $rm) {
+    $roomOccupancyMap[$rm['id']] = getRoomOccupancyStatus((int)$rm['id'], $rm['status'], $allBookingsMap[(int)$rm['id']] ?? []);
+}
 
 // Payment Channel Settings
 $mayaName   = getSetting('hotel_maya_name', 'WILLY GAILO');
@@ -63,36 +69,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Please select a room, check-in, and check-out date.';
         } elseif ($checkIn >= $checkOut) {
             $error = 'The check-out date must be later than the check-in date.';
-        } elseif (!isRoomAvailable($roomId, $checkIn, $checkOut)) {
-            $error = 'This room is already reserved for those selected dates.';
+        } elseif ($checkIn < date('Y-m-d')) {
+            $error = 'Check-in date cannot be in the past.';
         } else {
-            $refNum    = trim($_POST['reference_number'] ?? '');
-            $notes     = trim($_POST['payment_notes'] ?? '');
-            $proofFile = null;
+            $conflict = findConflictingBooking($roomId, $checkIn, $checkOut);
+            if ($conflict) {
+                $error = 'Duplicate Booking Prevented: Room "' . $conflict['room_name'] . '" is already reserved from ' . formatDate($conflict['check_in']) . ' to ' . formatDate($conflict['check_out']) . ' (Booking #' . $conflict['booking_code'] . '). Please select other dates.';
+            } else {
+                $refNum    = trim($_POST['reference_number'] ?? '');
+                $notes     = trim($_POST['payment_notes'] ?? '');
+                $proofFile = null;
 
-            if ($actionMode === 'book_and_pay') {
-                if (empty($refNum)) {
-                    $error = 'Please enter your payment reference number / transaction ID.';
-                } elseif (empty($_FILES['proof']['name'])) {
-                    $error = 'Please upload a screenshot or photo of your payment receipt.';
-                } else {
-                    $proofFile = uploadFile($_FILES['proof'], 'proofs', ALLOWED_IMAGE_TYPES, MAX_UPLOAD_SIZE, $bookProofErr);
-                    if (!$proofFile) {
-                        $error = $bookProofErr ?: 'Invalid image type or the receipt file exceeds limit (Max 15MB JPG, PNG, and WebP).';
+                if ($actionMode === 'book_and_pay') {
+                    if (empty($refNum)) {
+                        $error = 'Please enter your payment reference number / transaction ID.';
+                    } elseif (empty($_FILES['proof']['name'])) {
+                        $error = 'Please upload a screenshot or photo of your payment receipt.';
+                    } else {
+                        $proofFile = uploadFile($_FILES['proof'], 'proofs', ALLOWED_IMAGE_TYPES, MAX_UPLOAD_SIZE, $bookProofErr);
+                        if (!$proofFile) {
+                            $error = $bookProofErr ?: 'Invalid image type or the receipt file exceeds limit (Max 15MB JPG, PNG, and WebP).';
+                        }
                     }
                 }
-            }
 
-            if (empty($error)) {
-                $bookingId = 0;
-                getDB()->beginTransaction();
-                try {
-                    $room = dbRow("SELECT * FROM rooms WHERE id = ? FOR UPDATE", [$roomId]);
+                if (empty($error)) {
+                    $bookingId = 0;
+                    getDB()->beginTransaction();
+                    try {
+                        $room = dbRow("SELECT * FROM rooms WHERE id = ? FOR UPDATE", [$roomId]);
+                        $conflictLock = findConflictingBooking($roomId, $checkIn, $checkOut);
 
-                    if (!$room || !isRoomAvailable($roomId, $checkIn, $checkOut)) {
-                        getDB()->rollBack();
-                        $error = 'This room was just booked for those dates. Please choose another date or room.';
-                    } else {
+                        if (!$room || $conflictLock) {
+                            getDB()->rollBack();
+                            $error = 'This room was just booked by another guest for those dates. Please choose another date or room.';
+                        } else {
                         $nights      = calculateNights($checkIn, $checkOut);
                         $totalAmount = $nights * $room['price_per_night'];
                         $bookingCode = generateBookingCode();
@@ -139,6 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+}
 }
 ?>
 <!DOCTYPE html>
@@ -349,29 +361,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <!-- 1. Room Selection -->
           <div class="form-group">
             <label class="form-label">Choose a Room or Dormitory <span class="required">*</span></label>
-            <select name="room_id" id="roomSelect" class="form-control" required onchange="updatePriceCalculator()">
+            <select name="room_id" id="roomSelect" class="form-control" required onchange="onRoomOrDateChanged('room')">
               <option value="" data-price="0" data-capacity="0">-- Select Room Here --</option>
-              <?php foreach ($rooms as $rm): ?>
+              <?php foreach ($rooms as $rm): 
+                $occ = $roomOccupancyMap[$rm['id']];
+                $statusSuffix = '';
+                if ($occ['state'] === 'occupied') {
+                    $statusSuffix = ' · [Occupied until ' . formatDate($occ['current_until'], 'M d') . ' · Advance Bookings Open]';
+                } elseif ($occ['state'] === 'reserved') {
+                    $statusSuffix = ' · [Reserved ' . formatDate($occ['next_booking']['check_in'], 'M d') . '–' . formatDate($occ['next_booking']['check_out'], 'M d') . ' · Other Dates Open]';
+                } else {
+                    $statusSuffix = ' · [Available Now]';
+                }
+              ?>
                 <option value="<?= $rm['id'] ?>" 
                         data-price="<?= $rm['price_per_night'] ?>" 
                         data-capacity="<?= $rm['capacity'] ?>"
                         data-name="<?= htmlspecialchars($rm['name'], ENT_QUOTES) ?>"
+                        data-status="<?= $occ['state'] ?>"
                         <?= $selectedRoomId === (int)$rm['id'] ? 'selected' : '' ?>>
-                  <?= h($rm['name']) ?> — ₱<?= number_format($rm['price_per_night'], 2) ?>/night (Max <?= $rm['capacity'] ?> pax)
+                  <?= h($rm['name']) ?> — ₱<?= number_format($rm['price_per_night'], 2) ?>/night (Max <?= $rm['capacity'] ?> pax)<?= $statusSuffix ?>
                 </option>
               <?php endforeach; ?>
             </select>
+          </div>
+
+          <!-- Real-Time Room Schedule & Reserved Dates Display -->
+          <div id="roomScheduleContainer" style="display:none;margin-top:12px;margin-bottom:16px;border-radius:12px;padding:14px 18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <i class="fa-solid fa-calendar-days" style="color:var(--gold);"></i>
+                <span style="font-weight:700;color:#fff;font-size:0.88rem;" id="scheduleHeaderTitle">Room Availability Schedule</span>
+              </div>
+              <div id="scheduleBadgeContainer"></div>
+            </div>
+            
+            <div id="scheduleDetailsText" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;"></div>
+            
+            <!-- List of already booked dates -->
+            <div id="bookedDatesChips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
           </div>
 
           <!-- 2. Stay Dates -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
             <div class="form-group">
               <label class="form-label">Check-in Date <span class="required">*</span></label>
-              <input type="date" name="check_in" id="checkInDate" class="form-control" min="<?= date('Y-m-d') ?>" required onchange="updatePriceCalculator()">
+              <input type="date" name="check_in" id="checkInDate" class="form-control" min="<?= date('Y-m-d') ?>" required onchange="onRoomOrDateChanged('check_in')">
             </div>
             <div class="form-group">
               <label class="form-label">Check-out Date <span class="required">*</span></label>
-              <input type="date" name="check_out" id="checkOutDate" class="form-control" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required onchange="updatePriceCalculator()">
+              <input type="date" name="check_out" id="checkOutDate" class="form-control" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required onchange="onRoomOrDateChanged('check_out')">
+            </div>
+          </div>
+
+          <!-- Real-Time Overlap / Duplicate Conflict Alert -->
+          <div id="dateConflictAlert" style="display:none;background:rgba(239,68,68,0.16);border:1px solid rgba(239,68,68,0.5);border-radius:12px;padding:14px 18px;margin-top:10px;margin-bottom:14px;">
+            <div style="display:flex;align-items:flex-start;gap:12px;">
+              <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:1.3rem;margin-top:2px;"></i>
+              <div style="flex:1;">
+                <div style="color:#fecaca;font-weight:700;font-size:0.95rem;" id="conflictAlertTitle">Duplicate Booking Conflict Detected!</div>
+                <div style="color:#cbd5e1;font-size:0.84rem;margin-top:4px;" id="conflictAlertDesc">
+                  This room is already reserved on the selected dates. Please adjust your dates or choose another room to prevent duplicate booking.
+                </div>
+              </div>
             </div>
           </div>
 
@@ -402,7 +454,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
 
           <!-- Primary Pop-up Trigger Button -->
-          <button type="button" class="btn btn-gold btn-block" onclick="openPaymentModal()" style="margin-top:22px;padding:15px;font-size:1.05rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px;">
+          <button type="button" class="btn btn-gold btn-block" id="bookSubmitBtn" onclick="openPaymentModal()" style="margin-top:22px;padding:15px;font-size:1.05rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px;">
             <i class="fa-solid fa-qrcode"></i> Click to Book &amp; Open Payment Methods (GCash / Maya)
           </button>
 
@@ -612,6 +664,142 @@ function switchModalChannel(channel) {
   }
 }
 
+// Global data for room availability & anti-duplicate schedule checking
+window.ROOM_ACTIVE_BOOKINGS = <?= json_encode($allBookingsMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+window.TODAY_DATE = "<?= date('Y-m-d') ?>";
+
+function onRoomOrDateChanged(triggerSource) {
+  const checkInInput = document.getElementById('checkInDate');
+  const checkOutInput = document.getElementById('checkOutDate');
+
+  // If check-in date changed, advance check-out min date by at least 1 day
+  if (triggerSource === 'check_in' && checkInInput.value) {
+    const d = new Date(checkInInput.value + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    const minOut = d.toISOString().split('T')[0];
+    checkOutInput.min = minOut;
+    if (checkOutInput.value && checkOutInput.value <= checkInInput.value) {
+      checkOutInput.value = minOut;
+    }
+  }
+
+  updatePriceCalculator();
+  checkRoomScheduleAndConflict();
+}
+
+function checkRoomScheduleAndConflict() {
+  const roomSelect     = document.getElementById('roomSelect');
+  const checkInInput   = document.getElementById('checkInDate');
+  const checkOutInput  = document.getElementById('checkOutDate');
+  const scheduleBox    = document.getElementById('roomScheduleContainer');
+  const conflictAlert  = document.getElementById('dateConflictAlert');
+  const conflictDesc   = document.getElementById('conflictAlertDesc');
+  const submitBtn      = document.getElementById('bookSubmitBtn');
+
+  const roomId = roomSelect.value;
+  if (!roomId) {
+    if (scheduleBox) scheduleBox.style.display = 'none';
+    if (conflictAlert) conflictAlert.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fa-solid fa-qrcode"></i> Click to Book &amp; Open Payment Methods (GCash / Maya)';
+      submitBtn.style.opacity = '1';
+      submitBtn.style.cursor = 'pointer';
+      submitBtn.style.pointerEvents = 'auto';
+    }
+    return false;
+  }
+
+  const selectedOption = roomSelect.options[roomSelect.selectedIndex];
+  const roomName = selectedOption.getAttribute('data-name') || selectedOption.text;
+  const bookings = (window.ROOM_ACTIVE_BOOKINGS && window.ROOM_ACTIVE_BOOKINGS[roomId]) ? window.ROOM_ACTIVE_BOOKINGS[roomId] : [];
+  const today = window.TODAY_DATE || new Date().toISOString().split('T')[0];
+
+  // 1. Render Room Schedule & Reserved Dates Display Box
+  if (scheduleBox) {
+    scheduleBox.style.display = 'block';
+    const headerTitle     = document.getElementById('scheduleHeaderTitle');
+    const badgeContainer  = document.getElementById('scheduleBadgeContainer');
+    const detailsText     = document.getElementById('scheduleDetailsText');
+    const chipsContainer  = document.getElementById('bookedDatesChips');
+
+    if (headerTitle) headerTitle.textContent = 'Room Schedule: ' + roomName;
+
+    if (bookings.length === 0) {
+      badgeContainer.innerHTML = '<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> Available - No Reserved Dates</span>';
+      detailsText.innerHTML = 'This room has no upcoming reservations on file. All dates are available for instant booking!';
+      chipsContainer.innerHTML = '<span style="font-size:0.8rem;color:#4ade80;"><i class="fa-solid fa-check"></i> 100% Free &amp; Open</span>';
+    } else {
+      const isOccupiedToday = bookings.some(b => b.check_in <= today && b.check_out > today);
+      if (isOccupiedToday) {
+        badgeContainer.innerHTML = '<span class="badge badge-danger"><i class="fa-solid fa-bed"></i> Currently Booked / Occupied</span>';
+        detailsText.innerHTML = '⚠️ This room is currently occupied by another guest today. You can still reserve it for future dates outside of these booked periods:';
+      } else {
+        badgeContainer.innerHTML = '<span class="badge badge-warning" style="background:rgba(234,179,8,0.22);color:#fde047;border:1px solid rgba(234,179,8,0.4);"><i class="fa-solid fa-calendar-check"></i> Has Reserved Dates</span>';
+        detailsText.innerHTML = 'This room has active bookings on file. <strong>Please select dates that do NOT overlap with the reserved periods below:</strong>';
+      }
+
+      let chips = '';
+      bookings.forEach(b => {
+        chips += `<div style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#fca5a5;border-radius:8px;padding:5px 10px;font-size:0.78rem;display:inline-flex;align-items:center;gap:6px;">
+          <i class="fa-solid fa-calendar-xmark" style="color:#f87171;"></i>
+          <strong>${b.display_dates}</strong>
+          <span style="opacity:0.75;font-size:0.72rem;">(#${b.booking_code})</span>
+        </div>`;
+      });
+      chipsContainer.innerHTML = chips;
+    }
+  }
+
+  // 2. Real-time Date Conflict Check
+  const checkIn  = checkInInput.value;
+  const checkOut = checkOutInput.value;
+
+  if (checkIn && checkOut && bookings.length > 0) {
+    let conflict = null;
+    for (let i = 0; i < bookings.length; i++) {
+      const b = bookings[i];
+      // Interval overlap: (checkIn < b.check_out && checkOut > b.check_in)
+      if (checkIn < b.check_out && checkOut > b.check_in) {
+        conflict = b;
+        break;
+      }
+    }
+
+    if (conflict) {
+      if (conflictAlert) {
+        conflictAlert.style.display = 'block';
+        conflictDesc.innerHTML = 'Room <strong>' + roomName + '</strong> is already reserved on <strong>' + conflict.display_dates + '</strong> (Booking #' + conflict.booking_code + '). Please pick different dates to prevent duplicate booking.';
+      }
+      checkInInput.style.borderColor = '#ef4444';
+      checkOutInput.style.borderColor = '#ef4444';
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-ban"></i> Dates Unavailable (Already Booked)';
+        submitBtn.style.opacity = '0.55';
+        submitBtn.style.cursor = 'not-allowed';
+        submitBtn.style.pointerEvents = 'none';
+      }
+      return true; // conflict detected!
+    }
+  }
+
+  // No conflict detected
+  if (conflictAlert) conflictAlert.style.display = 'none';
+  checkInInput.style.borderColor = '';
+  checkOutInput.style.borderColor = '';
+
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-qrcode"></i> Click to Book &amp; Open Payment Methods (GCash / Maya)';
+    submitBtn.style.opacity = '1';
+    submitBtn.style.cursor = 'pointer';
+    submitBtn.style.pointerEvents = 'auto';
+  }
+  return false;
+}
+
 function updatePriceCalculator() {
   const roomSelect = document.getElementById('roomSelect');
   const checkInInput = document.getElementById('checkInDate');
@@ -629,8 +817,8 @@ function updatePriceCalculator() {
   const checkOutVal = checkOutInput.value;
 
   if (checkInVal && checkOutVal) {
-    const d1 = new Date(checkInVal);
-    const d2 = new Date(checkOutVal);
+    const d1 = new Date(checkInVal + 'T00:00:00');
+    const d2 = new Date(checkOutVal + 'T00:00:00');
     const diffTime = d2.getTime() - d1.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -672,13 +860,19 @@ function openPaymentModal() {
     return;
   }
 
+  // Prevent opening modal if conflict exists
+  if (checkRoomScheduleAndConflict()) {
+    alert('Cannot proceed: The room is already booked on your selected dates. Please choose different dates to prevent duplicate booking.');
+    return;
+  }
+
   // Populate Modal Summary
   const selectedOption = roomSelect.options[roomSelect.selectedIndex];
   const price = parseFloat(selectedOption.getAttribute('data-price')) || 0;
   const roomName = selectedOption.getAttribute('data-name') || selectedOption.text;
 
-  const d1 = new Date(checkIn);
-  const d2 = new Date(checkOut);
+  const d1 = new Date(checkIn + 'T00:00:00');
+  const d2 = new Date(checkOut + 'T00:00:00');
   const diffDays = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
   const total = diffDays * price;
 
@@ -759,7 +953,7 @@ function submitModalCheckout(mode) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  updatePriceCalculator();
+  onRoomOrDateChanged();
 });
 </script>
 </body>

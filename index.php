@@ -20,10 +20,11 @@ $rooms = dbRows("
     SELECT r.*, rt.name as type_name 
     FROM rooms r 
     JOIN room_types rt ON r.room_type_id = rt.id 
-    WHERE r.status = 'available' 
+    WHERE r.status != 'maintenance' 
     ORDER BY r.price_per_night ASC 
     LIMIT 6
 ");
+$allBookingsMap = getAllRoomsActiveBookingsMap();
 
 // Handle Review Submission from Homepage Modal
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['submit_homepage_review'])) {
@@ -703,6 +704,7 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
           $amenities = safeJson($room['amenities']);
           $tags = safeJson($room['tags']);
           $rating = roomAvgRating($room['id']);
+          $occ = getRoomOccupancyStatus((int)$room['id'], $room['status'], $allBookingsMap[(int)$room['id']] ?? []);
         ?>
         <div class="room-card reveal" style="transition-delay:<?= $i * 0.06 ?>s;">
           <div class="room-card-img">
@@ -712,9 +714,7 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
                  decoding="async"
                  onerror="this.src='assets/images/rooms/default-room.jpg'">
             <div class="room-card-badge">
-              <span class="badge badge-<?= $room['status'] === 'available' ? 'success' : 'warning' ?>">
-                <?= ucfirst($room['status']) ?>
-              </span>
+              <?= $occ['tag_html'] ?>
             </div>
             <button class="room-card-fav" aria-label="Save room">
               <i class="fa-regular fa-heart"></i>
@@ -725,7 +725,7 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
               <h3 class="room-card-name"><?= h($room['name']) ?></h3>
               <span class="badge badge-gold"><?= h($room['type_name']) ?></span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
               <span class="stars">
                 <?php for($s=1;$s<=5;$s++): ?>
                   <i class="fa-<?= $s <= round($rating) ? 'solid' : 'regular' ?> fa-star"></i>
@@ -737,6 +737,15 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
                 · <?= $room['capacity'] ?> Pax
               </span>
             </div>
+            <?php if ($occ['state'] === 'occupied'): ?>
+              <div style="font-size:0.74rem;color:#f87171;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:4px 8px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                <i class="fa-solid fa-bed"></i> Occupied until <?= formatDate($occ['current_until']) ?> · Future dates open
+              </div>
+            <?php elseif ($occ['state'] === 'reserved'): ?>
+              <div style="font-size:0.74rem;color:#fbbf24;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:4px 8px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                <i class="fa-solid fa-calendar-check"></i> Booked <?= formatDate($occ['next_booking']['check_in'], 'M d') ?> – <?= formatDate($occ['next_booking']['check_out'], 'M d') ?> · Other dates open
+              </div>
+            <?php endif; ?>
             <div class="room-card-amenities">
               <?php foreach(array_slice($amenities, 0, 4) as $a): ?>
               <span class="room-amenity-tag"><i class="fa-solid fa-check" style="color:var(--gold);font-size:0.6rem;"></i> <?= h($a) ?></span>

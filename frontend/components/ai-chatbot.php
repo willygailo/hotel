@@ -10,8 +10,12 @@ $activeUserId = currentUserId() ?: 0;
 $isUserLoggedIn = isLoggedIn();
 $aiEndpoint = SITE_URL . '/ai/chatbot.php';
 ?>
+<?php
+$aiCssVer = @filemtime(__DIR__ . '/../assets/css/ai-chat.css') ?: '1';
+$aiJsVer  = @filemtime(__DIR__ . '/../assets/js/ai-chat.js') ?: '1';
+?>
 <!-- AI Chatbot Stylesheet -->
-<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/ai-chat.css">
+<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/ai-chat.css?v=<?= $aiCssVer ?>">
 
 <!-- AI Chatbot Floating Widget -->
 <div class="ai-fab" id="aiFab">
@@ -32,7 +36,10 @@ $aiEndpoint = SITE_URL . '/ai/chatbot.php';
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
-        <button type="button" class="ai-chat-btn-action" id="aiVoiceReplyToggle" onclick="toggleVoiceReply()" title="Toggle AI Voice Reply (Speak Back)" aria-label="Toggle voice reply" style="display:none;">
+        <button type="button" class="ai-voice-lang-header-btn" id="aiVoiceLangQuickBtn" onclick="toggleVoiceLang()" title="Switch Voice Language (PH: Tagalog / EN: English)" aria-label="Switch voice language">
+          PH
+        </button>
+        <button type="button" class="ai-chat-btn-action" id="aiVoiceReplyToggle" onclick="toggleVoiceReply()" title="Toggle AI Voice Reply (Speak Back)" aria-label="Toggle voice reply" aria-pressed="false">
           <i class="fa-solid fa-volume-xmark" id="aiVoiceReplyIcon"></i>
         </button>
         <button type="button" class="ai-chat-btn-action" onclick="resetAIChat()" title="Start new conversation" aria-label="Restart chat">
@@ -105,7 +112,7 @@ $aiEndpoint = SITE_URL . '/ai/chatbot.php';
 
     <!-- Input Bar -->
     <div class="ai-chat-input-wrap">
-      <button type="button" class="ai-chat-mic" id="aiMicBtn" onclick="toggleVoiceInput()" title="Talk to Marvi (Voice Input)" aria-label="Voice input" style="display:none;">
+      <button type="button" class="ai-chat-mic" id="aiMicBtn" onclick="toggleVoiceInput()" title="Talk to Marvi (Voice Input)" aria-label="Voice input">
         <i class="fa-solid fa-microphone" id="aiMicIcon"></i>
       </button>
       <input
@@ -139,4 +146,4 @@ window.HOTEL_AI_CONFIG = <?= json_encode([
 ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 </script>
 <!-- AI Chatbot Client Script -->
-<script src="<?= ASSETS_URL ?>/js/ai-chat.js"></script>
+<script src="<?= ASSETS_URL ?>/js/ai-chat.js?v=<?= $aiJsVer ?>"></script>

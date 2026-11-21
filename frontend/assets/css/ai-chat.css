@@ -661,6 +661,39 @@
   color: #fecaca;
 }
 
+.ai-voice-lang-header-btn {
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--gold, #d4af37);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  transition: all 0.2s ease;
+}
+
+.ai-voice-lang-header-btn:hover {
+  background: rgba(201, 168, 76, 0.2);
+  border-color: rgba(201, 168, 76, 0.45);
+}
+
+.ai-voice-lang-header-btn.is-en {
+  color: #7dd3fc;
+  border-color: rgba(125, 211, 252, 0.38);
+}
+
+.ai-chat-btn-action.is-unsupported,
+.ai-chat-mic.is-unsupported {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
 .ai-chat-mic {
   width: 40px;
   height: 40px;
@@ -725,9 +758,10 @@
   transition: all 0.18s ease;
 }
 
-.ai-msg-speak-btn:hover {
+.ai-msg-speak-btn:hover,
+.ai-msg-speak-btn.is-speaking {
   color: var(--gold, #d4af37);
-  background: rgba(212, 175, 55, 0.1);
+  background: rgba(212, 175, 55, 0.14);
 }
 
 /* Clickable "Take Me There" Navigation Action Buttons */
@@ -809,7 +843,8 @@
     font-size: 1rem !important; /* Minimum 16px to prevent Android keyboard auto-zoom */
     padding: 12px 14px;
   }
-  .ai-chat-send {
+  .ai-chat-send,
+  .ai-chat-mic {
     width: 44px;
     height: 44px;
     min-width: 44px;

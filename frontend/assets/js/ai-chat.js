@@ -9,7 +9,13 @@
   const VOICE_LANG_KEY     = 'mh_ai_voice_lang';
 
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-  const hasSpeechSynthesis = typeof window.speechSynthesis !== 'undefined';
+  const hasSpeechSynthesis =
+    typeof window.speechSynthesis !== 'undefined' &&
+    typeof window.SpeechSynthesisUtterance !== 'undefined';
+
+  const userAgent = navigator.userAgent || '';
+  const isInAppWebView = /FBAN|FBAV|Messenger|Instagram|Line\/|MicroMessenger|\bwv\b|BytedanceWebview|TikTok/i.test(userAgent);
+  const isFirefoxBrowser = /Firefox\//i.test(userAgent) && !/Seamonkey/i.test(userAgent);
 
   let activeAbortController = null;
   let isStreaming = false;
@@ -18,8 +24,20 @@
   let isSpeaking = false;
   let lastInputWasVoice = false;
   let voiceReplyEnabled = localStorage.getItem(VOICE_REPLY_KEY) === '1';
-  let voiceLang = localStorage.getItem(VOICE_LANG_KEY) || 'fil-PH';
+  let voiceLang = localStorage.getItem(VOICE_LANG_KEY) === 'en-US' ? 'en-US' : 'fil-PH';
   let conversationTurns = []; // [{ role: 'user'|'assistant', text: string, html?: string, plain?: string, lang?: string }]
+
+  let speechUnlocked = false;
+  let cachedVoices = [];
+  let activeSpeechRunId = 0;
+  let speechDelayTimer = null;
+  let speechWatchdogTimer = null;
+  let speechKeepAliveTimer = null;
+  let activeSpeakButton = null;
+  let shownTtsDiagnostic = false;
+
+  let activeRecognitionRunId = 0;
+  let cancelNextVoiceSend = false;
 
   function getConfig() {
     return window.HOTEL_AI_CONFIG || {};
@@ -48,6 +66,82 @@
     const div = document.createElement('div');
     div.textContent = String(text ?? '');
     return div.innerHTML;
+  }
+
+  function isSecureOriginContext() {
+    return window.isSecureContext !== false;
+  }
+
+  function getVoiceCapabilityIssue() {
+    if (!isSecureOriginContext()) {
+      return {
+        code: 'insecure-context',
+        title: 'Mic requires HTTPS / localhost',
+        message:
+          'Naka-block ang microphone sa plain HTTP link (tulad ng <code>http://192.168...</code>). ' +
+          'Buksan ang site gamit ang <strong>HTTPS tunnel link</strong> (hal. <code>https://*.trycloudflare.com</code>) o <code>localhost</code> upang gumana ang Mic.'
+      };
+    }
+    if (!SpeechRecognitionCtor) {
+      if (isInAppWebView) {
+        return {
+          code: 'in-app-webview',
+          title: 'Buksan sa Chrome para sa Mic',
+          message:
+            'Hinaharang ng Messenger / Facebook in-app browser ang Microphone at Voice features. ' +
+            'I-tap ang <strong>menu (&vellip; o &bull;&bull;&bull;)</strong> sa itaas at piliin ang <strong>Open in Chrome / External Browser</strong>.'
+        };
+      }
+      if (isFirefoxBrowser) {
+        return {
+          code: 'firefox-unsupported',
+          title: 'Gamitin ang Chrome/Edge para sa Mic',
+          message:
+            'Hindi suportado ng Firefox ang built-in Web Speech Microphone. ' +
+            'Buksan ang site sa <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong> kung gusto mong magsalita gamit ang mic.'
+        };
+      }
+      return {
+        code: 'unsupported',
+        title: 'Mic not supported on this browser',
+        message:
+          'Walang built-in Voice Recognition ang browser na ito. Subukan buksan sa <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong>.'
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Synchronously warm up/unlock speechSynthesis inside a user gesture so async SSE replies can speak.
+   */
+  function unlockSpeechSynthesis() {
+    if (!hasSpeechSynthesis || speechUnlocked) return;
+    try {
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        speechUnlocked = true;
+        return;
+      }
+      const primer = new window.SpeechSynthesisUtterance(' ');
+      primer.volume = 0;
+      primer.rate = 10;
+      primer.onend = () => {
+        speechUnlocked = true;
+      };
+      primer.onerror = () => {};
+      window.speechSynthesis.speak(primer);
+      speechUnlocked = true;
+    } catch (e) {}
+  }
+
+  function refreshVoices() {
+    if (!hasSpeechSynthesis) return [];
+    try {
+      const list = window.speechSynthesis.getVoices();
+      if (Array.isArray(list) && list.length > 0) {
+        cachedVoices = list;
+      }
+    } catch (e) {}
+    return cachedVoices;
   }
 
   /**
@@ -102,28 +196,49 @@
     el.innerHTML = `<i class="fa-solid fa-circle" style="font-size:0.48rem;"></i> ${escHtml(text)}`;
   }
 
+  function updateVoiceLangUI() {
+    const label = voiceLang === 'en-US' ? 'EN' : 'PH';
+    const title =
+      voiceLang === 'en-US'
+        ? 'Voice Language: English (US) — Click to switch to PH/Tagalog'
+        : 'Voice Language: Tagalog / PH — Click to switch to English';
+
+    const barLangBtn = document.getElementById('aiVoiceLangBtn');
+    const quickLangBtn = document.getElementById('aiVoiceLangQuickBtn');
+    [barLangBtn, quickLangBtn].forEach((btn) => {
+      if (!btn) return;
+      btn.textContent = label;
+      btn.title = title;
+      btn.classList.toggle('is-en', voiceLang === 'en-US');
+    });
+  }
+
+  function updateMicButtonUI() {
+    const micBtn = document.getElementById('aiMicBtn');
+    const micIcon = document.getElementById('aiMicIcon');
+    if (!micBtn || !micIcon) return;
+
+    micBtn.style.display = 'flex';
+    const issue = getVoiceCapabilityIssue();
+    micBtn.classList.toggle('is-unsupported', !!issue);
+    micBtn.classList.toggle('listening', isListening);
+    micIcon.className = isListening ? 'fa-solid fa-microphone-lines' : 'fa-solid fa-microphone';
+    micBtn.title = issue ? issue.title : (isListening ? 'Tap to send voice message' : 'Talk to Marvi (Voice Input)');
+  }
+
   function updateVoiceBar() {
     const bar = document.getElementById('aiVoiceBar');
     const txt = document.getElementById('aiVoiceBarText');
-    const langBtn = document.getElementById('aiVoiceLangBtn');
-    const micBtn = document.getElementById('aiMicBtn');
-    const micIcon = document.getElementById('aiMicIcon');
 
-    if (langBtn) {
-      langBtn.textContent = voiceLang === 'en-US' ? 'EN' : 'PH';
-    }
-
-    if (micBtn && micIcon) {
-      micBtn.classList.toggle('listening', isListening);
-      micIcon.className = isListening ? 'fa-solid fa-microphone-lines' : 'fa-solid fa-microphone';
-    }
+    updateVoiceLangUI();
+    updateMicButtonUI();
 
     if (!bar || !txt) return;
 
     if (isListening) {
       bar.style.display = 'flex';
       bar.className = 'ai-voice-bar is-listening';
-      txt.textContent = voiceLang === 'en-US' ? 'Listening (English)...' : 'Nakikinig (Tagalog / PH)...';
+      txt.textContent = voiceLang === 'en-US' ? 'Listening (English)... Tap mic when done' : 'Nakikinig (PH)... I-tap ang mic pag tapos';
       setHeaderStatus('listening', 'Listening via Mic...');
     } else if (isSpeaking) {
       bar.style.display = 'flex';
@@ -142,72 +257,318 @@
     const btn = document.getElementById('aiVoiceReplyToggle');
     const icon = document.getElementById('aiVoiceReplyIcon');
     if (!btn || !icon) return;
+
+    btn.style.display = 'flex';
     if (!hasSpeechSynthesis) {
-      btn.style.display = 'none';
+      btn.classList.remove('active');
+      btn.classList.add('is-unsupported');
+      btn.setAttribute('aria-pressed', 'false');
+      icon.className = 'fa-solid fa-volume-xmark';
+      btn.title = 'Text-to-Speech unavailable in this browser';
       return;
     }
-    btn.style.display = 'flex';
+
+    btn.classList.remove('is-unsupported');
     btn.classList.toggle('active', voiceReplyEnabled);
+    btn.setAttribute('aria-pressed', voiceReplyEnabled ? 'true' : 'false');
     icon.className = voiceReplyEnabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
     btn.title = voiceReplyEnabled
       ? 'AI Voice Reply: ON (Click to mute)'
-      : 'AI Voice Reply: OFF (Click to enable)';
+      : 'AI Voice Reply: OFF (Click to enable auto-speak)';
   }
 
-  function speakText(plainText, langCode) {
-    if (!hasSpeechSynthesis || !plainText || !plainText.trim()) return;
-    try {
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(plainText.trim());
-      const targetLang = langCode === 'en' ? 'en-US' : 'fil-PH';
-      utter.lang = targetLang;
-      utter.rate = 1.02;
-      utter.pitch = 1.0;
+  function setSpeakButtonState(btn, speaking) {
+    if (!btn) return;
+    btn.classList.toggle('is-speaking', speaking);
+    btn.innerHTML = speaking
+      ? '<i class="fa-solid fa-stop"></i> Stop'
+      : '<i class="fa-solid fa-volume-high"></i> Listen';
+    btn.title = speaking ? 'Stop speaking' : 'Listen to this reply';
+  }
 
-      const voices = window.speechSynthesis.getVoices() || [];
-      if (voices.length > 0) {
-        const preferred =
-          voices.find((v) => v.lang && v.lang.toLowerCase() === targetLang.toLowerCase()) ||
-          voices.find((v) => v.lang && v.lang.toLowerCase().startsWith(langCode === 'en' ? 'en' : 'fil')) ||
-          voices.find((v) => v.lang && v.lang.toLowerCase().startsWith(langCode === 'en' ? 'en' : 'tl')) ||
-          voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('en'));
-        if (preferred) utter.voice = preferred;
-      }
-
-      utter.onstart = () => {
-        isSpeaking = true;
-        updateVoiceBar();
-      };
-      utter.onend = () => {
-        isSpeaking = false;
-        updateVoiceBar();
-      };
-      utter.onerror = () => {
-        isSpeaking = false;
-        updateVoiceBar();
-      };
-
-      window.speechSynthesis.speak(utter);
-    } catch (e) {
-      isSpeaking = false;
-      updateVoiceBar();
+  function clearSpeechTimers() {
+    if (speechDelayTimer) {
+      clearTimeout(speechDelayTimer);
+      speechDelayTimer = null;
+    }
+    if (speechWatchdogTimer) {
+      clearTimeout(speechWatchdogTimer);
+      speechWatchdogTimer = null;
+    }
+    if (speechKeepAliveTimer) {
+      clearInterval(speechKeepAliveTimer);
+      speechKeepAliveTimer = null;
     }
   }
 
-  function stopSpeaking() {
-    if (hasSpeechSynthesis) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch (e) {}
+  function normalizeTextForSpeech(rawText) {
+    let text = String(rawText || '').trim();
+    if (!text) return '';
+
+    // Speak Philippine peso figures naturally (e.g. "₱1,500.00" -> "1,500 pesos")
+    text = text.replace(/₱\s*([\d,]+)(?:\.00)?\b/g, '$1 pesos');
+    text = text.replace(/₱/g, 'pesos ');
+    text = text.replace(/\s*\/gabi\b/gi, ' bawat gabi');
+    text = text.replace(/\s*\/night\b/gi, ' per night');
+    text = text.replace(/\s+/g, ' ').trim();
+    return text;
+  }
+
+  function splitSpeechChunks(text) {
+    const normalized = normalizeTextForSpeech(text);
+    if (!normalized) return [];
+
+    // Split on sentence punctuation first so Chromium never hits the ~15s cutoff bug
+    const rawSentences = normalized
+      .split(/(?<=[.!?])\s+|\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const chunks = [];
+    const MAX_CHUNK_LEN = 165;
+
+    for (const sentence of rawSentences) {
+      if (sentence.length <= MAX_CHUNK_LEN) {
+        chunks.push(sentence);
+        continue;
+      }
+      const words = sentence.split(/\s+/);
+      let current = '';
+      for (const word of words) {
+        if ((current + ' ' + word).trim().length > MAX_CHUNK_LEN && current) {
+          chunks.push(current.trim());
+          current = word;
+        } else {
+          current = (current + ' ' + word).trim();
+        }
+      }
+      if (current) chunks.push(current.trim());
+    }
+    return chunks;
+  }
+
+  function pickPreferredVoice(voices, langCode) {
+    const targetLang = langCode === 'en' ? 'en-US' : 'fil-PH';
+    if (!voices || voices.length === 0) {
+      return { voice: null, lang: targetLang };
+    }
+
+    let preferred = null;
+    if (langCode === 'en') {
+      preferred =
+        voices.find((v) => v.lang && v.lang.toLowerCase() === 'en-ph') ||
+        voices.find((v) => v.lang && v.lang.toLowerCase() === 'en-us') ||
+        voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('en')) ||
+        voices.find((v) => v.default) ||
+        voices[0];
+    } else {
+      preferred =
+        voices.find((v) => v.lang && ['fil-ph', 'tl-ph'].includes(v.lang.toLowerCase())) ||
+        voices.find((v) => v.lang && /^(fil|tl)/i.test(v.lang)) ||
+        voices.find((v) => v.lang && v.lang.toLowerCase() === 'en-ph') ||
+        voices.find((v) => v.lang && v.lang.toLowerCase() === 'en-us') ||
+        voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('en')) ||
+        voices.find((v) => v.default) ||
+        voices[0];
+    }
+
+    return {
+      voice: preferred || null,
+      // Always match utter.lang to the assigned voice's language to prevent WebKit/Chromium mismatches
+      lang: preferred && preferred.lang ? preferred.lang : targetLang
+    };
+  }
+
+  function notifyTtsIssueOnce(errCode) {
+    if (shownTtsDiagnostic) return;
+    shownTtsDiagnostic = true;
+
+    let msg;
+    if (errCode === 'not-allowed') {
+      msg = 'Na-block ng browser ang automatic na pagsasalita. Pindutin ang <strong>Listen</strong> button sa mensahe upang pakinggan si Marvi.';
+    } else if (isInAppWebView) {
+      msg = 'Walang Text-to-Speech audio sa Messenger / Facebook in-app browser. Buksan ang link sa <strong>Google Chrome</strong> para marinig si Marvi.';
+    } else {
+      msg = 'Walang available na Text-to-Speech voice sa browser/device na ito. Subukan sa Google Chrome na may enabled TTS/Speech engine.';
+    }
+    appendMessageElement(msg, false, true);
+  }
+
+  function finishSpeakingState() {
+    clearSpeechTimers();
+    if (activeSpeakButton) {
+      setSpeakButtonState(activeSpeakButton, false);
+      activeSpeakButton = null;
     }
     isSpeaking = false;
     updateVoiceBar();
   }
 
-  function stopListening() {
+  function speakText(plainText, langCode, sourceBtn = null, forceEnglishFallback = false, fromManualRetry = false) {
+    if (!plainText || !plainText.trim()) return;
+
+    if (!hasSpeechSynthesis) {
+      notifyTtsIssueOnce('unsupported');
+      return;
+    }
+
+    // If clicking Listen on the currently speaking message, toggle stop cleanly
+    if (sourceBtn && isSpeaking && activeSpeakButton === sourceBtn) {
+      stopSpeaking();
+      return;
+    }
+
+    const wasActive = window.speechSynthesis.speaking || window.speechSynthesis.pending;
+    clearSpeechTimers();
+    activeSpeechRunId++;
+    const runId = activeSpeechRunId;
+
+    if (activeSpeakButton && activeSpeakButton !== sourceBtn) {
+      setSpeakButtonState(activeSpeakButton, false);
+    }
+    activeSpeakButton = sourceBtn;
+
+    const chunks = splitSpeechChunks(plainText);
+    if (chunks.length === 0) {
+      finishSpeakingState();
+      return;
+    }
+
+    if (wasActive) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
+
+    const startPlayback = (triedVoiceWarmup = false) => {
+      if (runId !== activeSpeechRunId) return;
+
+      const voices = refreshVoices();
+      // Chromium often returns [] synchronously on first call; give voiceschanged one brief chance
+      if (voices.length === 0 && !triedVoiceWarmup && !fromManualRetry) {
+        speechDelayTimer = setTimeout(() => startPlayback(true), 220);
+        return;
+      }
+
+      const effectiveLang = forceEnglishFallback ? 'en' : (langCode || 'tl');
+      const selection = pickPreferredVoice(voices, effectiveLang);
+      let chunkIdx = 0;
+
+      // Keep long Chrome TTS utterances from pausing silently
+      speechKeepAliveTimer = setInterval(() => {
+        if (runId !== activeSpeechRunId) return;
+        try {
+          if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.resume();
+          }
+        } catch (e) {}
+      }, 9000);
+
+      const speakNextChunk = () => {
+        if (runId !== activeSpeechRunId) return;
+        if (chunkIdx >= chunks.length) {
+          finishSpeakingState();
+          return;
+        }
+
+        const utter = new window.SpeechSynthesisUtterance(chunks[chunkIdx]);
+        utter.lang = selection.lang;
+        if (selection.voice && !forceEnglishFallback) {
+          utter.voice = selection.voice;
+        }
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+
+        let started = false;
+        clearTimeout(speechWatchdogTimer);
+        speechWatchdogTimer = setTimeout(() => {
+          if (runId !== activeSpeechRunId || started) return;
+          // Some Linux / WebView builds remain stuck in pending with 0 audio and no error event
+          try {
+            window.speechSynthesis.cancel();
+          } catch (e) {}
+          finishSpeakingState();
+          if (voices.length === 0 || isInAppWebView) {
+            notifyTtsIssueOnce('no-voices');
+          }
+        }, 3500);
+
+        utter.onstart = () => {
+          if (runId !== activeSpeechRunId) return;
+          started = true;
+          clearTimeout(speechWatchdogTimer);
+          isSpeaking = true;
+          setSpeakButtonState(activeSpeakButton, true);
+          updateVoiceBar();
+        };
+
+        utter.onend = () => {
+          if (runId !== activeSpeechRunId) return;
+          clearTimeout(speechWatchdogTimer);
+          chunkIdx++;
+          speakNextChunk();
+        };
+
+        utter.onerror = (event) => {
+          if (runId !== activeSpeechRunId) return;
+          clearTimeout(speechWatchdogTimer);
+          const errCode = (event && event.error) ? String(event.error) : 'synthesis-failed';
+          if (errCode === 'interrupted' || errCode === 'canceled') {
+            return;
+          }
+          // Fallback cleanly from fil-PH to en-US if language pack isn't installed on device
+          if (!forceEnglishFallback && (errCode === 'language-unavailable' || errCode === 'voice-unavailable')) {
+            speakText(plainText, 'en', sourceBtn, true, true);
+            return;
+          }
+          finishSpeakingState();
+          notifyTtsIssueOnce(errCode);
+        };
+
+        try {
+          isSpeaking = true;
+          setSpeakButtonState(activeSpeakButton, true);
+          updateVoiceBar();
+          window.speechSynthesis.speak(utter);
+        } catch (e) {
+          finishSpeakingState();
+          notifyTtsIssueOnce('synthesis-failed');
+        }
+      };
+
+      speakNextChunk();
+    };
+
+    // Delay briefly after cancel() to avoid Chromium's same-tick cancel()+speak() race bug
+    if (wasActive) {
+      speechDelayTimer = setTimeout(() => startPlayback(false), 85);
+    } else {
+      startPlayback(false);
+    }
+  }
+
+  function stopSpeaking() {
+    activeSpeechRunId++;
+    if (hasSpeechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
+    finishSpeakingState();
+  }
+
+  function stopListening(options = {}) {
+    const cancelSend = options.cancelSend !== false;
+    if (cancelSend) {
+      cancelNextVoiceSend = true;
+    }
     if (recognition && isListening) {
       try {
-        recognition.stop();
+        if (cancelSend && typeof recognition.abort === 'function') {
+          recognition.abort();
+        } else {
+          recognition.stop();
+        }
       } catch (e) {}
     }
     isListening = false;
@@ -215,15 +576,17 @@
   }
 
   function attachSpeakButton(bubbleDiv, plainText, langCode) {
-    if (!hasSpeechSynthesis || !plainText || !plainText.trim()) return;
+    if (!plainText || !plainText.trim()) return;
     const footer = document.createElement('div');
     footer.className = 'ai-msg-tools';
     const speakBtn = document.createElement('button');
     speakBtn.type = 'button';
     speakBtn.className = 'ai-msg-speak-btn';
-    speakBtn.title = 'Listen to this reply';
-    speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i> Listen';
-    speakBtn.addEventListener('click', () => speakText(plainText, langCode));
+    setSpeakButtonState(speakBtn, false);
+    speakBtn.addEventListener('click', () => {
+      speechUnlocked = true;
+      speakText(plainText, langCode, speakBtn);
+    });
     footer.appendChild(speakBtn);
     bubbleDiv.appendChild(footer);
   }
@@ -346,8 +709,11 @@
     if (!message) return;
 
     lastInputWasVoice = !!fromVoice;
+    if (!fromVoice && voiceReplyEnabled) {
+      unlockSpeechSynthesis();
+    }
     stopSpeaking();
-    stopListening();
+    stopListening({ cancelSend: true });
 
     appendMessageElement(escHtml(message), true);
     const historySnapshot = getHistoryForPayload();
@@ -368,6 +734,7 @@
       finalized = true;
       removeAITyping();
 
+      let targetBubble = null;
       if (streamBubble) {
         streamBubble.classList.remove('ai-streaming');
         if (isWarning) {
@@ -381,8 +748,9 @@
           streamBubble.innerHTML = fullHtml;
           attachSpeakButton(streamBubble, plainText, langCode);
         }
+        targetBubble = streamBubble;
       } else {
-        appendMessageElement(fullHtml, false, isWarning, plainText, langCode);
+        targetBubble = appendMessageElement(fullHtml, false, isWarning, plainText, langCode);
       }
 
       scrollChatToBottom(true);
@@ -398,7 +766,8 @@
         saveConversation();
 
         if ((voiceReplyEnabled || lastInputWasVoice) && plainText) {
-          speakText(plainText, langCode);
+          const speakBtn = targetBubble ? targetBubble.querySelector('.ai-msg-speak-btn') : null;
+          speakText(plainText, langCode, speakBtn);
         }
       }
     };
@@ -542,22 +911,34 @@
       activeAbortController.abort();
       return;
     }
+    if (voiceReplyEnabled) {
+      unlockSpeechSynthesis();
+    }
     sendAIMessage(false);
   }
 
   function sendQuickPrompt(promptText) {
     const input = document.getElementById('aiInput');
     if (!input || isStreaming) return;
+    if (voiceReplyEnabled) {
+      unlockSpeechSynthesis();
+    }
     input.value = promptText;
     sendAIMessage(false);
   }
 
   function toggleVoiceReply() {
-    if (!hasSpeechSynthesis) return;
+    if (!hasSpeechSynthesis) {
+      notifyTtsIssueOnce('unsupported');
+      return;
+    }
+    unlockSpeechSynthesis();
     voiceReplyEnabled = !voiceReplyEnabled;
     localStorage.setItem(VOICE_REPLY_KEY, voiceReplyEnabled ? '1' : '0');
     if (!voiceReplyEnabled) {
       stopSpeaking();
+    } else if (refreshVoices().length === 0) {
+      setHeaderStatus('online', 'Voice Reply ON (checking voices...)');
     }
     updateVoiceReplyToggleUI();
   }
@@ -566,86 +947,165 @@
     voiceLang = voiceLang === 'fil-PH' ? 'en-US' : 'fil-PH';
     localStorage.setItem(VOICE_LANG_KEY, voiceLang);
     if (isListening) {
-      stopListening();
-      setTimeout(() => startVoiceInput(), 180);
+      stopListening({ cancelSend: true });
+      setTimeout(() => startVoiceInput(), 200);
     } else {
       updateVoiceBar();
     }
   }
 
-  function startVoiceInput() {
-    if (!SpeechRecognitionCtor || isStreaming) return;
+  function formatRecognitionErrorMessage(errCode) {
+    switch (errCode) {
+      case 'not-allowed':
+      case 'service-not-allowed': {
+        const envIssue = getVoiceCapabilityIssue();
+        if (envIssue) return envIssue.message;
+        if (isInAppWebView) {
+          return 'Naka-block ang microphone sa in-app browser. I-tap ang menu at piliing <strong>Open in Chrome</strong>.';
+        }
+        return 'Naka-block ang microphone permission sa iyong browser. Paki-allow ang Mic access sa address bar icon upang makapagsalita kay Marvi.';
+      }
+      case 'audio-capture':
+        return 'Walang ma-detect na microphone sa device mo, o ginagamit ito ng ibang app.';
+      case 'network':
+        return 'Hindi makakonekta sa Speech Recognition service ng browser. Pakisiguro ang internet connection o subukan mag-type muna.';
+      case 'language-not-supported':
+        return 'Hindi suportado ng device ang napiling voice language. Ilipat ito sa EN sa header pill at subukan muli.';
+      case 'no-speech':
+        return 'Walang boses na narinig. Pindutin ang Mic button at magsalita nang malinaw malapit sa mic.';
+      default:
+        return `Hindi nag-umpisa ang voice input (${escHtml(errCode)}). Subukan muli o i-type ang iyong tanong.`;
+    }
+  }
+
+  function startVoiceInput(retriedEnglishFallback = false) {
+    if (isStreaming) return;
+
+    const issue = getVoiceCapabilityIssue();
+    if (issue) {
+      appendMessageElement(issue.message, false, true);
+      return;
+    }
+
     stopSpeaking();
+    unlockSpeechSynthesis();
+
+    const runId = ++activeRecognitionRunId;
+    cancelNextVoiceSend = false;
+    let hadError = false;
+    let gotAnyTranscript = false;
 
     try {
-      recognition = new SpeechRecognitionCtor();
-      recognition.lang = voiceLang;
-      recognition.interimResults = true;
-      recognition.continuous = false;
-      recognition.maxAlternatives = 1;
+      const rec = new SpeechRecognitionCtor();
+      recognition = rec;
+      rec.lang = voiceLang;
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.maxAlternatives = 1;
 
       const input = document.getElementById('aiInput');
-      let finalTranscript = '';
+      let startedOnce = false;
 
-      recognition.onstart = () => {
+      rec.onstart = () => {
+        if (runId !== activeRecognitionRunId) return;
+        startedOnce = true;
         isListening = true;
         updateVoiceBar();
       };
 
-      recognition.onresult = (event) => {
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const text = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += text + ' ';
-          } else {
-            interim += text;
-          }
+      rec.onresult = (event) => {
+        if (runId !== activeRecognitionRunId) return;
+        let fullTranscript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          fullTranscript += event.results[i][0].transcript;
+        }
+        const cleaned = fullTranscript.trim();
+        if (cleaned) {
+          gotAnyTranscript = true;
         }
         if (input) {
-          input.value = (finalTranscript + interim).trim();
+          input.value = cleaned;
         }
       };
 
-      recognition.onerror = (event) => {
-        isListening = false;
-        updateVoiceBar();
-        if (event.error === 'not-allowed') {
+      rec.onerror = (event) => {
+        if (runId !== activeRecognitionRunId) return;
+        const errCode = (event && event.error) ? String(event.error) : 'unknown';
+
+        // Ignore benign abort when user manually stopped/switched languages
+        if (errCode === 'aborted' && cancelNextVoiceSend) {
+          isListening = false;
+          updateVoiceBar();
+          return;
+        }
+
+        // Automatically fallback once from fil-PH to en-US if device lacks Filipino recognition pack
+        if (errCode === 'language-not-supported' && voiceLang === 'fil-PH' && !retriedEnglishFallback) {
+          hadError = true;
+          isListening = false;
+          voiceLang = 'en-US';
+          localStorage.setItem(VOICE_LANG_KEY, voiceLang);
+          updateVoiceBar();
           appendMessageElement(
-            'Naka-block ang microphone permission sa iyong browser. Paki-allow ang Mic access upang makapagsalita kay Marvi.',
+            'Walang <code>fil-PH</code> voice recognition pack sa device na ito — awtomatikong inilipat sa <strong>EN (en-US)</strong> at sinusubukan muli.',
             false,
-            true
+            false
           );
+          setTimeout(() => startVoiceInput(true), 220);
+          return;
         }
-      };
 
-      recognition.onend = () => {
-        const hadListening = isListening;
+        hadError = true;
         isListening = false;
         updateVoiceBar();
-        if (hadListening && input && input.value.trim() !== '') {
+
+        // Don't complain about no-speech if user already produced text or manually cancelled
+        if (errCode === 'no-speech' && gotAnyTranscript) {
+          return;
+        }
+        appendMessageElement(formatRecognitionErrorMessage(errCode), false, true);
+      };
+
+      rec.onend = () => {
+        if (runId !== activeRecognitionRunId) return;
+        const shouldSend = startedOnce && !cancelNextVoiceSend && !hadError;
+        isListening = false;
+        recognition = null;
+        updateVoiceBar();
+
+        if (shouldSend && input && input.value.trim() !== '') {
           sendAIMessage(true);
         }
       };
 
-      recognition.start();
+      // Optimistic listening state so tapping mic again cleanly stops even during startup
+      isListening = true;
+      updateVoiceBar();
+      rec.start();
     } catch (e) {
       isListening = false;
+      recognition = null;
       updateVoiceBar();
+      appendMessageElement(
+        'Hindi mabuksan ang microphone sa browser na ito. Pakisubukan i-refresh ang page o gamitin ang Google Chrome.',
+        false,
+        true
+      );
     }
   }
 
   function toggleVoiceInput() {
-    if (!SpeechRecognitionCtor) return;
+    unlockSpeechSynthesis();
     if (isListening) {
-      stopListening();
+      // Stopping mic manually by tapping the mic button submits any captured text
+      stopListening({ cancelSend: false });
     } else {
-      startVoiceInput();
+      startVoiceInput(false);
     }
   }
 
   function stopMarviVoiceAll() {
-    stopListening();
+    stopListening({ cancelSend: true });
     stopSpeaking();
   }
 
@@ -683,6 +1143,7 @@
       activeAbortController.abort();
     }
     stopMarviVoiceAll();
+    shownTtsDiagnostic = false;
     conversationTurns = [];
     try {
       sessionStorage.removeItem(getStorageKey());
@@ -716,17 +1177,26 @@
 
   // Initialize UI & restore conversation across pages
   document.addEventListener('DOMContentLoaded', () => {
-    const micBtn = document.getElementById('aiMicBtn');
-    if (micBtn && SpeechRecognitionCtor) {
-      micBtn.style.display = 'flex';
+    refreshVoices();
+    if (hasSpeechSynthesis) {
+      if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
+        window.speechSynthesis.onvoiceschanged = () => {
+          refreshVoices();
+          updateVoiceReplyToggleUI();
+        };
+      }
+      if (typeof window.speechSynthesis.addEventListener === 'function') {
+        window.speechSynthesis.addEventListener('voiceschanged', () => {
+          refreshVoices();
+          updateVoiceReplyToggleUI();
+        });
+      }
     }
+
+    updateVoiceLangUI();
+    updateMicButtonUI();
     updateVoiceReplyToggleUI();
     loadSavedConversation();
-
-    // Warm up speechSynthesis voices list asynchronously in Chrome/Edge
-    if (hasSpeechSynthesis && typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
-      window.speechSynthesis.onvoiceschanged = () => {};
-    }
   });
 
   document.addEventListener('keydown', (e) => {

@@ -8,8 +8,12 @@ requireRole('admin');
 releaseReadOnlySession();
 
 $adminId = currentUserId();
+$statusFilter = $_GET['status'] ?? 'all';
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 30;
+$offset = ($page - 1) * $perPage;
 
-// Handle verify / reject payment
+// Handle verify / reject payment while preserving active filter & page
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_payment'])) {
     $token = $_POST[CSRF_TOKEN_NAME] ?? '';
     if (!verifyCsrfToken($token)) {
@@ -20,17 +24,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_payment'])) {
         $res = processPaymentDecision($payId, $act, $adminId, 'Admin');
         setFlash($res['flash_type'], $res['message']);
     }
-    header("Location: payments.php");
+    $redirectParams = [];
+    if ($statusFilter !== 'all') {
+        $redirectParams['status'] = $statusFilter;
+    }
+    if ($page > 1) {
+        $redirectParams['page'] = $page;
+    }
+    $qs = !empty($redirectParams) ? ('?' . http_build_query($redirectParams)) : '';
+    header("Location: payments.php{$qs}");
     exit;
 }
 
-$statusFilter = $_GET['status'] ?? 'all';
 $whereSql = '';
 $queryParams = [];
 if (in_array($statusFilter, ['pending', 'verified', 'rejected', 'refunded'], true)) {
     $whereSql = 'WHERE p.status = ?';
     $queryParams[] = $statusFilter;
 }
+
+$isCsvExport = (isset($_GET['export']) && $_GET['export'] === 'csv');
+$totalPayments = (int)(dbRow("SELECT COUNT(*) as c FROM payments p {$whereSql}", $queryParams)['c'] ?? 0);
+$totalPages = max(1, (int)ceil($totalPayments / $perPage));
+if ($page > $totalPages) {
+    $page = $totalPages;
+    $offset = ($page - 1) * $perPage;
+}
+$limitSql = $isCsvExport ? '' : "LIMIT {$perPage} OFFSET {$offset}";
 
 $payments = dbRows("
     SELECT p.*, b.booking_code, 
@@ -44,6 +64,7 @@ $payments = dbRows("
     LEFT JOIN users v ON p.verified_by = v.id 
     {$whereSql}
     ORDER BY p.id DESC
+    {$limitSql}
 ", $queryParams);
 
 // CSV Export with formula-injection neutralization
@@ -85,10 +106,13 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Payment Verification — Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -120,10 +144,19 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         </div>
       </div>
 
+      <div class="admin-toolbar">
+        <div style="font-size:0.84rem;color:var(--text-muted);">
+          Showing page <strong style="color:#fff;"><?= $page ?></strong> of <strong style="color:#fff;"><?= $totalPages ?></strong> (<?= $totalPayments ?> record(s))
+        </div>
+        <div style="min-width:260px;">
+          <input type="text" id="paymentSearchInput" data-table-search data-table-target="#paymentsTable" class="form-control" placeholder="Search booking code, guest, ref #..." style="background:rgba(255,255,255,0.05);font-size:0.85rem;">
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-body" style="padding:0;">
           <div class="table-wrap">
-            <table class="table">
+            <table class="table" id="paymentsTable">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -211,17 +244,18 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                               'ref_num' => $pay['reference_number'] ?: 'No Reference Number',
                               'status' => $pay['status'],
                               'proof_url' => getUploadUrl($pay['proof_image']),
+                              'proof_raw' => $pay['proof_image'],
                               'notes' => $pay['notes'] ?: 'No additional notes provided.',
                               'paid_at' => formatDate($pay['created_at'], 'F d, Y \a\t h:i:s A'),
                               'verified_by' => !empty($pay['verifier_first_name']) ? ((($pay['verifier_role'] ?? '') === 'admin' ? 'Super Admin: ' : 'Frontdesk Staff: ') . $pay['verifier_first_name'] . ' ' . ($pay['verifier_last_name'] ?? '')) : null,
                               'verified_at' => !empty($pay['verified_at']) ? formatDate($pay['verified_at'], 'M d, Y \a\t h:i A') : null
-                            ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' title="Inspect & Verify with AI Assist" style="padding:4px 8px;font-size:0.75rem;">
+                            ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' title="Inspect & Verify Receipt" style="padding:4px 8px;font-size:0.75rem;">
                               <i class="fa-solid fa-magnifying-glass-chart"></i> Inspect
                             </button>
                           <?php endif; ?>
 
                           <?php if ($pay['status'] === 'pending'): ?>
-                            <form action="" method="POST" style="display:inline-flex;gap:4px;">
+                            <form action="payments.php?status=<?= urlencode($statusFilter) ?>&page=<?= $page ?>" method="POST" style="display:inline-flex;gap:4px;">
                               <?= csrfField() ?>
                               <input type="hidden" name="payment_id" value="<?= $pay['id'] ?>">
                               <input type="hidden" name="action_payment" value="1">
@@ -239,6 +273,19 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
               </tbody>
             </table>
           </div>
+          <?php if ($totalPages > 1): ?>
+            <div class="admin-pagination">
+              <span>Page <strong><?= $page ?></strong> of <strong><?= $totalPages ?></strong></span>
+              <div class="admin-pagination-links">
+                <?php if ($page > 1): ?>
+                  <a href="payments.php?status=<?= urlencode($statusFilter) ?>&page=<?= $page - 1 ?>" class="btn btn-ghost btn-sm">&laquo; Prev</a>
+                <?php endif; ?>
+                <?php if ($page < $totalPages): ?>
+                  <a href="payments.php?status=<?= urlencode($statusFilter) ?>&page=<?= $page + 1 ?>" class="btn btn-ghost btn-sm">Next &raquo;</a>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -247,7 +294,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 </div>
 
 <!-- Receipt Quick Inspector Modal -->
-<div id="receiptInspectorModal" onclick="closeReceiptInspector()" style="display:none;position:fixed;inset:0;background:rgba(5,10,24,0.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+<div id="receiptInspectorModal" class="admin-modal-overlay" onclick="closeReceiptInspector()" style="display:none;position:fixed;inset:0;background:rgba(5,10,24,0.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;">
   <div class="glass-card" style="max-width:850px;width:100%;max-height:90vh;overflow-y:auto;padding:28px;background:var(--navy);border:1px solid rgba(201,168,76,0.3);border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.7);" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:20px;">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -262,14 +309,18 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
       <button type="button" class="btn btn-ghost btn-sm" onclick="closeReceiptInspector()" style="font-size:1.2rem;padding:4px 8px;color:#94a3b8;">&times;</button>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;" id="inspectorGrid">
+    <div class="admin-modal-grid-2" id="inspectorGrid">
       <!-- Screenshot Preview Column -->
       <div style="background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;">
         <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;font-weight:700;">Uploaded Proof Receipt</div>
-        <img id="inspectorReceiptImg" src="#" alt="Proof Receipt" style="max-width:100%;max-height:380px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);display:block;margin:0 auto;">
+        <img id="inspectorReceiptImg" src="#" alt="Proof Receipt" style="max-width:100%;max-height:380px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);display:block;margin:0 auto;object-fit:contain;">
+        <div id="inspectorReceiptFallback" style="display:none;padding:28px 16px;color:var(--text-muted);font-size:0.85rem;">
+          <i class="fa-solid fa-file-pdf" style="font-size:2.4rem;color:var(--gold);margin-bottom:8px;display:block;"></i>
+          <span>Preview unavailable inline. Open file in a new tab below.</span>
+        </div>
         <div style="margin-top:10px;">
           <a href="#" id="inspectorReceiptLink" target="_blank" class="btn btn-ghost btn-sm" style="font-size:0.75rem;">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open High-Res Full Image
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Full File
           </a>
         </div>
       </div>
@@ -323,7 +374,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 
         <!-- Actions -->
         <div id="inspectorActionArea">
-          <form id="inspectorActionForm" action="" method="POST" style="display:flex;gap:10px;">
+          <form id="inspectorActionForm" action="payments.php?status=<?= urlencode($statusFilter) ?>&page=<?= $page ?>" method="POST" style="display:flex;gap:10px;">
             <?= csrfField() ?>
             <input type="hidden" name="payment_id" id="inspectorPaymentId" value="">
             <input type="hidden" name="action_payment" value="1">
@@ -341,8 +392,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
   </div>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/admin.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 <script>
 function openReceiptInspector(data) {
   document.getElementById('inspectorPaymentId').value = data.id;
@@ -356,14 +407,29 @@ function openReceiptInspector(data) {
   document.getElementById('inspectorNotes').textContent = data.notes;
 
   const imgEl = document.getElementById('inspectorReceiptImg');
+  const fallbackEl = document.getElementById('inspectorReceiptFallback');
   const linkEl = document.getElementById('inspectorReceiptLink');
-  if (data.proof_url) {
+  const rawName = (data.proof_raw || data.proof_url || '').toLowerCase();
+  const isPdf = rawName.endsWith('.pdf');
+
+  if (data.proof_url && !isPdf) {
+    if (fallbackEl) fallbackEl.style.display = 'none';
+    imgEl.onerror = function () {
+      imgEl.style.display = 'none';
+      if (fallbackEl) fallbackEl.style.display = 'block';
+    };
     imgEl.src = data.proof_url;
     imgEl.style.display = 'block';
     linkEl.href = data.proof_url;
     linkEl.style.display = 'inline-flex';
+  } else if (data.proof_url) {
+    imgEl.style.display = 'none';
+    if (fallbackEl) fallbackEl.style.display = 'block';
+    linkEl.href = data.proof_url;
+    linkEl.style.display = 'inline-flex';
   } else {
     imgEl.style.display = 'none';
+    if (fallbackEl) fallbackEl.style.display = 'none';
     linkEl.href = '#';
     linkEl.style.display = 'none';
   }

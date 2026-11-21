@@ -68,15 +68,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['override_status'])) {
                     createNotification($bk['user_id'], 'Booking Status Update', "Your reservation #{$bk['booking_code']} was marked $newStat: $reason", 'alert');
                     setFlash('warning', "Booking #{$bk['booking_code']} marked as " . strtoupper($newStat) . ".");
                 } elseif ($newStat === 'checked_in') {
-                    dbExec("UPDATE bookings SET status = 'checked_in', checked_in_at = NOW() WHERE id = ?", [$bId]);
-                    dbExec("UPDATE rooms SET status = 'occupied' WHERE id = ?", [$bk['room_id']]);
-                    auditLog('Admin Checked In Guest', 'Admin Module', "Booking #{$bk['booking_code']} marked checked-in");
-                    setFlash('success', "Customer for booking #{$bk['booking_code']} checked in successfully.");
+                    $conflict = findConflictingBooking((int)$bk['room_id'], $bk['check_in'], $bk['check_out'], $bId);
+                    if ($conflict) {
+                        setFlash('error', "Cannot check in Booking #{$bk['booking_code']}: overlaps with Booking #{$conflict['booking_code']} (" . formatDate($conflict['check_in'], 'M d') . " - " . formatDate($conflict['check_out'], 'M d') . ").");
+                    } else {
+                        dbExec("UPDATE bookings SET status = 'checked_in', checked_in_at = NOW(), accepted_by = COALESCE(accepted_by, ?), accepted_at = COALESCE(accepted_at, NOW()), cancelled_reason = NULL WHERE id = ?", [$adminId, $bId]);
+                        dbExec("UPDATE rooms SET status = 'occupied' WHERE id = ?", [$bk['room_id']]);
+                        auditLog('Admin Checked In Guest', 'Admin Module', "Booking #{$bk['booking_code']} marked checked-in");
+                        setFlash('success', "Customer for booking #{$bk['booking_code']} checked in successfully.");
+                    }
                 } elseif ($newStat === 'checked_out') {
                     dbExec("UPDATE bookings SET status = 'checked_out', checked_out_at = NOW() WHERE id = ?", [$bId]);
-                    dbExec("UPDATE rooms SET status = 'dirty' WHERE id = ?", [$bk['room_id']]);
-                    auditLog('Admin Checked Out Guest', 'Admin Module', "Booking #{$bk['booking_code']} marked checked-out. Room marked for cleaning.");
-                    setFlash('info', "Customer for booking #{$bk['booking_code']} checked out. Room marked for housekeeping.");
+                    $otherCheckedIn = dbRow("SELECT id FROM bookings WHERE room_id = ? AND status = 'checked_in' AND id != ? LIMIT 1", [(int)$bk['room_id'], $bId]);
+                    if ($otherCheckedIn) {
+                        dbExec("UPDATE rooms SET status = 'occupied' WHERE id = ?", [$bk['room_id']]);
+                        auditLog('Admin Checked Out Guest', 'Admin Module', "Booking #{$bk['booking_code']} marked checked-out (other dorm guest still in-house).");
+                        setFlash('info', "Customer for booking #{$bk['booking_code']} checked out. Room stays occupied by remaining dorm guest.");
+                    } else {
+                        dbExec("UPDATE rooms SET status = 'dirty' WHERE id = ?", [$bk['room_id']]);
+                        auditLog('Admin Checked Out Guest', 'Admin Module', "Booking #{$bk['booking_code']} marked checked-out. Room marked for cleaning.");
+                        setFlash('info', "Customer for booking #{$bk['booking_code']} checked out. Room marked for housekeeping.");
+                    }
                 } else { // pending
                     dbExec("UPDATE bookings SET status = 'pending', accepted_at = NULL, cancelled_at = NULL, cancelled_reason = NULL WHERE id = ?", [$bId]);
                     if ($wasCheckedIn) {
@@ -88,8 +100,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['override_status'])) {
             }
         }
     }
-    $tabParam = $tab !== 'all' ? '?tab=' . urlencode($tab) : '';
-    header("Location: bookings.php$tabParam");
+    $redir = [];
+    if ($tab !== 'all') $redir['tab'] = $tab;
+    if (!empty($_GET['q'])) $redir['q'] = trim((string)$_GET['q']);
+    if (!empty($_GET['page']) && (int)$_GET['page'] > 1) $redir['page'] = (int)$_GET['page'];
+    $qs = !empty($redir) ? ('?' . http_build_query($redir)) : '';
+    header("Location: bookings.php{$qs}");
     exit;
 }
 
@@ -105,17 +121,42 @@ $counts = dbRow("
     FROM bookings
 ");
 
-$whereClause = "1=1";
+$search = trim($_GET['q'] ?? '');
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 30;
+$offset = ($page - 1) * $perPage;
+
+$conditions = ["1=1"];
+$params = [];
 if ($tab === 'pending') {
-    $whereClause = "b.status = 'pending'";
+    $conditions[] = "b.status = 'pending'";
 } elseif ($tab === 'confirmed') {
-    $whereClause = "b.status = 'confirmed'";
+    $conditions[] = "b.status = 'confirmed'";
 } elseif ($tab === 'checked_in') {
-    $whereClause = "b.status = 'checked_in'";
+    $conditions[] = "b.status = 'checked_in'";
 } elseif ($tab === 'checked_out') {
-    $whereClause = "b.status = 'checked_out'";
+    $conditions[] = "b.status = 'checked_out'";
 } elseif ($tab === 'cancelled') {
-    $whereClause = "b.status IN ('cancelled', 'rejected')";
+    $conditions[] = "b.status IN ('cancelled', 'rejected')";
+}
+if ($search !== '') {
+    $conditions[] = "(b.booking_code LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ? OR r.name LIKE ? OR r.room_number LIKE ?)";
+    $like = '%' . $search . '%';
+    array_push($params, $like, $like, $like, $like, $like, $like);
+}
+$whereClause = implode(' AND ', $conditions);
+
+$totalFiltered = (int)(dbRow("
+    SELECT COUNT(*) as c
+    FROM bookings b
+    JOIN users u ON b.user_id = u.id
+    JOIN rooms r ON b.room_id = r.id
+    WHERE $whereClause
+", $params)['c'] ?? 0);
+$totalPages = max(1, (int)ceil($totalFiltered / $perPage));
+if ($page > $totalPages) {
+    $page = $totalPages;
+    $offset = ($page - 1) * $perPage;
 }
 
 $allBookings = dbRows("
@@ -123,21 +164,31 @@ $allBookings = dbRows("
            u.first_name, u.middle_name, u.last_name, u.suffix, u.email, u.phone, 
            r.name as room_name, r.room_number,
            ac.first_name as acceptor_fn, ac.last_name as acceptor_ln, ac.role as acceptor_role,
-           (SELECT p.id FROM payments p WHERE p.booking_id = b.id ORDER BY p.id DESC LIMIT 1) as payment_id,
-           (SELECT p.status FROM payments p WHERE p.booking_id = b.id ORDER BY p.id DESC LIMIT 1) as payment_status,
-           COALESCE((SELECT p.method FROM payments p WHERE p.booking_id = b.id ORDER BY p.id DESC LIMIT 1), b.payment_method, 'maya') as payment_method,
-           (SELECT p.proof_image FROM payments p WHERE p.booking_id = b.id ORDER BY p.id DESC LIMIT 1) as proof_image,
-           (SELECT p.reference_number FROM payments p WHERE p.booking_id = b.id ORDER BY p.id DESC LIMIT 1) as reference_number,
-           (SELECT p.notes FROM payments p WHERE p.booking_id = b.id ORDER BY p.id DESC LIMIT 1) as payment_notes,
-           (SELECT p.amount FROM payments p WHERE p.booking_id = b.id ORDER BY p.id DESC LIMIT 1) as paid_amount,
-           (SELECT p.created_at FROM payments p WHERE p.booking_id = b.id ORDER BY p.id DESC LIMIT 1) as payment_created_at
+           lp.id as payment_id,
+           lp.status as payment_status,
+           COALESCE(lp.method, b.payment_method, 'maya') as payment_method,
+           lp.proof_image as proof_image,
+           lp.reference_number as reference_number,
+           lp.notes as payment_notes,
+           lp.amount as paid_amount,
+           lp.created_at as payment_created_at
     FROM bookings b 
     JOIN users u ON b.user_id = u.id 
     JOIN rooms r ON b.room_id = r.id 
     LEFT JOIN users ac ON b.accepted_by = ac.id
+    LEFT JOIN (
+        SELECT p1.*
+        FROM payments p1
+        INNER JOIN (
+            SELECT booking_id, MAX(id) AS max_id
+            FROM payments
+            GROUP BY booking_id
+        ) pm ON p1.id = pm.max_id
+    ) lp ON lp.booking_id = b.id
     WHERE $whereClause
     ORDER BY b.id DESC
-");
+    LIMIT {$perPage} OFFSET {$offset}
+", $params);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -145,10 +196,13 @@ $allBookings = dbRows("
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Master Bookings Registry &amp; Lifecycle Audit — Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
   <style>
     .booking-tabs {
       display: flex;
@@ -275,29 +329,34 @@ $allBookings = dbRows("
           <h1 class="page-header-title">Master Reservation Records</h1>
           <div class="page-header-sub">Full audit trail of bookings with exact decision timestamps for approvals, denials, and customer check-ins.</div>
         </div>
-        <div style="min-width:280px;">
-          <input type="text" id="bookingSearchInput" class="form-control" placeholder="Search code, customer, room, or email..." onkeyup="filterBookingsTable()" style="background:rgba(255,255,255,0.05);font-size:0.85rem;">
-        </div>
+        <form action="bookings.php" method="GET" style="display:flex;gap:8px;align-items:center;min-width:290px;">
+          <input type="hidden" name="tab" value="<?= h($tab) ?>">
+          <input type="text" id="bookingSearchInput" name="q" value="<?= h($search) ?>" data-table-search data-table-target="#bookingsTable" class="form-control" placeholder="Search code, customer, room, or email..." style="background:rgba(255,255,255,0.05);font-size:0.85rem;">
+          <button type="submit" class="btn btn-gold btn-sm"><i class="fa-solid fa-magnifying-glass"></i></button>
+          <?php if ($search !== ''): ?>
+            <a href="bookings.php?tab=<?= urlencode($tab) ?>" class="btn btn-ghost btn-sm" title="Clear"><i class="fa-solid fa-xmark"></i></a>
+          <?php endif; ?>
+        </form>
       </div>
 
       <!-- Quick Filter Tabs (Hindi Magulo at Hindi Watak-watak) -->
       <div class="booking-tabs">
-        <a href="bookings.php?tab=all" class="booking-tab <?= $tab === 'all' ? 'active' : '' ?>">
+        <a href="bookings.php?tab=all<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="booking-tab <?= $tab === 'all' ? 'active' : '' ?>">
           <i class="fa-solid fa-list-ul"></i> All Records <span class="tab-counter"><?= (int)($counts['total'] ?? 0) ?></span>
         </a>
-        <a href="bookings.php?tab=pending" class="booking-tab <?= $tab === 'pending' ? 'active' : '' ?>">
+        <a href="bookings.php?tab=pending<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="booking-tab <?= $tab === 'pending' ? 'active' : '' ?>">
           <i class="fa-solid fa-clock" style="color:#eab308;"></i> Pending Approval <span class="tab-counter"><?= (int)($counts['pending_cnt'] ?? 0) ?></span>
         </a>
-        <a href="bookings.php?tab=confirmed" class="booking-tab <?= $tab === 'confirmed' ? 'active' : '' ?>">
+        <a href="bookings.php?tab=confirmed<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="booking-tab <?= $tab === 'confirmed' ? 'active' : '' ?>">
           <i class="fa-solid fa-circle-check" style="color:#22c55e;"></i> Approved / Confirmed <span class="tab-counter"><?= (int)($counts['confirmed_cnt'] ?? 0) ?></span>
         </a>
-        <a href="bookings.php?tab=checked_in" class="booking-tab <?= $tab === 'checked_in' ? 'active' : '' ?>">
+        <a href="bookings.php?tab=checked_in<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="booking-tab <?= $tab === 'checked_in' ? 'active' : '' ?>">
           <i class="fa-solid fa-key" style="color:#60a5fa;"></i> In-House Occupants <span class="tab-counter"><?= (int)($counts['checked_in_cnt'] ?? 0) ?></span>
         </a>
-        <a href="bookings.php?tab=checked_out" class="booking-tab <?= $tab === 'checked_out' ? 'active' : '' ?>">
+        <a href="bookings.php?tab=checked_out<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="booking-tab <?= $tab === 'checked_out' ? 'active' : '' ?>">
           <i class="fa-solid fa-door-closed" style="color:#94a3b8;"></i> Checked Out <span class="tab-counter"><?= (int)($counts['checked_out_cnt'] ?? 0) ?></span>
         </a>
-        <a href="bookings.php?tab=cancelled" class="booking-tab <?= $tab === 'cancelled' ? 'active' : '' ?>">
+        <a href="bookings.php?tab=cancelled<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="booking-tab <?= $tab === 'cancelled' ? 'active' : '' ?>">
           <i class="fa-solid fa-ban" style="color:#ef4444;"></i> Denied / Cancelled <span class="tab-counter"><?= (int)($counts['cancelled_cnt'] ?? 0) ?></span>
         </a>
       </div>
@@ -403,6 +462,7 @@ $allBookings = dbRows("
                               "method" => strtoupper($bk["payment_method"]),
                               "ref_num" => $bk["reference_number"] ?: "No Reference Number",
                               "proof_url" => getUploadUrl($bk["proof_image"]),
+                              "proof_raw" => $bk["proof_image"],
                               "payment_status" => $bk["payment_status"] ?? "pending",
                               "payment_id" => $bk["payment_id"],
                               "notes" => $bk["payment_notes"] ?: "No notes provided.",
@@ -479,10 +539,11 @@ $allBookings = dbRows("
                           </button>
                         </div>
 
-                        <form action="" method="POST" style="display:flex;gap:4px;align-items:center;">
+                        <form action="bookings.php?tab=<?= urlencode($tab) ?><?= $search !== '' ? '&q=' . urlencode($search) : '' ?><?= $page > 1 ? '&page=' . $page : '' ?>" method="POST" style="display:flex;gap:4px;align-items:center;" onsubmit="return handleBookingOverrideSubmit(this)">
                           <?= csrfField() ?>
                           <input type="hidden" name="booking_id" value="<?= $bk['id'] ?>">
                           <input type="hidden" name="override_status" value="1">
+                          <input type="hidden" name="status_reason" value="">
                           <select name="status" class="form-control" style="font-size:0.75rem;padding:4px 8px;min-width:115px;">
                             <option value="pending" <?= $bk['status'] === 'pending' ? 'selected' : '' ?>>Pending</option>
                             <option value="confirmed" <?= $bk['status'] === 'confirmed' ? 'selected' : '' ?>>Approved</option>
@@ -502,6 +563,21 @@ $allBookings = dbRows("
               </tbody>
             </table>
           </div>
+          <?php if ($totalPages > 1 || $totalFiltered > 0): ?>
+            <div class="admin-pagination">
+              <span>Showing page <strong><?= $page ?></strong> of <strong><?= $totalPages ?></strong> (<?= $totalFiltered ?> booking record(s))</span>
+              <?php if ($totalPages > 1): ?>
+                <div class="admin-pagination-links">
+                  <?php if ($page > 1): ?>
+                    <a href="bookings.php?tab=<?= urlencode($tab) ?>&q=<?= urlencode($search) ?>&page=<?= $page - 1 ?>" class="btn btn-ghost btn-sm">&laquo; Prev</a>
+                  <?php endif; ?>
+                  <?php if ($page < $totalPages): ?>
+                    <a href="bookings.php?tab=<?= urlencode($tab) ?>&q=<?= urlencode($search) ?>&page=<?= $page + 1 ?>" class="btn btn-ghost btn-sm">Next &raquo;</a>
+                  <?php endif; ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -546,7 +622,7 @@ $allBookings = dbRows("
 </div>
 
 <!-- Receipt Quick Inspector Modal for Bookings Registry -->
-<div id="receiptInspectorModal" style="display:none;position:fixed;inset:0;background:rgba(5,10,24,0.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;" onclick="closeReceiptInspector()">
+<div id="receiptInspectorModal" class="admin-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(5,10,24,0.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;" onclick="closeReceiptInspector()">
   <div class="glass-card" style="max-width:850px;width:100%;max-height:90vh;overflow-y:auto;padding:28px;background:var(--navy);border:1px solid rgba(201,168,76,0.3);border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.7);" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:20px;">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -561,14 +637,18 @@ $allBookings = dbRows("
       <button type="button" class="btn btn-ghost btn-sm" onclick="closeReceiptInspector()" style="font-size:1.2rem;padding:4px 8px;color:#94a3b8;">&times;</button>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;" id="inspectorGrid">
+    <div class="admin-modal-grid-2" id="inspectorGrid">
       <!-- Screenshot Preview Column -->
       <div style="background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;">
         <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;font-weight:700;">Uploaded Proof Receipt</div>
         <img id="inspectorReceiptImg" src="#" alt="Proof Receipt" style="max-width:100%;max-height:380px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);display:block;margin:0 auto;object-fit:contain;">
+        <div id="inspectorReceiptFallback" style="display:none;padding:28px 16px;color:var(--text-muted);font-size:0.85rem;">
+          <i class="fa-solid fa-file-pdf" style="font-size:2.4rem;color:var(--gold);margin-bottom:8px;display:block;"></i>
+          <span>Preview unavailable inline. Open file in a new tab below.</span>
+        </div>
         <div style="margin-top:10px;">
           <a href="#" id="inspectorReceiptLink" target="_blank" class="btn btn-ghost btn-sm" style="font-size:0.75rem;">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open High-Res Full Image
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Full File
           </a>
         </div>
       </div>
@@ -622,7 +702,7 @@ $allBookings = dbRows("
 
         <!-- Direct Actions -->
         <div id="inspectorActionArea">
-          <form id="inspectorActionForm" action="" method="POST" style="display:flex;gap:10px;">
+          <form id="inspectorActionForm" action="bookings.php?tab=<?= urlencode($tab) ?><?= $search !== '' ? '&q=' . urlencode($search) : '' ?><?= $page > 1 ? '&page=' . $page : '' ?>" method="POST" style="display:flex;gap:10px;">
             <?= csrfField() ?>
             <input type="hidden" name="payment_id" id="inspectorPaymentId" value="">
             <input type="hidden" name="action_payment" value="1">
@@ -640,9 +720,20 @@ $allBookings = dbRows("
   </div>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/admin.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 <script>
+function handleBookingOverrideSubmit(form) {
+  const sel = form.querySelector('select[name="status"]');
+  const reasonInp = form.querySelector('input[name="status_reason"]');
+  if (sel && reasonInp && (sel.value === 'rejected' || sel.value === 'cancelled')) {
+    const label = sel.value === 'rejected' ? 'Denial' : 'Cancellation';
+    const r = prompt(`Enter reason for ${label} (optional):`, '');
+    if (r === null) return false;
+    reasonInp.value = r.trim();
+  }
+  return true;
+}
 function filterBookingsTable() {
   const query = document.getElementById('bookingSearchInput').value.toLowerCase();
   const rows = document.querySelectorAll('#bookingsTable tbody tr');
@@ -785,14 +876,29 @@ function openReceiptInspector(data) {
   document.getElementById('inspectorNotes').textContent = data.notes || 'No customer notes.';
 
   const imgEl = document.getElementById('inspectorReceiptImg');
+  const fallbackEl = document.getElementById('inspectorReceiptFallback');
   const linkEl = document.getElementById('inspectorReceiptLink');
-  if (data.proof_url) {
+  const rawName = (data.proof_raw || data.proof_url || '').toLowerCase();
+  const isPdf = rawName.endsWith('.pdf');
+
+  if (data.proof_url && !isPdf) {
+    if (fallbackEl) fallbackEl.style.display = 'none';
+    imgEl.onerror = function () {
+      imgEl.style.display = 'none';
+      if (fallbackEl) fallbackEl.style.display = 'block';
+    };
     imgEl.src = data.proof_url;
     linkEl.href = data.proof_url;
     imgEl.style.display = 'block';
     linkEl.style.display = 'inline-flex';
+  } else if (data.proof_url) {
+    imgEl.style.display = 'none';
+    if (fallbackEl) fallbackEl.style.display = 'block';
+    linkEl.href = data.proof_url;
+    linkEl.style.display = 'inline-flex';
   } else {
     imgEl.style.display = 'none';
+    if (fallbackEl) fallbackEl.style.display = 'none';
     linkEl.href = '#';
     linkEl.style.display = 'none';
   }

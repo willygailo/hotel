@@ -8,20 +8,43 @@ requireRole('admin');
 releaseReadOnlySession();
 
 $filter = trim($_GET['role'] ?? 'all');
-$whereClause = "";
+$search = trim($_GET['q'] ?? '');
+$page   = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 50;
+$offset  = ($page - 1) * $perPage;
 
-if ($filter === 'user_auth') {
-    $whereClause = "WHERE (u.role = 'user' OR a.module IN ('User Auth', 'Auth', 'User Module') OR a.action LIKE '%User%' OR a.details LIKE '%user%')";
-} elseif ($filter === 'staff_auth') {
-    $whereClause = "WHERE (u.role = 'staff' OR a.module IN ('Staff Auth', 'Staff Module') OR a.action LIKE '%Staff%' OR a.details LIKE '%staff%')";
+// Mutually exclusive role conditions so Admin actions (e.g. "Admin Updated User Account") never pollute User/Staff feeds
+$adminCond  = "(u.role = 'admin' OR a.module IN ('Admin Auth', 'Admin Module', 'Admin Settings') OR a.action LIKE 'Admin %')";
+$staffCond  = "((u.role = 'staff' OR a.module IN ('Staff Auth', 'Staff Module', 'Staff Finance')) AND NOT {$adminCond})";
+$userCond   = "((u.role = 'user' OR a.module IN ('User Auth', 'Auth', 'User Module')) AND NOT {$adminCond} AND NOT {$staffCond})";
+$failedCond = "(a.action LIKE '%Failed%' OR a.action LIKE '%Blocked%' OR a.action LIKE '%WARNING%' OR a.details LIKE '%failed%' OR a.details LIKE '%invalid_credentials%' OR a.details LIKE '%banned%')";
+
+$conditions = [];
+$params     = [];
+
+if ($filter === 'user_auth' || $filter === 'user') {
+    $conditions[] = $userCond;
+} elseif ($filter === 'staff_auth' || $filter === 'staff') {
+    $conditions[] = $staffCond;
 } elseif ($filter === 'admin_auth') {
-    $whereClause = "WHERE (u.role = 'admin' OR a.module IN ('Admin Auth', 'Admin Module') OR a.action LIKE '%Admin%')";
+    $conditions[] = $adminCond;
 } elseif ($filter === 'failed') {
-    $whereClause = "WHERE (a.action LIKE '%Failed%' OR a.action LIKE '%Blocked%' OR a.action LIKE '%WARNING%' OR a.details LIKE '%failed%' OR a.details LIKE '%invalid_credentials%' OR a.details LIKE '%banned%')";
-} elseif ($filter === 'staff') {
-    $whereClause = "WHERE u.role = 'staff' OR a.module LIKE '%Staff%'";
-} elseif ($filter === 'user') {
-    $whereClause = "WHERE u.role = 'user' OR a.module LIKE '%User%'";
+    $conditions[] = $failedCond;
+}
+
+if ($search !== '') {
+    $conditions[] = "(a.action LIKE ? OR a.module LIKE ? OR a.details LIKE ? OR a.ip_address LIKE ? OR u.email LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)";
+    $like = '%' . $search . '%';
+    array_push($params, $like, $like, $like, $like, $like, $like, $like);
+}
+
+$whereClause = !empty($conditions) ? ('WHERE ' . implode(' AND ', $conditions)) : '';
+
+$totalRows = (int)(dbRow("SELECT COUNT(*) as c FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id {$whereClause}", $params)['c'] ?? 0);
+$totalPages = max(1, (int)ceil($totalRows / $perPage));
+if ($page > $totalPages) {
+    $page = $totalPages;
+    $offset = ($page - 1) * $perPage;
 }
 
 $logs = dbRows("
@@ -30,15 +53,25 @@ $logs = dbRows("
     LEFT JOIN users u ON a.user_id = u.id 
     {$whereClause} 
     ORDER BY a.id DESC 
-    LIMIT 200
-");
+    LIMIT {$perPage} OFFSET {$offset}
+", $params);
 
-// Accurate Tab Counts
-$cntUserAuth  = (int)(dbRow("SELECT COUNT(*) as c FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id WHERE (u.role = 'user' OR a.module IN ('User Auth', 'Auth', 'User Module') OR a.action LIKE '%User%' OR a.details LIKE '%user%')")['c'] ?? 0);
-$cntStaffAuth = (int)(dbRow("SELECT COUNT(*) as c FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id WHERE (u.role = 'staff' OR a.module IN ('Staff Auth', 'Staff Module') OR a.action LIKE '%Staff%' OR a.details LIKE '%staff%')")['c'] ?? 0);
-$cntAdminAuth = (int)(dbRow("SELECT COUNT(*) as c FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id WHERE (u.role = 'admin' OR a.module IN ('Admin Auth', 'Admin Module') OR a.action LIKE '%Admin%')")['c'] ?? 0);
-$cntFailed    = (int)(dbRow("SELECT COUNT(*) as c FROM audit_logs WHERE (action LIKE '%Failed%' OR action LIKE '%Blocked%' OR action LIKE '%WARNING%' OR details LIKE '%failed%' OR details LIKE '%invalid_credentials%' OR details LIKE '%banned%')")['c'] ?? 0);
-$cntAll       = (int)(dbRow("SELECT COUNT(*) as c FROM audit_logs")['c'] ?? 0);
+// Accurate Non-Overlapping Tab Counts
+$countsRow = dbRow("
+    SELECT
+        COUNT(*) AS cnt_all,
+        SUM(CASE WHEN {$userCond} THEN 1 ELSE 0 END) AS cnt_user,
+        SUM(CASE WHEN {$staffCond} THEN 1 ELSE 0 END) AS cnt_staff,
+        SUM(CASE WHEN {$adminCond} THEN 1 ELSE 0 END) AS cnt_admin,
+        SUM(CASE WHEN {$failedCond} THEN 1 ELSE 0 END) AS cnt_failed
+    FROM audit_logs a
+    LEFT JOIN users u ON a.user_id = u.id
+");
+$cntUserAuth  = (int)($countsRow['cnt_user'] ?? 0);
+$cntStaffAuth = (int)($countsRow['cnt_staff'] ?? 0);
+$cntAdminAuth = (int)($countsRow['cnt_admin'] ?? 0);
+$cntFailed    = (int)($countsRow['cnt_failed'] ?? 0);
+$cntAll       = (int)($countsRow['cnt_all'] ?? 0);
 
 /**
  * Helper to parse raw JSON logs into clean human-readable details and email
@@ -50,7 +83,6 @@ function parseAuditDetails(array $log): array {
     $name    = trim(($log['first_name'] ?? '') . ' ' . ($log['last_name'] ?? ''));
     $badgeType = 'info';
 
-    // If details is JSON
     if (!empty($details) && ($details[0] === '{' || $details[0] === '[')) {
         $json = json_decode($details, true);
         if (json_last_error() === JSON_ERROR_NONE && is_array($json)) {
@@ -85,26 +117,23 @@ function parseAuditDetails(array $log): array {
         $badgeType = 'danger';
     } elseif (stripos($action, 'blocked') !== false || stripos($action, 'rate limit') !== false) {
         $badgeType = 'warning';
-    } elseif (stripos($action, 'registered') !== false) {
-        $badgeType = 'success';
-    } elseif (stripos($action, 'logged in') !== false) {
+    } elseif (stripos($action, 'registered') !== false || stripos($action, 'logged in') !== false) {
         $badgeType = 'success';
     }
 
-    // Role detection
     $role = $log['user_role'] ?? '';
     if (empty($role)) {
-        if (stripos($log['module'], 'staff') !== false || stripos($action, 'staff') !== false) {
-            $role = 'staff';
-        } elseif (stripos($log['module'], 'admin') !== false || stripos($action, 'admin') !== false) {
+        if (stripos($log['module'], 'admin') !== false || stripos($action, 'admin') !== false) {
             $role = 'admin';
+        } elseif (stripos($log['module'], 'staff') !== false || stripos($action, 'staff') !== false) {
+            $role = 'staff';
         } else {
             $role = 'user';
         }
     }
 
     return [
-        'name'      => $name ?: ($email ?: 'Guest User'),
+        'name'      => $name ?: ($email ?: 'Guest / System'),
         'email'     => $email,
         'role'      => $role,
         'action'    => $action,
@@ -119,10 +148,13 @@ function parseAuditDetails(array $log): array {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Audit &amp; Login Logs — Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
   <style>
     .audit-tab-pills { display: flex; gap: 8px; flex-wrap: wrap; }
     .audit-tab-pill {
@@ -158,27 +190,35 @@ function parseAuditDetails(array $log): array {
           <h1 class="page-header-title">Audit, Login &amp; Registration Logs</h1>
           <div class="page-header-sub">Dedicated activity feeds for Guest Users, Staff Frontdesk, and Security Audits.</div>
         </div>
+        <form action="audit-logs.php" method="GET" style="display:flex;gap:8px;align-items:center;">
+          <input type="hidden" name="role" value="<?= h($filter) ?>">
+          <input type="text" name="q" value="<?= h($search) ?>" class="form-control" placeholder="Search action, email, details, IP..." style="min-width:250px;background:rgba(255,255,255,0.05);font-size:0.85rem;">
+          <button type="submit" class="btn btn-gold btn-sm"><i class="fa-solid fa-magnifying-glass"></i></button>
+          <?php if ($search !== ''): ?>
+            <a href="audit-logs.php?role=<?= urlencode($filter) ?>" class="btn btn-ghost btn-sm" title="Clear search"><i class="fa-solid fa-xmark"></i></a>
+          <?php endif; ?>
+        </form>
       </div>
 
       <!-- Dedicated Separated Activity Tabs -->
       <div class="audit-tab-pills" style="margin-bottom:20px;">
-        <a href="?role=user_auth" class="audit-tab-pill <?= $filter === 'user_auth' ? 'active' : '' ?>">
+        <a href="?role=user_auth<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="audit-tab-pill <?= $filter === 'user_auth' ? 'active' : '' ?>">
           <i class="fa-solid fa-users" style="color:<?= $filter === 'user_auth' ? 'inherit' : '#2ECC71' ?>;"></i> 
           User Logins &amp; Signups <span class="audit-pill-count"><?= $cntUserAuth ?></span>
         </a>
-        <a href="?role=staff_auth" class="audit-tab-pill <?= $filter === 'staff_auth' ? 'active' : '' ?>">
+        <a href="?role=staff_auth<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="audit-tab-pill <?= $filter === 'staff_auth' ? 'active' : '' ?>">
           <i class="fa-solid fa-user-tie" style="color:<?= $filter === 'staff_auth' ? 'inherit' : '#4E9AF1' ?>;"></i> 
           Staff Desk Activity <span class="audit-pill-count"><?= $cntStaffAuth ?></span>
         </a>
-        <a href="?role=admin_auth" class="audit-tab-pill <?= $filter === 'admin_auth' ? 'active' : '' ?>">
+        <a href="?role=admin_auth<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="audit-tab-pill <?= $filter === 'admin_auth' ? 'active' : '' ?>">
           <i class="fa-solid fa-crown" style="color:<?= $filter === 'admin_auth' ? 'inherit' : 'var(--gold)' ?>;"></i> 
           Admin Actions <span class="audit-pill-count"><?= $cntAdminAuth ?></span>
         </a>
-        <a href="?role=failed" class="audit-tab-pill <?= $filter === 'failed' ? 'active' : '' ?>" style="<?= $cntFailed > 0 ? 'border-color:rgba(239,68,68,0.4);' : '' ?>">
+        <a href="?role=failed<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="audit-tab-pill <?= $filter === 'failed' ? 'active' : '' ?>" style="<?= $cntFailed > 0 ? 'border-color:rgba(239,68,68,0.4);' : '' ?>">
           <i class="fa-solid fa-triangle-exclamation" style="color:<?= $filter === 'failed' ? 'inherit' : '#ef4444' ?>;"></i> 
           Failed Attempts <span class="audit-pill-count" style="<?= $cntFailed > 0 && $filter !== 'failed' ? 'background:#ef4444;color:#fff;' : '' ?>"><?= $cntFailed ?></span>
         </a>
-        <a href="?role=all" class="audit-tab-pill <?= $filter === 'all' ? 'active' : '' ?>">
+        <a href="?role=all<?= $search !== '' ? '&q=' . urlencode($search) : '' ?>" class="audit-tab-pill <?= $filter === 'all' ? 'active' : '' ?>">
           <i class="fa-solid fa-list-check"></i> 
           All Logs <span class="audit-pill-count"><?= $cntAll ?></span>
         </a>
@@ -201,7 +241,7 @@ function parseAuditDetails(array $log): array {
               </thead>
               <tbody>
                 <?php if (empty($logs)): ?>
-                  <tr>
+                  <tr data-empty-row>
                     <td colspan="7" class="text-center" style="padding:36px;color:var(--text-muted);">
                       <i class="fa-solid fa-folder-open" style="font-size:2rem;margin-bottom:8px;display:block;"></i>
                       No activity logs recorded under this filter.
@@ -258,6 +298,21 @@ function parseAuditDetails(array $log): array {
               </tbody>
             </table>
           </div>
+          <?php if ($totalPages > 1 || $totalRows > 0): ?>
+            <div class="admin-pagination">
+              <span>Showing page <strong><?= $page ?></strong> of <strong><?= $totalPages ?></strong> (<?= $totalRows ?> matching log(s))</span>
+              <?php if ($totalPages > 1): ?>
+                <div class="admin-pagination-links">
+                  <?php if ($page > 1): ?>
+                    <a href="?role=<?= urlencode($filter) ?>&q=<?= urlencode($search) ?>&page=<?= $page - 1 ?>" class="btn btn-ghost btn-sm">&laquo; Prev</a>
+                  <?php endif; ?>
+                  <?php if ($page < $totalPages): ?>
+                    <a href="?role=<?= urlencode($filter) ?>&q=<?= urlencode($search) ?>&page=<?= $page + 1 ?>" class="btn btn-ghost btn-sm">Next &raquo;</a>
+                  <?php endif; ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -265,7 +320,7 @@ function parseAuditDetails(array $log): array {
   </main>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/admin.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

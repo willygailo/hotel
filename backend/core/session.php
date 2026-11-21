@@ -247,6 +247,30 @@ function getFlash(): ?array {
     return null;
 }
 
+function sanitizeFlashHtml(string $message): string {
+    if (!preg_match('/<\/?(strong|b|em|i|br|small|code|a)\b/i', $message)) {
+        return htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+    }
+
+    $clean = strip_tags($message, '<strong><b><em><i><br><small><code><a>');
+    $clean = preg_replace('/<(strong|b|em|i|small|code)\b[^>]*>/i', '<$1>', $clean);
+    $clean = preg_replace('/<br\s*\/?>/i', '<br>', $clean);
+    $clean = preg_replace_callback('/<a\b([^>]*)>/i', function (array $matches): string {
+        $attrs = $matches[1] ?? '';
+        $href = '#';
+        if (preg_match('/\bhref\s*=\s*(["\'])(.*?)\1/i', $attrs, $m)) {
+            $candidate = html_entity_decode(trim($m[2]), ENT_QUOTES, 'UTF-8');
+            if (preg_match('/^(https?:\/\/|\/|[a-z0-9_.\-\/]+\.php)/i', $candidate)) {
+                $href = htmlspecialchars($candidate, ENT_QUOTES, 'UTF-8');
+            }
+        }
+        $targetBlank = preg_match('/\btarget\s*=\s*(["\'])_blank\1/i', $attrs);
+        return '<a href="' . $href . '"' . ($targetBlank ? ' target="_blank" rel="noopener noreferrer"' : '') . '>';
+    }, $clean);
+
+    return $clean;
+}
+
 function renderFlash(): string {
     $flash = getFlash();
     if (!$flash) return '';
@@ -256,10 +280,11 @@ function renderFlash(): string {
         'warning' => 'fa-triangle-exclamation',
         'info'    => 'fa-circle-info',
     ];
-    $icon = $icons[$flash['type']] ?? 'fa-bell';
-    return '<div class="flash-message flash-' . htmlspecialchars($flash['type']) . '" id="flashMsg">
+    $type = preg_replace('/[^a-z]/i', '', (string)($flash['type'] ?? 'info')) ?: 'info';
+    $icon = $icons[$type] ?? 'fa-bell';
+    return '<div class="flash-message flash-' . htmlspecialchars($type, ENT_QUOTES, 'UTF-8') . '" id="flashMsg">
         <i class="fa-solid ' . $icon . '"></i>
-        <span>' . htmlspecialchars($flash['message']) . '</span>
-        <button onclick="this.parentElement.remove()" class="flash-close"><i class="fa-solid fa-xmark"></i></button>
+        <span>' . sanitizeFlashHtml((string)($flash['message'] ?? '')) . '</span>
+        <button type="button" onclick="this.parentElement.remove()" class="flash-close"><i class="fa-solid fa-xmark"></i></button>
     </div>';
 }

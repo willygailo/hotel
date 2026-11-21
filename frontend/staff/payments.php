@@ -10,6 +10,20 @@ releaseReadOnlySession();
 $staffId = currentUserId();
 $staff = dbRow("SELECT * FROM users WHERE id = ?", [$staffId]);
 
+$statusFilter = $_GET['status'] ?? 'all';
+if (!in_array($statusFilter, ['all', 'pending', 'verified', 'rejected'], true)) {
+    $statusFilter = 'all';
+}
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 30;
+
+$buildQs = function () use ($statusFilter, $page): string {
+    $p = [];
+    if ($statusFilter !== 'all') $p['status'] = $statusFilter;
+    if ($page > 1) $p['page'] = $page;
+    return !empty($p) ? ('?' . http_build_query($p)) : '';
+};
+
 // Action: Verify / Reject payment receipt (Delegated to Frontdesk Staff when Admin is away)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_payment'])) {
     $token = $_POST[CSRF_TOKEN_NAME] ?? '';
@@ -21,24 +35,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_payment'])) {
         $res = processPaymentDecision($payId, $act, $staffId, 'Staff');
         setFlash($res['flash_type'], $res['message']);
     }
-    header("Location: payments.php");
+    header("Location: payments.php" . $buildQs());
     exit;
 }
 
-$pendingPayments = dbRow("SELECT COUNT(*) as cnt FROM payments WHERE status = 'pending'")['cnt'] ?? 0;
+// Single-pass status counts for filter tabs & sidebar sync
+$payCounts = dbRow("
+    SELECT
+        COUNT(*) AS all_cnt,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_cnt,
+        SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) AS verified_cnt,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected_cnt
+    FROM payments
+") ?: ['all_cnt' => 0, 'pending_cnt' => 0, 'verified_cnt' => 0, 'rejected_cnt' => 0];
+
+$pendingPayments = (int)($payCounts['pending_cnt'] ?? 0);
+$GLOBALS['pendingPayments'] = $pendingPayments;
+
+$whereSql = '';
+$queryParams = [];
+if ($statusFilter !== 'all') {
+    $whereSql = 'WHERE p.status = ?';
+    $queryParams[] = $statusFilter;
+}
+
+$totalFiltered = match ($statusFilter) {
+    'pending'  => (int)($payCounts['pending_cnt'] ?? 0),
+    'verified' => (int)($payCounts['verified_cnt'] ?? 0),
+    'rejected' => (int)($payCounts['rejected_cnt'] ?? 0),
+    default    => (int)($payCounts['all_cnt'] ?? 0),
+};
+$totalPages = max(1, (int)ceil($totalFiltered / $perPage));
+if ($page > $totalPages) {
+    $page = $totalPages;
+}
+$offset = ($page - 1) * $perPage;
 
 $payments = dbRows("
-    SELECT p.*, b.booking_code, 
-           u.first_name, u.middle_name, u.last_name, u.suffix, u.email, u.phone, 
+    SELECT p.*, b.booking_code,
+           u.first_name, u.middle_name, u.last_name, u.suffix, u.email, u.phone,
            r.name as room_name, r.room_number,
-           v.first_name as verifier_first_name, v.last_name as verifier_last_name, v.role as verifier_role 
-    FROM payments p 
-    JOIN bookings b ON p.booking_id = b.id 
-    JOIN users u ON p.user_id = u.id 
-    JOIN rooms r ON b.room_id = r.id 
-    LEFT JOIN users v ON p.verified_by = v.id 
-    ORDER BY p.id DESC
-");
+           v.first_name as verifier_first_name, v.last_name as verifier_last_name, v.role as verifier_role
+    FROM payments p
+    JOIN bookings b ON p.booking_id = b.id
+    JOIN users u ON p.user_id = u.id
+    JOIN rooms r ON b.room_id = r.id
+    LEFT JOIN users v ON p.verified_by = v.id
+    {$whereSql}
+    ORDER BY (p.status = 'pending') DESC, p.id DESC
+    LIMIT {$perPage} OFFSET {$offset}
+", $queryParams);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -46,33 +92,13 @@ $payments = dbRows("
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Payment Verification — Frontdesk Staff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/staff.css">
-  <style>
-    .inspector-modal {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(4, 7, 20, 0.88);
-      z-index: 9999;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .inspector-box {
-      background: var(--navy-card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      max-width: 820px;
-      width: 100%;
-      padding: 24px;
-      position: relative;
-      max-height: 90vh;
-      overflow-y: auto;
-    }
-  </style>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/staff.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -111,13 +137,31 @@ $payments = dbRows("
         </div>
       </div>
 
-      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+      <div class="page-header">
         <div>
           <h1 class="page-header-title">Payment Verification Queue</h1>
           <div class="page-header-sub">Review receipts submitted by arriving customers and verify immediately.</div>
         </div>
+      </div>
+
+      <div class="staff-toolbar">
+        <div class="staff-filter-pills">
+          <a href="payments.php?status=all" class="staff-filter-pill<?= $statusFilter === 'all' ? ' active' : '' ?>">
+            All <span class="pill-count"><?= (int)$payCounts['all_cnt'] ?></span>
+          </a>
+          <a href="payments.php?status=pending" class="staff-filter-pill<?= $statusFilter === 'pending' ? ' active' : '' ?>">
+            Pending <span class="pill-count"><?= (int)$payCounts['pending_cnt'] ?></span>
+          </a>
+          <a href="payments.php?status=verified" class="staff-filter-pill<?= $statusFilter === 'verified' ? ' active' : '' ?>">
+            Verified <span class="pill-count"><?= (int)$payCounts['verified_cnt'] ?></span>
+          </a>
+          <a href="payments.php?status=rejected" class="staff-filter-pill<?= $statusFilter === 'rejected' ? ' active' : '' ?>">
+            Rejected <span class="pill-count"><?= (int)$payCounts['rejected_cnt'] ?></span>
+          </a>
+        </div>
+
         <div style="min-width:260px;">
-          <input type="text" id="paySearchInput" class="form-control" placeholder="Search booking, customer, or ref #..." onkeyup="filterPaymentsTable()" style="background:rgba(255,255,255,0.05);font-size:0.85rem;">
+          <input type="text" id="paySearchInput" data-table-search data-table-target="#paymentsTable" class="form-control" placeholder="Search booking, customer, or ref #..." style="background:rgba(255,255,255,0.05);font-size:0.85rem;">
         </div>
       </div>
 
@@ -140,7 +184,7 @@ $payments = dbRows("
               </thead>
               <tbody>
                 <?php if (empty($payments)): ?>
-                  <tr><td colspan="9" class="text-center" style="padding:30px;color:var(--text-muted);">No payment records found.</td></tr>
+                  <tr data-empty-row><td colspan="9" class="text-center" style="padding:30px;color:var(--text-muted);">No payment records found for this filter.</td></tr>
                 <?php else: ?>
                   <?php foreach ($payments as $pay): ?>
                     <tr>
@@ -160,7 +204,7 @@ $payments = dbRows("
                       <td class="col-nowrap">
                         <div><code><?= h($pay['reference_number'] ?: 'No Ref') ?></code></div>
                         <?php if ($pay['proof_image']): ?>
-                          <a href="<?= getUploadUrl($pay['proof_image']) ?>" target="_blank" style="color:var(--accent);font-size:0.75rem;"><i class="fa-solid fa-image"></i> View Receipt</a>
+                          <a href="<?= h(getUploadUrl($pay['proof_image'])) ?>" target="_blank" style="color:var(--accent);font-size:0.75rem;"><i class="fa-solid fa-image"></i> View Receipt</a>
                         <?php endif; ?>
                       </td>
                       <td class="col-nowrap">
@@ -201,8 +245,9 @@ $payments = dbRows("
                               'ref_num' => $pay['reference_number'] ?: 'No Reference Number',
                               'status' => $pay['status'],
                               'proof_url' => getUploadUrl($pay['proof_image']),
+                              'proof_raw' => $pay['proof_image'],
                               'paid_at' => formatDate($pay['created_at'], 'F d, Y \a\t h:i:s A'),
-                              'notes' => $pay['notes'] ?: 'No notes.',
+                              'notes' => $pay['notes'] ?: 'No notes provided.',
                               'verified_by' => !empty($pay['verifier_first_name']) ? ((($pay['verifier_role'] ?? '') === 'admin' ? 'Super Admin: ' : 'Frontdesk Staff: ') . $pay['verifier_first_name'] . ' ' . ($pay['verifier_last_name'] ?? '')) : null,
                               'verified_at' => !empty($pay['verified_at']) ? formatDate($pay['verified_at'], 'M d, Y \a\t h:i A') : null
                             ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' title="Inspect Receipt" style="padding:4px 8px;font-size:0.75rem;">
@@ -211,9 +256,9 @@ $payments = dbRows("
                           <?php endif; ?>
 
                           <?php if ($pay['status'] === 'pending'): ?>
-                            <form action="" method="POST" style="display:inline-flex;gap:4px;">
+                            <form action="payments.php<?= h($buildQs()) ?>" method="POST" style="display:inline-flex;gap:4px;">
                               <?= csrfField() ?>
-                              <input type="hidden" name="payment_id" value="<?= $pay['id'] ?>">
+                              <input type="hidden" name="payment_id" value="<?= (int)$pay['id'] ?>">
                               <input type="hidden" name="action_payment" value="1">
                               <button type="submit" name="action_type" value="verify" class="btn btn-success btn-sm" title="Approve Payment" onclick="return confirm('Approve this payment for Booking #<?= h($pay['booking_code']) ?>?')"><i class="fa-solid fa-check"></i></button>
                               <button type="submit" name="action_type" value="reject" class="btn btn-danger btn-sm" title="Reject Payment" onclick="return confirm('Decline this payment receipt?')"><i class="fa-solid fa-xmark"></i></button>
@@ -225,10 +270,25 @@ $payments = dbRows("
                       </td>
                     </tr>
                   <?php endforeach; ?>
+                  <tr data-no-match-row style="display:none;"><td colspan="9" class="text-center" style="padding:28px;color:var(--text-muted);">No payments match your search term.</td></tr>
                 <?php endif; ?>
               </tbody>
             </table>
           </div>
+
+          <?php if ($totalPages > 1): ?>
+            <div class="staff-pagination">
+              <span>Page <strong><?= $page ?></strong> of <strong><?= $totalPages ?></strong> (<?= $totalFiltered ?> record(s))</span>
+              <div class="staff-pagination-links">
+                <?php if ($page > 1): ?>
+                  <a href="payments.php?<?= http_build_query(array_filter(['status' => $statusFilter !== 'all' ? $statusFilter : null, 'page' => $page - 1])) ?>" class="btn btn-ghost btn-sm">&laquo; Prev</a>
+                <?php endif; ?>
+                <?php if ($page < $totalPages): ?>
+                  <a href="payments.php?<?= http_build_query(array_filter(['status' => $statusFilter !== 'all' ? $statusFilter : null, 'page' => $page + 1])) ?>" class="btn btn-ghost btn-sm">Next &raquo;</a>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -237,7 +297,7 @@ $payments = dbRows("
 </div>
 
 <!-- Receipt Lightbox Modal for Staff -->
-<div class="inspector-modal" id="staffInspectorModal" onclick="closeStaffInspector(event)">
+<div class="inspector-modal staff-modal-overlay" id="staffInspectorModal">
   <div class="inspector-box" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;border-bottom:1px solid var(--border);padding-bottom:12px;">
       <h3 style="font-family:var(--font-serif);font-size:1.3rem;color:#fff;margin:0;">
@@ -246,19 +306,23 @@ $payments = dbRows("
       <button type="button" class="btn btn-ghost btn-sm" onclick="closeStaffInspector()" style="font-size:1.2rem;padding:4px 8px;color:#94a3b8;">&times;</button>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+    <div class="staff-modal-grid-2">
       <div style="background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;">
         <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;font-weight:700;">Uploaded Receipt</div>
-        <img id="staffReceiptImg" src="#" alt="Proof Receipt" style="max-width:100%;max-height:360px;border-radius:8px;display:block;margin:0 auto;box-shadow:0 4px 15px rgba(0,0,0,0.5);">
+        <img id="staffReceiptImg" src="#" alt="Proof Receipt" style="max-width:100%;max-height:360px;border-radius:8px;display:block;margin:0 auto;box-shadow:0 4px 15px rgba(0,0,0,0.5);object-fit:contain;">
+        <div id="staffReceiptFallback" style="display:none;padding:28px 16px;color:var(--text-muted);font-size:0.85rem;">
+          <i class="fa-solid fa-file-pdf" style="font-size:2.4rem;color:var(--gold);margin-bottom:8px;display:block;"></i>
+          <span>Inline preview unavailable for this file. Open full file in a new tab below.</span>
+        </div>
         <div style="margin-top:10px;">
           <a href="#" id="staffReceiptLink" target="_blank" class="btn btn-ghost btn-sm" style="font-size:0.75rem;">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open High-Res Full Image
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Full File
           </a>
         </div>
       </div>
 
       <div>
-        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;font-size:0.85rem;">
+        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;font-size:0.85rem;">
           <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
             <span style="color:var(--text-muted);">Customer:</span>
             <strong style="color:#fff;" id="staffGuestName">-</strong>
@@ -289,8 +353,13 @@ $payments = dbRows("
           </div>
         </div>
 
+        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px;font-size:0.8rem;color:#cbd5e1;">
+          <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:4px;">Customer Notes:</div>
+          <div id="staffNotes">-</div>
+        </div>
+
         <div id="staffActionArea">
-          <form id="staffActionForm" action="" method="POST" style="display:flex;gap:10px;">
+          <form id="staffActionForm" action="payments.php<?= h($buildQs()) ?>" method="POST" style="display:flex;gap:10px;">
             <?= csrfField() ?>
             <input type="hidden" name="payment_id" id="staffPaymentId" value="">
             <input type="hidden" name="action_payment" value="1">
@@ -308,18 +377,9 @@ $payments = dbRows("
   </div>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/staff.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/staff.js')) ?>"></script>
 <script>
-function filterPaymentsTable() {
-  const query = document.getElementById('paySearchInput').value.toLowerCase();
-  const rows = document.querySelectorAll('#paymentsTable tbody tr');
-  rows.forEach(row => {
-    const text = row.innerText.toLowerCase();
-    row.style.display = text.includes(query) ? '' : 'none';
-  });
-}
-
 function openStaffInspector(data) {
   document.getElementById('staffPaymentId').value = data.id;
   document.getElementById('staffGuestName').textContent = data.guest;
@@ -329,16 +389,32 @@ function openStaffInspector(data) {
   document.getElementById('staffAmount').textContent = data.amount;
   document.getElementById('staffPaidAt').textContent = data.paid_at;
   document.getElementById('staffRefNum').textContent = data.ref_num;
+  document.getElementById('staffNotes').textContent = data.notes || 'No notes provided.';
 
   const imgEl = document.getElementById('staffReceiptImg');
+  const fallbackEl = document.getElementById('staffReceiptFallback');
   const linkEl = document.getElementById('staffReceiptLink');
-  if (data.proof_url) {
+  const rawName = (data.proof_raw || data.proof_url || '').toLowerCase();
+  const isPdf = rawName.endsWith('.pdf');
+
+  if (data.proof_url && !isPdf) {
+    if (fallbackEl) fallbackEl.style.display = 'none';
+    imgEl.onerror = function () {
+      imgEl.style.display = 'none';
+      if (fallbackEl) fallbackEl.style.display = 'block';
+    };
     imgEl.src = data.proof_url;
     imgEl.style.display = 'block';
     linkEl.href = data.proof_url;
     linkEl.style.display = 'inline-flex';
+  } else if (data.proof_url) {
+    imgEl.style.display = 'none';
+    if (fallbackEl) fallbackEl.style.display = 'block';
+    linkEl.href = data.proof_url;
+    linkEl.style.display = 'inline-flex';
   } else {
     imgEl.style.display = 'none';
+    if (fallbackEl) fallbackEl.style.display = 'none';
     linkEl.href = '#';
     linkEl.style.display = 'none';
   }
@@ -359,14 +435,12 @@ function openStaffInspector(data) {
     noticeEl.innerHTML = '';
   }
 
-  const modal = document.getElementById('staffInspectorModal');
-  modal.style.display = 'flex';
+  document.getElementById('staffInspectorModal').style.display = 'flex';
 }
 
-function closeStaffInspector(e) {
+function closeStaffInspector() {
   document.getElementById('staffInspectorModal').style.display = 'none';
 }
 </script>
 </body>
 </html>
-

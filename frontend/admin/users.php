@@ -7,9 +7,60 @@ require_once __DIR__ . '/../../backend/core/email.php';
 
 requireRole('admin');
 releaseReadOnlySession();
+ensureTempCredentialSchema();
 
 $adminId = currentUserId();
 $tab = $_GET['tab'] ?? 'all';
+$search = trim($_GET['q'] ?? '');
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 30;
+
+$buildUsersRedirect = function () use ($tab, $search, $page): string {
+    $q = [];
+    if ($tab !== 'all') $q['tab'] = $tab;
+    if ($search !== '') $q['q'] = $search;
+    if ($page > 1) $q['page'] = $page;
+    return 'users.php' . (!empty($q) ? ('?' . http_build_query($q)) : '');
+};
+
+// Handle Create Walk-In Guest Account
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_walkin_user') {
+    $token = $_POST[CSRF_TOKEN_NAME] ?? '';
+    if (!verifyCsrfToken($token)) {
+        setFlash('error', 'Invalid security token.');
+    } else {
+        $fn    = trim($_POST['first_name'] ?? '');
+        $mn    = trim($_POST['middle_name'] ?? '');
+        $ln    = trim($_POST['last_name'] ?? '');
+        $sf    = trim($_POST['suffix'] ?? '');
+        $email = strtolower(trim($_POST['email'] ?? ''));
+        $phone = trim($_POST['phone'] ?? '');
+        $pass  = $_POST['initial_password'] ?? '';
+
+        $nameErr = validatePersonName($fn, $ln, $mn, $sf);
+        if ($nameErr !== null) {
+            setFlash('error', $nameErr);
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            setFlash('error', 'Please enter a valid guest email address.');
+        } elseif (strlen($pass) < 8) {
+            setFlash('error', 'Initial password must be at least 8 characters long.');
+        } elseif (dbRow("SELECT id FROM users WHERE email = ?", [$email])) {
+            setFlash('error', "An account with email '" . h($email) . "' already exists.");
+        } else {
+            $hashed = password_hash($pass, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
+            $newId = dbInsert(
+                "INSERT INTO users (first_name, middle_name, last_name, suffix, email, phone, password, role, status, email_verified)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'user', 'active', 1)",
+                [$fn, $mn !== '' ? $mn : null, $ln, $sf !== '' ? $sf : null, $email, $phone, $hashed]
+            );
+            setAdminAssignedTempPassword($newId, $pass);
+            auditLog('Admin Created Walk-In Guest', 'Admin Module', "Admin #$adminId registered walk-in Guest #$newId ($email)");
+            setFlash('success', "Walk-in guest account created for <strong>" . h(formatFullName(['first_name' => $fn, 'middle_name' => $mn, 'last_name' => $ln, 'suffix' => $sf])) . "</strong> (" . h($email) . "). View or copy the temporary password in the Credentials column.");
+        }
+    }
+    header("Location: " . $buildUsersRedirect());
+    exit;
+}
 
 // Handle Edit User Account
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_user') {
@@ -27,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $mn       = trim($_POST['middle_name'] ?? '');
             $ln       = trim($_POST['last_name'] ?? '');
             $sf       = trim($_POST['suffix'] ?? '');
-            $email    = trim($_POST['email'] ?? '');
+            $email    = strtolower(trim($_POST['email'] ?? ''));
             $phone    = trim($_POST['phone'] ?? '');
             $address  = trim($_POST['address'] ?? '');
             $location = trim($_POST['location'] ?? '');
@@ -45,6 +96,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 if ($emailExists) {
                     setFlash('error', "The email '$email' is already taken by another account.");
                 } else {
+                    $prevKyc = $target['verification_status'] ?? 'unverified';
+                    $verifiedByVal = $target['verified_by'] ?? null;
+                    $verifiedAtVal = $target['verified_at'] ?? null;
+                    $rejReasonVal  = $target['rejection_reason'] ?? null;
+
+                    if ($kyc === 'verified' && $prevKyc !== 'verified') {
+                        $verifiedByVal = $adminId;
+                        $verifiedAtVal = date('Y-m-d H:i:s');
+                        $rejReasonVal  = null;
+                        createNotification($uId, 'KYC Identity Verified!', 'Your identity verification status has been marked Verified by hotel administration.', 'system');
+                    } elseif ($kyc === 'rejected' && $prevKyc !== 'rejected') {
+                        $verifiedByVal = $adminId;
+                        $verifiedAtVal = date('Y-m-d H:i:s');
+                        if (empty($rejReasonVal)) {
+                            $rejReasonVal = 'Marked rejected by administration during account review.';
+                        }
+                        createNotification($uId, 'ID Verification Action Required', 'Your ID verification status requires updates: ' . $rejReasonVal, 'alert');
+                    }
+
                     dbExec("UPDATE users SET 
                         first_name = ?, 
                         middle_name = ?, 
@@ -56,9 +126,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         location = ?, 
                         status = ?, 
                         verification_status = ?, 
-                        profile_verified = ?
+                        profile_verified = ?,
+                        verified_by = ?,
+                        verified_at = ?,
+                        rejection_reason = ?
                     WHERE id = ? AND role = 'user'", [
-                        $fn, $mn, $ln, $sf, $email, $phone, $address, $location, $status, $kyc, $isVer, $uId
+                        $fn, $mn, $ln, $sf, $email, $phone, $address, $location, $status, $kyc, $isVer,
+                        $verifiedByVal, $verifiedAtVal, $rejReasonVal, $uId
                     ]);
 
                     auditLog('Admin Updated User Account', 'Admin Module', "Admin #$adminId edited Guest Account #$uId ($email)");
@@ -67,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
         }
     }
-    header("Location: users.php" . ($tab !== 'all' ? "?tab=$tab" : ""));
+    header("Location: " . $buildUsersRedirect());
     exit;
 }
 
@@ -85,13 +159,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         if (!$target) {
             setFlash('error', 'User account not found or already deleted.');
         } else {
-            // Delete account (cascades to bookings, payments, reviews, notifications)
             dbExec("DELETE FROM users WHERE id = ? AND role = 'user'", [$uId]);
             auditLog('Admin Deleted User Account', 'Admin Module', "Admin #$adminId permanently deleted User #$uId ({$target['email']})");
-            setFlash('success', "User account for <strong>" . h(formatFullName($target)) . "</strong> ({$target['email']}) has been permanently deleted.");
+            setFlash('success', "User account for <strong>" . h(formatFullName($target)) . "</strong> (" . h($target['email']) . ") has been permanently deleted.");
         }
     }
-    header("Location: users.php" . ($tab !== 'all' ? "?tab=$tab" : ""));
+    header("Location: " . $buildUsersRedirect());
     exit;
 }
 
@@ -113,17 +186,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
             $resetExpires = date('Y-m-d H:i:s', strtotime('+2 hours'));
             dbExec("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [$resetToken, $resetExpires, $uId]);
 
-            // Resolve clicked request AND any remaining pending requests for this user so live watcher always triggers
             if ($reqId > 0) {
                 dbExec(
                     "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'link', new_password_assigned = NULL, resolved_at = NOW(), user_notified_at = NULL WHERE id = ?",
                     [$reqId]
                 );
             }
-            dbExec(
+            $updatedPending = dbExec(
                 "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'link', new_password_assigned = NULL, resolved_at = NOW(), user_notified_at = NULL WHERE (user_id = ? OR email = ?) AND status = 'pending'",
                 [$uId, $target['email']]
             );
+            if ($reqId <= 0 && $updatedPending === 0) {
+                dbInsert(
+                    "INSERT INTO password_reset_requests (user_id, email, phone, status, dispatch_type, new_password_assigned, requested_at, resolved_at)
+                     VALUES (?, ?, ?, 'completed', 'link', NULL, NOW(), NOW())",
+                    [$uId, $target['email'], $target['phone'] ?? null]
+                );
+            }
 
             $oneTimeLink = SITE_URL . '/auth/reset-password.php?token=' . $resetToken;
             $emailNote = '';
@@ -141,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 }
             }
             auditLog('Admin Generated Reset Link', 'Admin Module', "Admin generated 1-time reset link for Guest #$uId ({$target['email']})");
-            setFlash('success', "One-time secure reset link generated for " . formatFullName($target) . " ({$target['email']}): {$oneTimeLink} — The user will also receive a live popup on their Forgot Password page.{$emailNote}");
+            setFlash('success', "One-time secure reset link generated for " . h(formatFullName($target)) . " (" . h($target['email']) . "): {$oneTimeLink}{$emailNote}");
         } else {
             $newPass = $_POST['new_password'] ?? '';
             if (strlen($newPass) < 8) {
@@ -149,18 +228,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
             } else {
                 $hashed = password_hash($newPass, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
                 dbExec("UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL, status = 'active' WHERE id = ?", [$hashed, $uId]);
-                
-                // Mark clicked request AND all pending reset requests for this user as completed so live watcher triggers
+                setAdminAssignedTempPassword($uId, $newPass);
+
                 if ($reqId > 0) {
                     dbExec(
                         "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'password', new_password_assigned = ?, resolved_at = NOW(), user_notified_at = NULL WHERE id = ?",
                         [$newPass, $reqId]
                     );
                 }
-                dbExec(
+                $updatedPending = dbExec(
                     "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'password', new_password_assigned = ?, resolved_at = NOW(), user_notified_at = NULL WHERE (user_id = ? OR email = ?) AND status = 'pending'",
                     [$newPass, $uId, $target['email']]
                 );
+                // Always record admin-initiated reset in password_reset_requests even if user did not submit Forgot Password form
+                if ($reqId <= 0 && $updatedPending === 0) {
+                    dbInsert(
+                        "INSERT INTO password_reset_requests (user_id, email, phone, status, dispatch_type, new_password_assigned, requested_at, resolved_at)
+                         VALUES (?, ?, ?, 'completed', 'password', ?, NOW(), NOW())",
+                        [$uId, $target['email'], $target['phone'] ?? null, $newPass]
+                    );
+                }
 
                 createNotification($uId, 'Password Updated', 'Your account password was updated by the Administrator. If you did not request this, please contact frontdesk assistance.', 'alert');
 
@@ -186,12 +273,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     }
                 }
 
-                auditLog('Admin Reset User Password', 'Admin Module', "Admin reset password for Guest #$uId ({$target['email']}) to newly dispatched password.");
-                setFlash('success', "New password for " . formatFullName($target) . " ({$target['email']}) is set to: {$newPass} — The user will automatically receive a live popup on their Forgot Password page.{$emailNote}");
+                auditLog('Admin Reset User Password', 'Admin Module', "Admin reset password for Guest #$uId ({$target['email']}) to newly dispatched temporary password.");
+                setFlash('success', "Temporary password updated for <strong>" . h(formatFullName($target)) . "</strong> (" . h($target['email']) . ") and saved in Credentials.{$emailNote}");
             }
         }
     }
-    header("Location: users.php" . ($tab !== 'all' ? "?tab=$tab" : ""));
+    header("Location: " . $buildUsersRedirect());
     exit;
 }
 
@@ -215,12 +302,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             createNotification($uId, 'KYC Identity Verified!', 'Congratulations! Your ID has been reviewed and approved by hotel administration. You now hold Verified User status.', 'system');
             auditLog('Admin Approved KYC', 'Admin Module', "Admin #$adminId approved ID verification for User #$uId ({$target['email']})");
-            setFlash('success', "Identity verification for " . formatFullName($target) . " was successfully approved!");
+            setFlash('success', "Identity verification for " . h(formatFullName($target)) . " was successfully approved!");
         } else {
             setFlash('error', 'User account not found.');
         }
     }
-    header("Location: users.php" . ($tab !== 'all' ? "?tab=$tab" : ""));
+    header("Location: " . $buildUsersRedirect());
     exit;
 }
 
@@ -248,12 +335,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             createNotification($uId, 'ID Verification Action Required', 'Your ID submission was not approved: ' . $reason . '. Please visit your profile to submit a valid document.', 'alert');
             auditLog('Admin Rejected KYC', 'Admin Module', "Admin #$adminId rejected ID verification for Guest #$uId ({$target['email']}). Reason: $reason");
-            setFlash('info', "Identity verification for " . formatFullName($target) . " was marked as rejected.");
+            setFlash('info', "Identity verification for " . h(formatFullName($target)) . " was marked as rejected.");
         } else {
             setFlash('error', 'User account not found.');
         }
     }
-    header("Location: users.php" . ($tab !== 'all' ? "?tab=$tab" : ""));
+    header("Location: " . $buildUsersRedirect());
     exit;
 }
 
@@ -272,7 +359,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             setFlash('info', "User status changed to $newStatus.");
         }
     }
-    header("Location: users.php" . ($tab !== 'all' ? "?tab=$tab" : ""));
+    header("Location: " . $buildUsersRedirect());
     exit;
 }
 
@@ -291,39 +378,78 @@ $countRow = dbRow("
 $pendingKycCount = (int)($countRow['pending_kyc'] ?? 0);
 $verifiedKycCount = (int)($countRow['verified_kyc'] ?? 0);
 $rejectedKycCount = (int)($countRow['rejected_kyc'] ?? 0);
+$unverifiedKycCount = (int)($countRow['unverified_kyc'] ?? 0);
 $totalUserCount = (int)($countRow['total_users'] ?? 0);
 $pendingResetsCount = (int)(dbRow("SELECT COUNT(*) as c FROM password_reset_requests WHERE status = 'pending'")['c'] ?? 0);
 
-// Filter query based on active tab
-$whereClause = "WHERE u.role = 'user'";
+// Filter & paginate based on active tab
 $resetRequests = [];
+$users = [];
+$totalTabRows = 0;
+$totalPages = 1;
+$offset = ($page - 1) * $perPage;
+
 if ($tab === 'resets') {
+    $rCond = [];
+    $rParams = [];
+    if ($search !== '') {
+        $rCond[] = "(pr.email LIKE ? OR pr.phone LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)";
+        $like = '%' . $search . '%';
+        array_push($rParams, $like, $like, $like, $like);
+    }
+    $rWhere = !empty($rCond) ? ('WHERE ' . implode(' AND ', $rCond)) : '';
+    $totalTabRows = (int)(dbRow("SELECT COUNT(*) as c FROM password_reset_requests pr LEFT JOIN users u ON pr.user_id = u.id {$rWhere}", $rParams)['c'] ?? 0);
+    $totalPages = max(1, (int)ceil($totalTabRows / $perPage));
+    if ($page > $totalPages) {
+        $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+    }
     $resetRequests = dbRows("
-        SELECT pr.*, u.first_name, u.last_name, u.avatar 
+        SELECT pr.*, u.first_name, u.last_name, u.avatar, u.password_is_temp
         FROM password_reset_requests pr 
         LEFT JOIN users u ON pr.user_id = u.id 
+        {$rWhere}
         ORDER BY CASE WHEN pr.status = 'pending' THEN 0 ELSE 1 END, pr.id DESC
-    ");
-} elseif ($tab === 'pending') {
-    $whereClause .= " AND (u.verification_status = 'pending' OR (u.verification_status IS NULL AND u.id_document IS NOT NULL AND u.profile_verified = 0))";
-} elseif ($tab === 'verified') {
-    $whereClause .= " AND (u.verification_status = 'verified' OR u.profile_verified = 1)";
-} elseif ($tab === 'rejected') {
-    $whereClause .= " AND u.verification_status = 'rejected'";
-} elseif ($tab === 'unverified') {
-    $whereClause .= " AND (u.verification_status = 'unverified' OR (u.profile_verified = 0 AND (u.id_document IS NULL OR u.id_document = '')))";
-}
+        LIMIT {$perPage} OFFSET {$offset}
+    ", $rParams);
+} else {
+    $uCond = ["u.role = 'user'"];
+    $uParams = [];
+    if ($tab === 'pending') {
+        $uCond[] = "(u.verification_status = 'pending' OR (u.verification_status IS NULL AND u.id_document IS NOT NULL AND u.profile_verified = 0))";
+    } elseif ($tab === 'verified') {
+        $uCond[] = "(u.verification_status = 'verified' OR u.profile_verified = 1)";
+    } elseif ($tab === 'rejected') {
+        $uCond[] = "u.verification_status = 'rejected'";
+    } elseif ($tab === 'unverified') {
+        $uCond[] = "(u.verification_status = 'unverified' OR (u.profile_verified = 0 AND (u.id_document IS NULL OR u.id_document = '')))";
+    }
+    if ($search !== '') {
+        $uCond[] = "(u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)";
+        $like = '%' . $search . '%';
+        array_push($uParams, $like, $like, $like, $like);
+    }
+    $whereClause = 'WHERE ' . implode(' AND ', $uCond);
 
-$users = dbRows("
-    SELECT u.*, COUNT(b.id) as bookings_count 
-    FROM users u 
-    LEFT JOIN bookings b ON u.id = b.user_id 
-    $whereClause
-    GROUP BY u.id 
-    ORDER BY 
-        CASE WHEN u.verification_status = 'pending' THEN 0 ELSE 1 END,
-        u.id DESC
-");
+    $totalTabRows = (int)(dbRow("SELECT COUNT(*) as c FROM users u {$whereClause}", $uParams)['c'] ?? 0);
+    $totalPages = max(1, (int)ceil($totalTabRows / $perPage));
+    if ($page > $totalPages) {
+        $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+    }
+
+    $users = dbRows("
+        SELECT u.*, COUNT(b.id) as bookings_count 
+        FROM users u 
+        LEFT JOIN bookings b ON u.id = b.user_id 
+        {$whereClause}
+        GROUP BY u.id 
+        ORDER BY 
+            CASE WHEN u.verification_status = 'pending' THEN 0 ELSE 1 END,
+            u.id DESC
+        LIMIT {$perPage} OFFSET {$offset}
+    ", $uParams);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -331,10 +457,13 @@ $users = dbRows("
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Manage Users & KYC Verification — Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
   <style>
     .kyc-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; flex-wrap: wrap; }
     .kyc-tab { text-decoration: none; padding: 8px 18px; border-radius: 8px; font-size: 0.88rem; font-weight: 500; color: var(--text-muted); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; }
@@ -362,30 +491,47 @@ $users = dbRows("
     <div class="page-content">
       <?= renderFlash() ?>
 
-      <div class="page-header" style="margin-bottom:20px;">
+      <div class="page-header" style="margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;">
         <div>
           <h1 class="page-header-title">User Accounts &amp; Identity Verification</h1>
-          <div class="page-header-sub">Review government-issued IDs, adjudicate KYC applications, and manage user access.</div>
+          <div class="page-header-sub">Review government-issued IDs, manage walk-in guests, and dispatch temporary passwords.</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <form action="users.php" method="GET" style="display:flex;gap:6px;align-items:center;">
+            <input type="hidden" name="tab" value="<?= h($tab) ?>">
+            <input type="text" name="q" value="<?= h($search) ?>" data-table-search data-table-target="<?= $tab === 'resets' ? '#resetsTable' : '#usersTable' ?>" class="form-control" placeholder="Search name, email, phone..." style="min-width:230px;background:rgba(255,255,255,0.05);font-size:0.85rem;">
+            <button type="submit" class="btn btn-ghost btn-sm"><i class="fa-solid fa-magnifying-glass"></i></button>
+            <?php if ($search !== ''): ?>
+              <a href="users.php?tab=<?= urlencode($tab) ?>" class="btn btn-ghost btn-sm" title="Clear"><i class="fa-solid fa-xmark"></i></a>
+            <?php endif; ?>
+          </form>
+          <button type="button" class="btn btn-gold btn-sm" onclick="openWalkinGuestModal()">
+            <i class="fa-solid fa-user-plus"></i> Add Walk-In Guest
+          </button>
         </div>
       </div>
 
       <!-- KYC & Reset Filter Tabs -->
       <div class="kyc-tabs">
-        <a href="users.php?tab=all" class="kyc-tab <?= $tab === 'all' ? 'active' : '' ?>">
+        <?php $qSuffix = $search !== '' ? '&q=' . urlencode($search) : ''; ?>
+        <a href="users.php?tab=all<?= $qSuffix ?>" class="kyc-tab <?= $tab === 'all' ? 'active' : '' ?>">
           <i class="fa-solid fa-users"></i> All Users <span class="kyc-pill"><?= $totalUserCount ?></span>
         </a>
-        <a href="users.php?tab=pending" class="kyc-tab <?= $tab === 'pending' ? 'active' : '' ?>" style="<?= $pendingKycCount > 0 ? 'border-color:#eab308;' : '' ?>">
+        <a href="users.php?tab=pending<?= $qSuffix ?>" class="kyc-tab <?= $tab === 'pending' ? 'active' : '' ?>" style="<?= $pendingKycCount > 0 ? 'border-color:#eab308;' : '' ?>">
           <i class="fa-solid fa-clock"></i> Pending Review 
           <span class="kyc-pill" style="<?= $pendingKycCount > 0 ? 'background:#eab308;color:#000;font-weight:700;' : '' ?>"><?= $pendingKycCount ?></span>
         </a>
-        <a href="users.php?tab=resets" class="kyc-tab <?= $tab === 'resets' ? 'active' : '' ?>" style="<?= $pendingResetsCount > 0 ? 'border-color:#f97316;' : '' ?>">
+        <a href="users.php?tab=resets<?= $qSuffix ?>" class="kyc-tab <?= $tab === 'resets' ? 'active' : '' ?>" style="<?= $pendingResetsCount > 0 ? 'border-color:#f97316;' : '' ?>">
           <i class="fa-solid fa-key"></i> Password Resets 
           <span class="kyc-pill" style="<?= $pendingResetsCount > 0 ? 'background:#f97316;color:#fff;font-weight:700;' : '' ?>"><?= $pendingResetsCount ?></span>
         </a>
-        <a href="users.php?tab=verified" class="kyc-tab <?= $tab === 'verified' ? 'active' : '' ?>">
+        <a href="users.php?tab=verified<?= $qSuffix ?>" class="kyc-tab <?= $tab === 'verified' ? 'active' : '' ?>">
           <i class="fa-solid fa-shield-check"></i> Verified <span class="kyc-pill"><?= $verifiedKycCount ?></span>
         </a>
-        <a href="users.php?tab=rejected" class="kyc-tab <?= $tab === 'rejected' ? 'active' : '' ?>">
+        <a href="users.php?tab=unverified<?= $qSuffix ?>" class="kyc-tab <?= $tab === 'unverified' ? 'active' : '' ?>">
+          <i class="fa-solid fa-user-clock"></i> Unverified <span class="kyc-pill"><?= $unverifiedKycCount ?></span>
+        </a>
+        <a href="users.php?tab=rejected<?= $qSuffix ?>" class="kyc-tab <?= $tab === 'rejected' ? 'active' : '' ?>">
           <i class="fa-solid fa-circle-exclamation"></i> Rejected <span class="kyc-pill"><?= $rejectedKycCount ?></span>
         </a>
       </div>
@@ -394,7 +540,7 @@ $users = dbRows("
       <div class="card">
         <div class="card-body" style="padding:0;">
           <div class="table-wrap">
-            <table class="table">
+            <table class="table" id="resetsTable">
               <thead>
                 <tr>
                   <th>Request ID</th>
@@ -408,10 +554,10 @@ $users = dbRows("
               </thead>
               <tbody>
                 <?php if (empty($resetRequests)): ?>
-                  <tr>
+                  <tr data-empty-row>
                     <td colspan="7" style="text-align:center;padding:36px;color:var(--text-muted);">
                       <i class="fa-solid fa-circle-check" style="font-size:2rem;color:#22c55e;margin-bottom:8px;display:block;"></i>
-                      No pending password reset requests at the moment.
+                      No password reset requests found.
                     </td>
                   </tr>
                 <?php else: ?>
@@ -451,16 +597,18 @@ $users = dbRows("
                       </td>
                       <td>
                         <?php if (!empty($req['new_password_assigned'])): ?>
-                          <code style="background:#222;color:#facc15;padding:3px 8px;border-radius:4px;"><?= h($req['new_password_assigned']) ?></code>
+                          <?= renderAdminCredentialBadge($req['new_password_assigned']) ?>
                         <?php elseif (($req['dispatch_type'] ?? '') === 'link'): ?>
                           <span style="color:var(--gold);font-size:0.8rem;"><i class="fa-solid fa-link"></i> One-time reset link</span>
+                        <?php elseif (($req['dispatch_type'] ?? '') === 'password' && $req['status'] === 'completed'): ?>
+                          <span class="badge badge-secondary" style="font-size:0.7rem;"><i class="fa-solid fa-lock"></i> Cleared / User Changed</span>
                         <?php else: ?>
                           <span style="color:var(--text-muted);font-size:0.8rem;">None yet</span>
                         <?php endif; ?>
                       </td>
                       <td style="text-align:right;">
                         <?php if ($req['user_id']): ?>
-                          <button class="btn btn-gold btn-sm" onclick="openResetModal(<?= $req['user_id'] ?>, '<?= h(addslashes(trim(($req['first_name'] ?? '') . ' ' . ($req['last_name'] ?? '')) ?: 'Guest')) ?>', '<?= h(addslashes($req['email'])) ?>', <?= $req['id'] ?>)">
+                          <button type="button" class="btn btn-gold btn-sm" onclick="openResetModal(<?= $req['user_id'] ?>, '<?= h(addslashes(trim(($req['first_name'] ?? '') . ' ' . ($req['last_name'] ?? '')) ?: 'Guest')) ?>', '<?= h(addslashes($req['email'])) ?>', <?= $req['id'] ?>)">
                             <i class="fa-solid fa-key"></i> <?= $req['status'] === 'pending' ? 'Dispatch Password' : 'Change Again' ?>
                           </button>
                         <?php else: ?>
@@ -473,6 +621,19 @@ $users = dbRows("
               </tbody>
             </table>
           </div>
+          <?php if ($totalPages > 1): ?>
+            <div class="admin-pagination">
+              <span>Page <strong><?= $page ?></strong> of <strong><?= $totalPages ?></strong> (<?= $totalTabRows ?> record(s))</span>
+              <div class="admin-pagination-links">
+                <?php if ($page > 1): ?>
+                  <a href="users.php?tab=resets<?= $qSuffix ?>&page=<?= $page - 1 ?>" class="btn btn-ghost btn-sm">&laquo; Prev</a>
+                <?php endif; ?>
+                <?php if ($page < $totalPages): ?>
+                  <a href="users.php?tab=resets<?= $qSuffix ?>&page=<?= $page + 1 ?>" class="btn btn-ghost btn-sm">Next &raquo;</a>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
       <?php else: ?>
@@ -480,12 +641,13 @@ $users = dbRows("
       <div class="card">
         <div class="card-body" style="padding:0;">
           <div class="table-wrap">
-            <table class="table">
+            <table class="table" id="usersTable">
               <thead>
                 <tr>
                   <th class="col-nowrap">ID</th>
                   <th>User Name</th>
                   <th>Email &amp; Contact</th>
+                  <th class="col-nowrap">Credentials</th>
                   <th class="col-nowrap">ID Document Info</th>
                   <th class="col-nowrap">KYC Status</th>
                   <th class="col-nowrap">Bookings</th>
@@ -495,10 +657,10 @@ $users = dbRows("
               </thead>
               <tbody>
                 <?php if (empty($users)): ?>
-                  <tr>
-                    <td colspan="8" style="text-align:center;padding:36px;color:var(--text-muted);">
+                  <tr data-empty-row>
+                    <td colspan="9" style="text-align:center;padding:36px;color:var(--text-muted);">
                       <i class="fa-solid fa-folder-open" style="font-size:2rem;margin-bottom:8px;display:block;"></i>
-                      No users found matching this tab filter.
+                      No users found matching this filter.
                     </td>
                   </tr>
                 <?php endif; ?>
@@ -506,6 +668,8 @@ $users = dbRows("
                 <?php foreach ($users as $u): 
                   $kycStatus = $u['verification_status'] ?? ($u['profile_verified'] ? 'verified' : (!empty($u['id_document']) ? 'pending' : 'unverified'));
                   $hasDoc = !empty($u['id_document']);
+                  $tempUserPass = getAdminTempPasswordForRow($u);
+                  $hasActiveLink = !empty($u['reset_token']) && !empty($u['reset_expires']) && strtotime((string)$u['reset_expires']) > time();
                 ?>
                   <tr>
                     <td class="col-nowrap">#<?= $u['id'] ?></td>
@@ -521,6 +685,9 @@ $users = dbRows("
                     <td>
                       <div><?= h($u['email']) ?></div>
                       <div style="font-size:0.75rem;color:var(--text-muted);"><?= h($u['phone'] ?: 'No Phone') ?></div>
+                    </td>
+                    <td class="col-nowrap">
+                      <?= renderAdminCredentialBadge($tempUserPass, $hasActiveLink) ?>
                     </td>
                     <td class="col-nowrap">
                       <?php if (!empty($u['id_type'])): ?>
@@ -585,11 +752,11 @@ $users = dbRows("
                           <i class="fa-solid fa-pen-to-square"></i>
                         </button>
 
-                        <button type="button" class="btn btn-ghost btn-sm" onclick="openResetModal(<?= $u['id'] ?>, '<?= addslashes(h(formatFullName($u))) ?>', '<?= addslashes(h($u['email'])) ?>')" title="Master Reset Password">
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="openResetModal(<?= $u['id'] ?>, '<?= addslashes(h(formatFullName($u))) ?>', '<?= addslashes(h($u['email'])) ?>')" title="Set / Reset Temporary Password">
                           <i class="fa-solid fa-key"></i>
                         </button>
 
-                        <form action="" method="POST" style="display:inline;">
+                        <form action="<?= h($buildUsersRedirect()) ?>" method="POST" style="display:inline;">
                           <?= csrfField() ?>
                           <input type="hidden" name="action" value="toggle_status">
                           <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
@@ -598,7 +765,7 @@ $users = dbRows("
                           </button>
                         </form>
 
-                        <form action="" method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete account for <?= addslashes(h(formatFullName($u))) ?> (#<?= $u['id'] ?>)? This will delete all associated bookings, payments, and reviews. This cannot be undone!')">
+                        <form action="<?= h($buildUsersRedirect()) ?>" method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete account for <?= addslashes(h(formatFullName($u))) ?> (#<?= $u['id'] ?>)? This will delete all associated bookings, payments, and reviews. This cannot be undone!')">
                           <?= csrfField() ?>
                           <input type="hidden" name="action" value="delete_user">
                           <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
@@ -613,6 +780,19 @@ $users = dbRows("
               </tbody>
             </table>
           </div>
+          <?php if ($totalPages > 1): ?>
+            <div class="admin-pagination">
+              <span>Page <strong><?= $page ?></strong> of <strong><?= $totalPages ?></strong> (<?= $totalTabRows ?> user(s))</span>
+              <div class="admin-pagination-links">
+                <?php if ($page > 1): ?>
+                  <a href="users.php?tab=<?= urlencode($tab) ?><?= $qSuffix ?>&page=<?= $page - 1 ?>" class="btn btn-ghost btn-sm">&laquo; Prev</a>
+                <?php endif; ?>
+                <?php if ($page < $totalPages): ?>
+                  <a href="users.php?tab=<?= urlencode($tab) ?><?= $qSuffix ?>&page=<?= $page + 1 ?>" class="btn btn-ghost btn-sm">Next &raquo;</a>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
       <?php endif; ?>
@@ -621,8 +801,73 @@ $users = dbRows("
   </main>
 </div>
 
+<!-- Admin Add Walk-In Guest Modal -->
+<div id="walkinGuestModal" class="admin-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(5px);z-index:9999;align-items:center;justify-content:center;padding:16px;overflow-y:auto;">
+  <div class="glass-card" style="max-width:540px;width:100%;padding:28px;background:var(--navy-light);border:1px solid var(--border-gold);border-radius:14px;box-shadow:0 20px 40px rgba(0,0,0,0.6);margin:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:12px;">
+      <h3 style="font-family:var(--font-serif);color:var(--gold);font-size:1.3rem;margin:0;">
+        <i class="fa-solid fa-user-plus"></i> Register Walk-In Guest
+      </h3>
+      <button type="button" onclick="closeWalkinGuestModal()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;">&times;</button>
+    </div>
+    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">
+      Gumawa ng verified guest account para sa walk-in customer. Ang initial temporary password ay makikita sa <strong>Credentials</strong> column hanggang mag-set sila ng sariling password.
+    </p>
+    <form action="<?= h($buildUsersRedirect()) ?>" method="POST">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="create_walkin_user">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label class="form-label">First Name <span class="required">*</span></label>
+          <input type="text" name="first_name" class="form-control" required minlength="2" maxlength="50" placeholder="e.g. Juan">
+        </div>
+        <div>
+          <label class="form-label">Middle Name</label>
+          <input type="text" name="middle_name" class="form-control" maxlength="50" placeholder="Optional">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label class="form-label">Last Name <span class="required">*</span></label>
+          <input type="text" name="last_name" class="form-control" required minlength="2" maxlength="50" placeholder="e.g. Dela Cruz">
+        </div>
+        <div>
+          <label class="form-label">Suffix</label>
+          <input type="text" name="suffix" class="form-control" maxlength="20" placeholder="Jr., III">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label class="form-label">Email Address <span class="required">*</span></label>
+          <input type="email" name="email" class="form-control" required placeholder="guest@email.com">
+        </div>
+        <div>
+          <label class="form-label">Contact Number</label>
+          <input type="tel" name="phone" class="form-control" placeholder="09123456789">
+        </div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <label class="form-label">Initial Temporary Password (Min. 8 chars) <span class="required">*</span></label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" name="initial_password" id="walkinInitialPass" class="form-control" required minlength="8" placeholder="Click Gen or type password">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="generateWalkinPass()" style="white-space:nowrap;" title="Generate random temporary password"><i class="fa-solid fa-dice"></i> Gen</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" onclick="closeWalkinGuestModal()">Cancel</button>
+        <button type="submit" class="btn btn-gold"><i class="fa-solid fa-user-check"></i> Create Guest Account</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Admin Edit User Account Modal -->
-<div id="editUserModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(5px);z-index:9999;align-items:center;justify-content:center;padding:16px;overflow-y:auto;">
+<div id="editUserModal" class="admin-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(5px);z-index:9999;align-items:center;justify-content:center;padding:16px;overflow-y:auto;">
   <div class="glass-card" style="max-width:560px;width:100%;padding:28px;background:var(--navy-light);border:1px solid var(--border-gold);border-radius:14px;box-shadow:0 20px 40px rgba(0,0,0,0.6);margin:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:12px;">
       <h3 style="font-family:var(--font-serif);color:var(--gold);font-size:1.3rem;margin:0;">
@@ -631,7 +876,7 @@ $users = dbRows("
       <button type="button" onclick="closeEditUserModal()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;">&times;</button>
     </div>
     
-    <form action="" method="POST">
+    <form action="<?= h($buildUsersRedirect()) ?>" method="POST">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="edit_user">
       <input type="hidden" name="user_id" id="editUserId">
@@ -708,35 +953,35 @@ $users = dbRows("
 </div>
 
 <!-- Master Reset Password Modal -->
-<div id="resetPasswordModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+<div id="resetPasswordModal" class="admin-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;padding:16px;">
   <div class="glass-card" style="max-width:440px;width:100%;padding:28px;background:var(--navy-light);border:1px solid var(--border-gold);border-radius:14px;box-shadow:0 20px 40px rgba(0,0,0,0.5);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h3 style="font-family:var(--font-serif);color:var(--gold);font-size:1.25rem;margin:0;"><i class="fa-solid fa-key"></i> Master Password Reset</h3>
       <button type="button" onclick="closeResetModal()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;">&times;</button>
     </div>
     <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">
-      Directly set a new password for <strong id="modalUserName" style="color:#fff;"></strong> (<span id="modalUserEmail"></span>).
+      Directly set a temporary password for <strong id="modalUserName" style="color:#fff;"></strong> (<span id="modalUserEmail"></span>).
     </p>
-    <form action="" method="POST" id="resetPassForm">
+    <form action="<?= h($buildUsersRedirect()) ?>" method="POST" id="resetPassForm">
       <?= csrfField() ?>
       <input type="hidden" name="user_id" id="modalUserId">
       <input type="hidden" name="request_id" id="modalRequestId" value="0">
 
       <div class="form-group" style="margin-bottom:16px;">
-        <label class="form-label">New Password (Min. 8 chars) <span class="required">*</span></label>
+        <label class="form-label">New Temporary Password (Min. 8 chars) <span class="required">*</span></label>
         <div style="display:flex;gap:8px;">
-          <input type="text" name="new_password" id="modalNewPassword" class="form-control" minlength="8" placeholder="Enter new password">
+          <input type="text" name="new_password" id="modalNewPassword" class="form-control" minlength="8" placeholder="Enter temporary password">
           <button type="button" class="btn btn-ghost btn-sm" onclick="generateRandomPass()" style="white-space:nowrap;" title="Generate random secure password"><i class="fa-solid fa-dice"></i> Gen</button>
         </div>
         <small style="color:var(--text-muted);font-size:0.75rem;margin-top:4px;display:block;">Required when manually updating password. Not required when generating a reset link.</small>
         <div style="margin-top:10px;padding:8px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.28);border-radius:8px;font-size:0.76rem;color:#bbf7d0;">
-          <i class="fa-solid fa-bolt" style="color:#4ade80;margin-right:4px;"></i> The user will automatically see a live one-time popup on their Forgot Password page once you click Update Password or Get Reset Link.
+          <i class="fa-solid fa-bolt" style="color:#4ade80;margin-right:4px;"></i> Assigned temporary passwords appear cleanly under the <strong>Credentials</strong> column until the guest sets a personal password.
         </div>
       </div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
         <button type="button" class="btn btn-ghost" onclick="closeResetModal()">Cancel</button>
-        <button type="submit" name="action" value="generate_link" class="btn btn-ghost" style="border:1px solid var(--gold);color:var(--gold);"><i class="fa-solid fa-link"></i> Get Reset Link</button>
+        <button type="submit" name="action" value="generate_link" formnovalidate class="btn btn-ghost" style="border:1px solid var(--gold);color:var(--gold);"><i class="fa-solid fa-link"></i> Get Reset Link</button>
         <button type="submit" name="action" value="reset_password" class="btn btn-gold"><i class="fa-solid fa-floppy-disk"></i> Update Password</button>
       </div>
     </form>
@@ -744,7 +989,7 @@ $users = dbRows("
 </div>
 
 <!-- Admin KYC Inspection Modal -->
-<div id="kycReviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
+<div id="kycReviewModal" class="admin-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
   <div class="glass-card" style="max-width:820px;width:100%;padding:28px;background:var(--navy-light);border:1px solid var(--border-gold);border-radius:16px;box-shadow:0 24px 50px rgba(0,0,0,0.6);margin:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:12px;">
       <div>
@@ -756,7 +1001,7 @@ $users = dbRows("
       <button type="button" onclick="closeKycReviewModal()" style="background:none;border:none;color:#aaa;font-size:1.5rem;cursor:pointer;">&times;</button>
     </div>
 
-    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:24px;margin-bottom:24px;">
+    <div class="admin-modal-grid-2-wide-left" style="margin-bottom:24px;">
       <!-- Left: Document Preview -->
       <div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -841,7 +1086,7 @@ $users = dbRows("
         <div style="margin-top:16px;">
           <div style="display:flex;gap:10px;">
             <!-- Approve Form -->
-            <form action="" method="POST" style="flex:1;">
+            <form action="<?= h($buildUsersRedirect()) ?>" method="POST" style="flex:1;">
               <?= csrfField() ?>
               <input type="hidden" name="action" value="approve_kyc">
               <input type="hidden" name="user_id" id="kycApproveUserId">
@@ -858,7 +1103,7 @@ $users = dbRows("
 
           <!-- Reject Details Drawer -->
           <div id="kycRejectDrawer" style="display:none;margin-top:14px;padding:14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;">
-            <form action="" method="POST">
+            <form action="<?= h($buildUsersRedirect()) ?>" method="POST">
               <?= csrfField() ?>
               <input type="hidden" name="action" value="reject_kyc">
               <input type="hidden" name="user_id" id="kycRejectUserId">
@@ -893,6 +1138,27 @@ $users = dbRows("
 </div>
 
 <script>
+function generateSecureTempString(prefix = '') {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  let pass = prefix;
+  const len = prefix ? 5 : 10;
+  for (let i = 0; i < len; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pass;
+}
+
+function openWalkinGuestModal() {
+  document.getElementById('walkinInitialPass').value = generateSecureTempString('Guest@');
+  document.getElementById('walkinGuestModal').style.display = 'flex';
+}
+function closeWalkinGuestModal() {
+  document.getElementById('walkinGuestModal').style.display = 'none';
+}
+function generateWalkinPass() {
+  document.getElementById('walkinInitialPass').value = generateSecureTempString('Guest@');
+}
+
 function openEditUserModal(data) {
   document.getElementById('editUserId').value = data.id;
   document.getElementById('editUserFn').value = data.first_name || '';
@@ -923,12 +1189,7 @@ function closeResetModal() {
   document.getElementById('resetPasswordModal').style.display = 'none';
 }
 function generateRandomPass() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
-  let pass = '';
-  for (let i = 0; i < 10; i++) {
-    pass += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  document.getElementById('modalNewPassword').value = pass;
+  document.getElementById('modalNewPassword').value = generateSecureTempString();
 }
 
 function openKycReviewModal(data) {
@@ -943,7 +1204,6 @@ function openKycReviewModal(data) {
   document.getElementById('kycModalIdNumber').textContent = data.id_number;
   document.getElementById('kycModalSubmittedAt').textContent = data.submitted_at || 'Not Available';
   
-  // Document display
   const imgEl = document.getElementById('kycDocImg');
   const pdfNotice = document.getElementById('kycDocPdfNotice');
   const externalLink = document.getElementById('kycDocExternalLink');
@@ -961,7 +1221,6 @@ function openKycReviewModal(data) {
     imgEl.style.display = 'block';
   }
 
-  // Status badge
   const statusBadgeMap = {
     'verified': '<span class="badge" style="background:#22c55e;color:#fff;">Verified</span>',
     'pending': '<span class="badge" style="background:#eab308;color:#000;">Pending Review</span>',
@@ -970,7 +1229,6 @@ function openKycReviewModal(data) {
   };
   document.getElementById('kycModalStatusBadge').innerHTML = statusBadgeMap[data.status] || data.status;
 
-  // Previous rejection reason
   const rejBox = document.getElementById('kycModalRejectionBox');
   if (data.rejection_reason && data.rejection_reason.trim() !== '') {
     document.getElementById('kycModalRejectionReason').textContent = data.rejection_reason;
@@ -979,7 +1237,6 @@ function openKycReviewModal(data) {
     rejBox.style.display = 'none';
   }
 
-  // Hide reject drawer initially
   document.getElementById('kycRejectDrawer').style.display = 'none';
   document.getElementById('kycReviewModal').style.display = 'flex';
 }
@@ -1001,7 +1258,7 @@ function setRejectReason(reason) {
 }
 </script>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/admin.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

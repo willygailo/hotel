@@ -30,13 +30,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_ai_config'])) {
         if ($aiModel !== '') {
             $upsert('ai_nvidia_model', $aiModel);
         }
-        if ($newKey !== '') {
+        if (!empty($_POST['clear_ai_key'])) {
+            $upsert('ai_nvidia_key', '');
+        } elseif ($newKey !== '') {
             $upsert('ai_nvidia_key', $newKey);
         }
 
         clearSettingsCache();
         auditLog('Updated AI Configuration', 'Admin Module', "AI Enabled: {$aiEnabled}, Model: {$aiModel}");
         setFlash('success', 'AI Engine settings updated successfully.');
+    }
+    header('Location: ai-config.php');
+    exit;
+}
+
+// Clear older non-flagged AI logs cleanly
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['clear_non_flagged_logs'])) {
+    $token = $_POST[CSRF_TOKEN_NAME] ?? '';
+    if (!verifyCsrfToken($token)) {
+        setFlash('error', 'Invalid security token.');
+    } else {
+        $deleted = dbExec("DELETE FROM ai_logs WHERE flagged = 0 AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)");
+        auditLog('Cleaned AI Logs', 'Admin Module', "Purged {$deleted} non-flagged AI log entries older than 7 days");
+        setFlash('success', "Cleaned {$deleted} older routine AI log record(s). Flagged security logs were kept intact.");
     }
     header('Location: ai-config.php');
     exit;
@@ -100,10 +116,13 @@ $logStats = dbRow("SELECT COUNT(*) AS total, SUM(CASE WHEN flagged = 1 THEN 1 EL
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Logs &amp; Monitoring — Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -162,17 +181,29 @@ $logStats = dbRow("SELECT COUNT(*) AS total, SUM(CASE WHEN flagged = 1 THEN 1 EL
           <div>
             <label class="form-label">Update NVIDIA API Key <small style="color:var(--text-muted);">(leave blank to keep current)</small></label>
             <input type="password" name="ai_nvidia_key" class="form-control" placeholder="<?= $hasKey ? '•••••••• (Configured)' : 'nvapi-...' ?>" autocomplete="new-password">
+            <?php if ($hasKey): ?>
+              <label style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:0.74rem;color:var(--text-muted);cursor:pointer;">
+                <input type="checkbox" name="clear_ai_key" value="1"> Remove saved DB API key
+              </label>
+            <?php endif; ?>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <button type="submit" class="btn btn-gold"><i class="fa-solid fa-save"></i> Save AI Config</button>
           </div>
         </form>
 
-        <form action="ai-config.php" method="POST" style="margin-top:12px;">
-          <?= csrfField() ?>
-          <input type="hidden" name="test_ai_connection" value="1">
-          <button type="submit" class="btn btn-ghost btn-sm"><i class="fa-solid fa-plug-circle-check"></i> Test Live AI Connection</button>
-        </form>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <form action="ai-config.php" method="POST">
+            <?= csrfField() ?>
+            <input type="hidden" name="test_ai_connection" value="1">
+            <button type="submit" class="btn btn-ghost btn-sm"><i class="fa-solid fa-plug-circle-check"></i> Test Live AI Connection</button>
+          </form>
+          <form action="ai-config.php" method="POST" onsubmit="return confirm('Purge routine AI logs older than 7 days? Security threat logs will be kept.')">
+            <?= csrfField() ?>
+            <input type="hidden" name="clear_non_flagged_logs" value="1">
+            <button type="submit" class="btn btn-ghost btn-sm"><i class="fa-solid fa-broom"></i> Clean Old Logs (&gt;7d)</button>
+          </form>
+        </div>
       </div>
 
       <!-- Log Filters -->
@@ -250,7 +281,7 @@ $logStats = dbRow("SELECT COUNT(*) AS total, SUM(CASE WHEN flagged = 1 THEN 1 EL
   </main>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/admin.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

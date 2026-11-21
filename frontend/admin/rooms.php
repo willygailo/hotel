@@ -87,8 +87,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_room'])) {
             if (!in_array($status, ['available', 'occupied', 'dirty', 'maintenance', 'reserved'], true)) {
                 $status = $existing['status'];
             }
+            if ($status !== 'occupied') {
+                $activeOccupant = dbRow("SELECT booking_code FROM bookings WHERE room_id = ? AND status = 'checked_in' LIMIT 1", [$roomId]);
+                if ($activeOccupant) {
+                    setFlash('error', "Cannot set Room #{$roomNum} to '{$status}' while Booking #{$activeOccupant['booking_code']} is currently Checked In. Check out the guest first.");
+                    header("Location: rooms.php");
+                    exit;
+                }
+            }
             $thumbnail = $existing['thumbnail'];
             if (!empty($_FILES['thumbnail']['name'])) {
+                $upErr = null;
                 $uploaded = uploadFile($_FILES['thumbnail'], 'rooms', ALLOWED_IMAGE_TYPES, MAX_UPLOAD_SIZE, $upErr);
                 if ($uploaded) {
                     if (!empty($thumbnail) && strpos($thumbnail, '/') !== false) {
@@ -147,10 +156,13 @@ $roomTypes = dbRows("SELECT * FROM room_types");
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Manage Rooms — Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -199,19 +211,20 @@ $roomTypes = dbRows("SELECT * FROM room_types");
           </div>
           <div>
             <label class="form-label">Floor</label>
-            <input type="number" name="floor" class="form-control" value="1" required>
+            <input type="number" name="floor" class="form-control" value="1" min="1" required>
           </div>
           <div>
             <label class="form-label">Capacity (Pax)</label>
-            <input type="number" name="capacity" class="form-control" value="2" required>
+            <input type="number" name="capacity" class="form-control" value="2" min="1" required>
           </div>
           <div>
             <label class="form-label">Price / Night (₱)</label>
-            <input type="number" step="0.01" name="price_per_night" class="form-control" placeholder="1500.00" required>
+            <input type="number" step="0.01" name="price_per_night" class="form-control" min="0" placeholder="1500.00" required>
           </div>
           <div>
             <label class="form-label">Thumbnail Image</label>
-            <input type="file" name="thumbnail" class="form-control" accept="image/*">
+            <input type="file" name="thumbnail" id="addRoomThumbInput" class="form-control" accept="image/*" onchange="optimizeImageInput(this, { maxDim: 1600, quality: 0.85, statusElId: 'addRoomThumbStatus' })">
+            <small id="addRoomThumbStatus" style="display:none;color:var(--gold);font-size:0.74rem;margin-top:3px;"></small>
             <small style="color:var(--text-muted);font-size:0.75rem;">JPG, PNG, WebP (Max 15MB)</small>
           </div>
           <div style="grid-column:1/-1;">
@@ -222,14 +235,23 @@ $roomTypes = dbRows("SELECT * FROM room_types");
         </form>
       </div>
 
+      <div class="admin-toolbar">
+        <div style="font-size:0.85rem;color:var(--text-muted);">
+          Showing <strong style="color:#fff;"><?= count($rooms) ?></strong> room(s) in inventory
+        </div>
+        <div style="min-width:260px;">
+          <input type="text" id="roomSearchInput" data-table-search data-table-target="#roomsTable" class="form-control" placeholder="Search room number, name, type, status..." style="background:rgba(255,255,255,0.05);font-size:0.85rem;">
+        </div>
+      </div>
+
       <!-- Rooms Inventory Table -->
       <div class="card">
         <div class="card-body" style="padding:0;">
           <div class="table-wrap">
-            <table class="table">
+            <table class="table" id="roomsTable">
               <thead>
                 <tr>
-                  <th class="col-nowrap">No.</th>
+                  <th class="col-nowrap">Photo &amp; No.</th>
                   <th>Name</th>
                   <th class="col-nowrap">Type</th>
                   <th class="col-nowrap">Floor</th>
@@ -240,40 +262,49 @@ $roomTypes = dbRows("SELECT * FROM room_types");
                 </tr>
               </thead>
               <tbody>
-                <?php foreach ($rooms as $r): ?>
-                  <tr>
-                    <td class="col-nowrap"><strong>#<?= h($r['room_number']) ?></strong></td>
-                    <td><?= h($r['name']) ?></td>
-                    <td class="col-nowrap"><span class="badge badge-gold"><?= h($r['type_name']) ?></span></td>
-                    <td class="col-nowrap">Floor <?= $r['floor'] ?></td>
-                    <td class="col-nowrap"><?= $r['capacity'] ?> pax</td>
-                    <td class="col-amount" style="color:var(--gold);font-weight:700;"><?= formatCurrency($r['price_per_night']) ?></td>
-                    <td class="col-nowrap"><?= statusBadge($r['status']) ?></td>
-                    <td class="col-nowrap" style="display:flex;gap:6px;">
-                      <button type="button"
-                              class="btn btn-ghost btn-sm"
-                              onclick="openEditRoomModal(this)"
-                              data-id="<?= (int)$r['id'] ?>"
-                              data-number="<?= h($r['room_number']) ?>"
-                              data-type="<?= (int)$r['room_type_id'] ?>"
-                              data-name="<?= h($r['name']) ?>"
-                              data-floor="<?= (int)$r['floor'] ?>"
-                              data-capacity="<?= (int)$r['capacity'] ?>"
-                              data-price="<?= h($r['price_per_night']) ?>"
-                              data-status="<?= h($r['status']) ?>"
-                              data-description="<?= h($r['description'] ?? '') ?>"
-                              title="Edit Room">
-                        <i class="fa-solid fa-pen-to-square"></i>
-                      </button>
-                      <form action="rooms.php" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this room?')">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="delete_room" value="1">
-                        <input type="hidden" name="room_id" value="<?= $r['id'] ?>">
-                        <button type="submit" class="btn btn-danger btn-sm" title="Delete Room"><i class="fa-solid fa-trash"></i></button>
-                      </form>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
+                <?php if (empty($rooms)): ?>
+                  <tr data-empty-row><td colspan="8" class="text-center" style="padding:32px;color:var(--text-muted);">No rooms found in inventory.</td></tr>
+                <?php else: ?>
+                  <?php foreach ($rooms as $r): ?>
+                    <tr>
+                      <td class="col-nowrap">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                          <img src="<?= h(roomThumbUrl($r['thumbnail'] ?? '')) ?>" alt="" style="width:46px;height:34px;border-radius:6px;object-fit:cover;border:1px solid rgba(255,255,255,0.12);" onerror="this.src='<?= h(ASSETS_URL) ?>/images/rooms/default-room.jpg';this.onerror=null;">
+                          <strong>#<?= h($r['room_number']) ?></strong>
+                        </div>
+                      </td>
+                      <td><?= h($r['name']) ?></td>
+                      <td class="col-nowrap"><span class="badge badge-gold"><?= h($r['type_name']) ?></span></td>
+                      <td class="col-nowrap">Floor <?= (int)$r['floor'] ?></td>
+                      <td class="col-nowrap"><?= (int)$r['capacity'] ?> pax</td>
+                      <td class="col-amount" style="color:var(--gold);font-weight:700;"><?= formatCurrency($r['price_per_night']) ?></td>
+                      <td class="col-nowrap"><?= statusBadge($r['status']) ?></td>
+                      <td class="col-nowrap" style="display:flex;gap:6px;">
+                        <button type="button"
+                                class="btn btn-ghost btn-sm"
+                                onclick="openEditRoomModal(this)"
+                                data-id="<?= (int)$r['id'] ?>"
+                                data-number="<?= h($r['room_number']) ?>"
+                                data-type="<?= (int)$r['room_type_id'] ?>"
+                                data-name="<?= h($r['name']) ?>"
+                                data-floor="<?= (int)$r['floor'] ?>"
+                                data-capacity="<?= (int)$r['capacity'] ?>"
+                                data-price="<?= h($r['price_per_night']) ?>"
+                                data-status="<?= h($r['status']) ?>"
+                                data-description="<?= h($r['description'] ?? '') ?>"
+                                title="Edit Room">
+                          <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <form action="rooms.php" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this room?')">
+                          <?= csrfField() ?>
+                          <input type="hidden" name="delete_room" value="1">
+                          <input type="hidden" name="room_id" value="<?= $r['id'] ?>">
+                          <button type="submit" class="btn btn-danger btn-sm" title="Delete Room"><i class="fa-solid fa-trash"></i></button>
+                        </form>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
               </tbody>
             </table>
           </div>
@@ -285,7 +316,7 @@ $roomTypes = dbRows("SELECT * FROM room_types");
 </div>
 
 <!-- Edit Room Modal -->
-<div id="editRoomModal" style="display:none;position:fixed;inset:0;background:rgba(4,7,20,0.85);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+<div id="editRoomModal" class="admin-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(4,7,20,0.85);z-index:9999;align-items:center;justify-content:center;padding:20px;">
   <div class="glass-card" style="width:100%;max-width:680px;padding:24px;max-height:90vh;overflow-y:auto;border:1px solid rgba(201,168,76,0.35);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h3 style="font-family:var(--font-serif);color:var(--gold);margin:0;"><i class="fa-solid fa-pen-to-square"></i> Edit Room</h3>
@@ -313,7 +344,7 @@ $roomTypes = dbRows("SELECT * FROM room_types");
       </div>
       <div>
         <label class="form-label">Floor</label>
-        <input type="number" name="floor" id="edit_room_floor" class="form-control" required>
+        <input type="number" name="floor" id="edit_room_floor" class="form-control" min="1" required>
       </div>
       <div>
         <label class="form-label">Capacity (Pax)</label>
@@ -335,7 +366,8 @@ $roomTypes = dbRows("SELECT * FROM room_types");
       </div>
       <div>
         <label class="form-label">Replace Thumbnail <small style="color:var(--text-muted);">(optional)</small></label>
-        <input type="file" name="thumbnail" class="form-control" accept="image/*">
+        <input type="file" name="thumbnail" id="editRoomThumbInput" class="form-control" accept="image/*" onchange="optimizeImageInput(this, { maxDim: 1600, quality: 0.85, statusElId: 'editRoomThumbStatus' })">
+        <small id="editRoomThumbStatus" style="display:none;color:var(--gold);font-size:0.74rem;margin-top:3px;"></small>
       </div>
       <div style="grid-column:1/-1;">
         <label class="form-label">Description</label>
@@ -349,8 +381,8 @@ $roomTypes = dbRows("SELECT * FROM room_types");
   </div>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/admin.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 <script>
 function openEditRoomModal(btn) {
   document.getElementById('edit_room_id').value = btn.dataset.id;
@@ -362,6 +394,8 @@ function openEditRoomModal(btn) {
   document.getElementById('edit_room_price').value = btn.dataset.price;
   document.getElementById('edit_room_status').value = btn.dataset.status;
   document.getElementById('edit_room_description').value = btn.dataset.description;
+  const st = document.getElementById('editRoomThumbStatus');
+  if (st) st.style.display = 'none';
   document.getElementById('editRoomModal').style.display = 'flex';
 }
 function closeEditRoomModal() {

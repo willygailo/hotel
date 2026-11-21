@@ -61,10 +61,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Executive Login — Marvelous Hotel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
 </head>
 <body style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#060919;">
 
@@ -104,11 +107,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
 
     <div style="text-align:center;margin-top:24px;font-size:0.82rem;color:var(--text-muted);border-top:1px solid rgba(255,255,255,0.06);padding-top:18px;">
-      <a href="../index.php" style="color:var(--text-muted);">&larr; Back to Public Website</a>
+      <a href="<?= h(USER_SITE_URL . '/index.php') ?>" style="color:var(--text-muted);">&larr; Back to Public Website</a>
     </div>
   </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/admin.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

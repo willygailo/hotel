@@ -7,19 +7,19 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 requireRole('admin');
 releaseReadOnlySession();
 
-// Periodic housekeeping: cancel stale unpaid bookings older than 24 hours
-autoExpireStaleBookings(24);
+// Throttled housekeeping: cancel stale unpaid bookings older than 24 hours (max once every 5 mins)
+throttleStaleBookingSweep(24, 300);
 
 $adminId = currentUserId();
 $admin = dbRow("SELECT * FROM users WHERE id = ?", [$adminId]);
 
-// Full system aggregates
+// Full system aggregates (expose pendingPayments/flaggedAiLogs cleanly to shared sidebar)
+$GLOBALS['pendingPayments'] = $pendingPayments = (int)(dbRow("SELECT COUNT(*) as cnt FROM payments WHERE status = 'pending'")['cnt'] ?? 0);
+$GLOBALS['flaggedAiLogs'] = $flaggedAiLogs = (int)(dbRow("SELECT COUNT(*) as cnt FROM ai_logs WHERE flagged = 1")['cnt'] ?? 0);
 $totalRevenue   = dbRow("SELECT SUM(amount) as total FROM payments WHERE status = 'verified'")['total'] ?? 0;
 $totalGuests    = dbRow("SELECT COUNT(*) as cnt FROM users WHERE role = 'user'")['cnt'] ?? 0;
 $totalStaff     = dbRow("SELECT COUNT(*) as cnt FROM users WHERE role = 'staff'")['cnt'] ?? 0;
 $totalBookings  = dbRow("SELECT COUNT(*) as cnt FROM bookings")['cnt'] ?? 0;
-$pendingPayments= dbRow("SELECT COUNT(*) as cnt FROM payments WHERE status = 'pending'")['cnt'] ?? 0;
-$flaggedAiLogs  = dbRow("SELECT COUNT(*) as cnt FROM ai_logs WHERE flagged = 1")['cnt'] ?? 0;
 
 // Staff Audit Logs (Dedicated)
 $staffAudits = dbRows("
@@ -56,10 +56,13 @@ $securityAlerts = dbRows("SELECT * FROM ai_logs WHERE flagged = 1 ORDER BY id DE
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard — Marvelous Hotel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -419,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadAdminAiInsights();
 });
 </script>
-<script src="../frontend/assets/js/core.js?v=<?= @filemtime(__DIR__ . '/../assets/js/core.js') ?: '1' ?>"></script>
-<script src="../frontend/assets/js/admin.js?v=<?= @filemtime(__DIR__ . '/../assets/js/admin.js') ?: '1' ?>"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

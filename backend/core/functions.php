@@ -989,15 +989,26 @@ function submitUserReview(int $userId, int $bookingId, int $rating, string $comm
 
 /**
  * Release 'occupied' room status if no other booking for that room remains checked_in.
+ * Returns true if the room became idle (and was transitioned to $idleStatus), false if another guest remains checked in.
  */
-function releaseRoomOccupancyIfIdle(int $roomId, int $excludeBookingId = 0): void {
+function releaseRoomOccupancyIfIdle(int $roomId, int $excludeBookingId = 0, string $idleStatus = 'available'): bool {
+    if (!in_array($idleStatus, ['available', 'dirty'], true)) {
+        $idleStatus = 'available';
+    }
     $otherActive = dbRow(
         "SELECT id FROM bookings WHERE room_id = ? AND status = 'checked_in' AND id != ? LIMIT 1",
         [$roomId, $excludeBookingId]
     );
-    if (!$otherActive) {
+    if ($otherActive) {
+        dbExec("UPDATE rooms SET status = 'occupied' WHERE id = ?", [$roomId]);
+        return false;
+    }
+    if ($idleStatus === 'dirty') {
+        dbExec("UPDATE rooms SET status = 'dirty' WHERE id = ? AND status != 'maintenance'", [$roomId]);
+    } else {
         dbExec("UPDATE rooms SET status = 'available' WHERE id = ? AND status = 'occupied'", [$roomId]);
     }
+    return true;
 }
 
 /**
@@ -1268,6 +1279,224 @@ function aiPlainTextForSpeech(string $text): string {
     $plain = preg_replace('/\s+/', ' ', $plain);
 
     return trim($plain);
+}
+
+/**
+ * Return a cache-busted URL for a frontend asset based on file modification time.
+ */
+function assetUrl(string $subpath): string {
+    $clean = ltrim($subpath, '/');
+    $diskPath = SITE_ROOT . '/frontend/assets/' . $clean;
+    $ver = @filemtime($diskPath) ?: '1';
+    return ASSETS_URL . '/' . $clean . '?v=' . $ver;
+}
+
+/**
+ * Throttle autoExpireStaleBookings() so executive dashboard loads don't run cleanup queries on every refresh.
+ */
+function throttleStaleBookingSweep(int $hoursThreshold = 24, int $cooldownSeconds = 300): void {
+    $cacheDir = SITE_ROOT . '/storage/cache';
+    $stampFile = $cacheDir . '/stale_booking_sweep.ts';
+    $now = time();
+
+    if (is_file($stampFile)) {
+        $lastRun = (int)@file_get_contents($stampFile);
+        if ($lastRun > 0 && ($now - $lastRun) < $cooldownSeconds) {
+            return;
+        }
+    }
+
+    autoExpireStaleBookings($hoursThreshold);
+
+    if (!is_dir($cacheDir)) {
+        @mkdir($cacheDir, 0775, true);
+    }
+    if (is_dir($cacheDir) && is_writable($cacheDir)) {
+        @file_put_contents($stampFile, (string)$now, LOCK_EX);
+    }
+}
+
+/**
+ * Idempotently ensure temp-credential tracking columns exist on users table (safety bridge if migration 0018 was not yet run).
+ */
+function ensureTempCredentialSchema(): bool {
+    static $ready = null;
+    if ($ready !== null) {
+        return $ready;
+    }
+    try {
+        $col = dbRow("SHOW COLUMNS FROM `users` LIKE 'temp_password_enc'");
+        if ($col) {
+            $ready = true;
+            return true;
+        }
+        dbExec("ALTER TABLE `users` ADD COLUMN `temp_password_enc` TEXT DEFAULT NULL AFTER `remember_expires`");
+        dbExec("ALTER TABLE `users` ADD COLUMN `password_is_temp` TINYINT(1) NOT NULL DEFAULT 0 AFTER `temp_password_enc`");
+        dbExec("ALTER TABLE `users` ADD COLUMN `password_updated_at` DATETIME DEFAULT NULL AFTER `password_is_temp`");
+        try {
+            $hasMigTable = dbRow("SHOW TABLES LIKE 'schema_migrations'");
+            if ($hasMigTable) {
+                dbExec("INSERT IGNORE INTO schema_migrations (migration) VALUES ('0018_admin_temp_credentials.sql')");
+            }
+        } catch (\Throwable $e) {}
+        $ready = true;
+        return true;
+    } catch (\Throwable $e) {
+        $ready = false;
+        return false;
+    }
+}
+
+/**
+ * Resolve 32-byte encryption key for Admin-assigned temporary credentials vault.
+ */
+function getTempCredentialVaultKey(): string {
+    static $key = null;
+    if ($key !== null) {
+        return $key;
+    }
+    $envSecret = getenv('MH_CRED_VAULT_KEY');
+    if (is_string($envSecret) && $envSecret !== '') {
+        $key = hash('sha256', $envSecret, true);
+        return $key;
+    }
+    $keyFile = SITE_ROOT . '/storage/.cred_vault.key';
+    if (is_file($keyFile)) {
+        $raw = trim((string)@file_get_contents($keyFile));
+        if (strlen($raw) === 64 && ctype_xdigit($raw)) {
+            $decoded = @hex2bin($raw);
+            if ($decoded !== false && strlen($decoded) === 32) {
+                $key = $decoded;
+                return $key;
+            }
+        }
+    }
+    try {
+        $generated = random_bytes(32);
+        if (!is_dir(dirname($keyFile))) {
+            @mkdir(dirname($keyFile), 0775, true);
+        }
+        if (is_writable(dirname($keyFile))) {
+            @file_put_contents($keyFile, bin2hex($generated), LOCK_EX);
+            @chmod($keyFile, 0600);
+            $key = $generated;
+            return $key;
+        }
+    } catch (\Throwable $e) {}
+
+    $key = hash('sha256', DB_HOST . '|' . DB_NAME . '|' . SITE_ROOT, true);
+    return $key;
+}
+
+function encryptAdminTempPassword(string $plain): string {
+    if ($plain === '' || !extension_loaded('openssl')) {
+        return '';
+    }
+    try {
+        $key = getTempCredentialVaultKey();
+        $iv  = random_bytes(12);
+        $tag = '';
+        $ct  = openssl_encrypt($plain, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag, '', 16);
+        if ($ct === false || strlen($tag) !== 16) {
+            return '';
+        }
+        return 'v1:' . base64_encode($iv . $tag . $ct);
+    } catch (\Throwable $e) {
+        return '';
+    }
+}
+
+function decryptAdminTempPassword(?string $stored): ?string {
+    if ($stored === null || $stored === '' || !extension_loaded('openssl')) {
+        return null;
+    }
+    if (!str_starts_with($stored, 'v1:')) {
+        return null;
+    }
+    $blob = base64_decode(substr($stored, 3), true);
+    if ($blob === false || strlen($blob) <= 28) {
+        return null;
+    }
+    $iv  = substr($blob, 0, 12);
+    $tag = substr($blob, 12, 16);
+    $ct  = substr($blob, 28);
+    $plain = openssl_decrypt($ct, 'aes-256-gcm', getTempCredentialVaultKey(), OPENSSL_RAW_DATA, $iv, $tag);
+    return ($plain === false || $plain === '') ? null : $plain;
+}
+
+/**
+ * Store encrypted temporary/initial password assigned by Admin (keeps users.password as Bcrypt).
+ */
+function setAdminAssignedTempPassword(int $userId, string $plainTempPass): void {
+    if ($userId <= 0 || $plainTempPass === '' || !ensureTempCredentialSchema()) {
+        return;
+    }
+    $enc = encryptAdminTempPassword($plainTempPass);
+    if ($enc === '') {
+        return;
+    }
+    try {
+        dbExec(
+            "UPDATE users SET temp_password_enc = ?, password_is_temp = 1, password_updated_at = NOW() WHERE id = ?",
+            [$enc, $userId]
+        );
+    } catch (\Throwable $e) {}
+}
+
+/**
+ * Clear active Admin temporary password once a user changes their own password.
+ */
+function clearAdminTempPassword(int $userId): void {
+    if ($userId <= 0) {
+        return;
+    }
+    if (ensureTempCredentialSchema()) {
+        try {
+            dbExec(
+                "UPDATE users SET temp_password_enc = NULL, password_is_temp = 0, password_updated_at = NOW() WHERE id = ?",
+                [$userId]
+            );
+        } catch (\Throwable $e) {}
+    }
+    try {
+        dbExec(
+            "UPDATE password_reset_requests
+             SET new_password_assigned = NULL,
+                 status = CASE WHEN status = 'pending' THEN 'dismissed' ELSE status END,
+                 resolved_at = COALESCE(resolved_at, NOW())
+             WHERE user_id = ? AND (new_password_assigned IS NOT NULL OR status = 'pending')",
+            [$userId]
+        );
+    } catch (\Throwable $e) {}
+}
+
+/**
+ * Return decrypted temporary password for an Admin table row when still active.
+ */
+function getAdminTempPasswordForRow(array $userRow): ?string {
+    if (empty($userRow['password_is_temp']) || empty($userRow['temp_password_enc'])) {
+        return null;
+    }
+    return decryptAdminTempPassword((string)$userRow['temp_password_enc']);
+}
+
+/**
+ * Shared Admin table badge renderer for masked/revealable/copyable temporary credentials.
+ */
+function renderAdminCredentialBadge(?string $tempPlain, bool $hasResetLink = false): string {
+    if ($tempPlain !== null && $tempPlain !== '') {
+        $safe = h($tempPlain);
+        return '<div class="cred-pill-wrap" data-revealed="0" data-secret="' . $safe . '">'
+            . '<span class="badge" style="background:rgba(249,115,22,0.16);color:#fb923c;border:1px solid rgba(249,115,22,0.35);font-size:0.62rem;padding:2px 5px;">Temp</span>'
+            . '<span class="cred-value">••••••••</span>'
+            . '<button type="button" class="cred-btn" onclick="toggleTempCredential(this)" title="Show Password" aria-label="Show Password"><i class="fa-solid fa-eye"></i></button>'
+            . '<button type="button" class="cred-btn" onclick="copyTempCredential(this)" title="Copy Password" aria-label="Copy Password"><i class="fa-regular fa-copy"></i></button>'
+            . '</div>';
+    }
+    if ($hasResetLink) {
+        return '<span class="badge badge-gold" style="font-size:0.7rem;"><i class="fa-solid fa-link"></i> Reset Link Active</span>';
+    }
+    return '<span class="badge badge-secondary" style="font-size:0.7rem;" title="Personal user-set password is protected by one-way Bcrypt hashing"><i class="fa-solid fa-lock"></i> Protected (Bcrypt)</span>';
 }
 
 

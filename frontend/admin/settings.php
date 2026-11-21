@@ -73,22 +73,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
     if (!verifyCsrfToken($token)) {
         setFlash('error', 'Invalid security token.');
     } else {
+        $allowedSettings = [
+            'mail_driver', 'smtp_host', 'smtp_port', 'smtp_encryption',
+            'smtp_username', 'smtp_password', 'mail_from_name',
+            'hotel_name', 'hotel_tagline', 'hotel_email', 'hotel_phone',
+            'hotel_address', 'check_in_time', 'check_out_time',
+            'hotel_maya_name', 'hotel_maya_handle', 'hotel_maya_phone', 'hotel_gcash',
+        ];
         if (!empty($_POST['settings']) && is_array($_POST['settings'])) {
+            $errMsg = null;
+            $toSave = [];
             foreach ($_POST['settings'] as $key => $val) {
-                $trimmedVal = trim($val);
-                // Clean spaces if saving smtp_password
-                if ($key === 'smtp_password') {
-                    $trimmedVal = str_replace(' ', '', $trimmedVal);
+                if (!in_array($key, $allowedSettings, true) || !is_string($val)) {
+                    continue;
                 }
-                dbExec(
-                    "INSERT INTO settings (`key`, `value`, `updated_at`) VALUES (?, ?, NOW()) 
-                     ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `updated_at` = NOW()",
-                    [$key, $trimmedVal]
-                );
+                $trimmedVal = trim($val);
+                if ($key === 'smtp_password') {
+                    // Leave blank to preserve currently configured App Password without overwriting with empty
+                    if ($trimmedVal === '') {
+                        continue;
+                    }
+                    $trimmedVal = str_replace(' ', '', $trimmedVal);
+                } elseif ($key === 'smtp_port') {
+                    $portNum = (int)$trimmedVal;
+                    $trimmedVal = (string)max(1, min(65535, $portNum ?: 587));
+                } elseif ($key === 'mail_driver') {
+                    $trimmedVal = in_array($trimmedVal, ['smtp', 'mail'], true) ? $trimmedVal : 'smtp';
+                } elseif ($key === 'smtp_encryption') {
+                    $trimmedVal = in_array($trimmedVal, ['tls', 'ssl'], true) ? $trimmedVal : 'tls';
+                } elseif ($key === 'hotel_email' && $trimmedVal !== '' && !filter_var($trimmedVal, FILTER_VALIDATE_EMAIL)) {
+                    $errMsg = 'Official Hotel Contact Email format is invalid.';
+                    break;
+                }
+                $toSave[$key] = $trimmedVal;
             }
-            clearSettingsCache();
-            auditLog('Updated System Settings', 'Admin Module', 'Modified global hotel configuration');
-            setFlash('success', 'System and Email configuration updated successfully!');
+
+            if ($errMsg !== null) {
+                setFlash('error', $errMsg);
+            } else {
+                foreach ($toSave as $key => $val) {
+                    dbExec(
+                        "INSERT INTO settings (`key`, `value`, `updated_at`) VALUES (?, ?, NOW()) 
+                         ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `updated_at` = NOW()",
+                        [$key, $val]
+                    );
+                }
+                clearSettingsCache();
+                auditLog('Updated System Settings', 'Admin Module', 'Modified global hotel configuration');
+                setFlash('success', 'System and Email configuration updated successfully!');
+            }
         }
     }
     header("Location: settings.php");
@@ -108,10 +141,13 @@ foreach ($rawSettings as $row) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>System Settings — Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
   <style>
     .settings-section-card {
       background: rgba(15, 23, 42, 0.7);
@@ -234,7 +270,8 @@ foreach ($rawSettings as $row) {
             <div class="form-group">
               <label class="form-label">Google 16-Character App Password</label>
               <div style="position:relative;">
-                <input type="password" id="smtp_pass_field" name="settings[smtp_password]" class="form-control" value="<?= h($s['smtp_password'] ?? '') ?>" placeholder="e.g. abcd efgh ijkl mnop">
+                <?php $hasSmtpPass = !empty($s['smtp_password']); ?>
+                <input type="password" id="smtp_pass_field" name="settings[smtp_password]" class="form-control" value="" autocomplete="new-password" placeholder="<?= $hasSmtpPass ? '•••••••••••••••• (Configured — leave blank to keep)' : 'e.g. abcd efgh ijkl mnop' ?>">
                 <button type="button" onclick="togglePassVisibility()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;">
                   <i class="fa-solid fa-eye" id="pass_icon"></i>
                 </button>
@@ -346,8 +383,8 @@ foreach ($rawSettings as $row) {
   </main>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/admin.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 <script>
 function togglePassVisibility() {
   const f = document.getElementById('smtp_pass_field');

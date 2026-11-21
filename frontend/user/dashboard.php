@@ -67,6 +67,13 @@ $recentBookings = dbRows("
     <div class="page-content">
       <?= renderFlash() ?>
 
+      <?php if (!empty($user['password_is_temp'])): ?>
+        <div class="flash-message flash-warning" style="margin-bottom:18px;">
+          <i class="fa-solid fa-key"></i>
+          <span>Kasalukuyang <strong>temporary password</strong> ang gamit mo. Para sa seguridad ng iyong account, pumunta sa <a href="profile.php">Profile Settings</a> at mag-set ng sariling password.</span>
+        </div>
+      <?php endif; ?>
+
       <div class="page-header">
         <div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">

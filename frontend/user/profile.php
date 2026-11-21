@@ -137,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $hashed = password_hash($newPass, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
                 dbExec("UPDATE users SET password = ? WHERE id = ?", [$hashed, $userId]);
+                clearAdminTempPassword($userId);
                 auditLog('Changed Password', 'User Module', "User #$userId updated password");
                 setFlash('success', 'Profile details, uploaded documents, and password have been saved!');
                 header("Location: profile.php");

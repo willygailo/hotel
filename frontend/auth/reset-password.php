@@ -52,15 +52,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
     } else {
         $hashedPass = password_hash($password, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
 
-        // Update password and clear reset token
+        // Update password and clear reset token & temporary credentials
         dbExec(
             "UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL, updated_at = NOW() WHERE id = ?",
             [$hashedPass, $user['id']]
         );
-        dbExec(
-            "UPDATE password_reset_requests SET status = 'completed', dispatch_type = COALESCE(dispatch_type, 'link'), resolved_at = COALESCE(resolved_at, NOW()), user_notified_at = COALESCE(user_notified_at, NOW()) WHERE user_id = ? AND status = 'pending'",
-            [$user['id']]
-        );
+        clearAdminTempPassword((int)$user['id']);
         consumePasswordResetWatch();
 
         auditLog('Password Reset Completed', 'User Auth', "Password changed for user {$user['email']}");

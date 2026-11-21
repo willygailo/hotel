@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
     } else {
         $fn    = trim($_POST['first_name'] ?? '');
         $ln    = trim($_POST['last_name'] ?? '');
-        $email = trim($_POST['email'] ?? '');
+        $email = strtolower(trim($_POST['email'] ?? ''));
         $phone = trim($_POST['phone'] ?? '');
         $pass  = $_POST['password'] ?? '';
 
@@ -23,19 +23,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
         $nameErr = validatePersonName($fn, $ln);
         if ($nameErr !== null) {
             setFlash('error', $nameErr);
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            setFlash('error', 'Please enter a valid staff email address.');
         } elseif ($exists) {
             setFlash('error', 'This email address is already in use.');
         } elseif (strlen($pass) < 8) {
             setFlash('error', 'The password must be at least 8 characters.');
         } else {
             $hashed = password_hash($pass, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
-            dbInsert(
+            $newStaffId = dbInsert(
                 "INSERT INTO users (first_name, last_name, email, phone, password, role, status, email_verified) 
                  VALUES (?, ?, ?, ?, ?, 'staff', 'active', 1)",
                 [$fn, $ln, $email, $phone, $hashed]
             );
+            setAdminAssignedTempPassword($newStaffId, $pass);
             auditLog('Created Staff Account', 'Admin Module', "Created staff account for $email");
-            setFlash('success', "Staff account for <strong>" . h($fn . ' ' . $ln) . "</strong> (" . h($email) . ") created successfully! The employee can now log in at the Staff Portal (<a href='" . h(STAFF_SITE_URL . '/login.php') . "' target='_blank' style='color:#fff;text-decoration:underline;'>" . h(STAFF_SITE_URL . '/login.php') . "</a>) to access their dashboard.");
+            setFlash('success', "Staff account for <strong>" . h($fn . ' ' . $ln) . "</strong> (" . h($email) . ") created successfully! The employee can now log in at the Staff Portal (<a href='" . h(STAFF_SITE_URL . '/login.php') . "' target='_blank'>" . h(STAFF_SITE_URL . '/login.php') . "</a>) to access their dashboard.");
         }
     }
     header("Location: staff.php");
@@ -57,8 +60,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         if ($stf) {
             $hashed = password_hash($newPass, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
             dbExec("UPDATE users SET password = ? WHERE id = ?", [$hashed, $sId]);
+            setAdminAssignedTempPassword($sId, $newPass);
             auditLog('Admin Reset Staff Password', 'Admin Module', "Admin reset password for Staff #$sId ({$stf['email']})");
-            setFlash('success', "Password for Staff {$stf['first_name']} {$stf['last_name']} ({$stf['email']}) was successfully updated!");
+            setFlash('success', "Password for Staff " . h($stf['first_name'] . ' ' . $stf['last_name']) . " (" . h($stf['email']) . ") was updated and recorded in Credentials!");
         } else {
             setFlash('error', 'Staff account not found.');
         }
@@ -81,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         } else {
             $fn     = trim($_POST['first_name'] ?? '');
             $ln     = trim($_POST['last_name'] ?? '');
-            $email  = trim($_POST['email'] ?? '');
+            $email  = strtolower(trim($_POST['email'] ?? ''));
             $phone  = trim($_POST['phone'] ?? '');
             $status = in_array($_POST['status'] ?? '', ['active', 'inactive'], true) ? $_POST['status'] : 'active';
 
@@ -99,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         $fn, $ln, $email, $phone, $status, $sId
                     ]);
                     auditLog('Admin Updated Staff Account', 'Admin Module', "Admin updated Staff #$sId ($email)");
-                    setFlash('success', "Staff account for <strong>" . h("$fn $ln") . "</strong> ($email) updated successfully.");
+                    setFlash('success', "Staff account for <strong>" . h("$fn $ln") . "</strong> (" . h($email) . ") updated successfully.");
                 }
             }
         }
@@ -152,6 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
+ensureTempCredentialSchema();
 $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DESC");
 ?>
 <!DOCTYPE html>
@@ -160,10 +165,13 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Manage Staff — Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -259,65 +267,88 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
         </form>
       </div>
 
+      <div class="admin-toolbar">
+        <div style="font-size:0.84rem;color:var(--text-muted);">
+          Active / Registered Frontdesk Staff: <strong style="color:#fff;"><?= count($staffMembers) ?></strong>
+        </div>
+        <div style="min-width:260px;">
+          <input type="text" id="staffSearchInput" data-table-search data-table-target="#staffTable" class="form-control" placeholder="Search staff name, email, contact..." style="background:rgba(255,255,255,0.05);font-size:0.85rem;">
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-body" style="padding:0;">
           <div class="table-wrap">
-            <table class="table">
+            <table class="table" id="staffTable">
               <thead>
                 <tr>
                   <th class="col-nowrap">ID</th>
-                  <th>Name</th>
+                  <th>Staff Member</th>
                   <th>Email</th>
                   <th class="col-nowrap">Contact</th>
-                  <th class="col-nowrap">Role</th>
+                  <th class="col-nowrap">Credentials</th>
                   <th class="col-nowrap">Last Login</th>
                   <th class="col-nowrap">Status</th>
                   <th class="col-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody>
-                <?php foreach ($staffMembers as $st): ?>
-                  <tr>
-                    <td class="col-nowrap">#<?= $st['id'] ?></td>
-                    <td class="col-nowrap"><strong><?= h($st['first_name'] . ' ' . $st['last_name']) ?></strong></td>
-                    <td><?= h($st['email']) ?></td>
-                    <td class="col-nowrap"><?= h($st['phone'] ?: 'N/A') ?></td>
-                    <td class="col-nowrap"><span class="badge badge-info">Frontdesk Staff</span></td>
-                    <td class="col-nowrap"><?= $st['last_login'] ? formatDate($st['last_login'], 'M d, Y h:i A') : 'Never' ?></td>
-                    <td class="col-nowrap"><?= statusBadge($st['status']) ?></td>
-                    <td class="col-nowrap" style="white-space:nowrap;display:flex;gap:6px;align-items:center;">
-                      <button type="button" class="btn btn-ghost btn-sm" onclick='openEditStaffModal(<?= json_encode([
-                        "id" => $st["id"],
-                        "first_name" => $st["first_name"],
-                        "last_name" => $st["last_name"],
-                        "email" => $st["email"],
-                        "phone" => $st["phone"] ?? "",
-                        "status" => $st["status"]
-                      ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' title="Edit Staff Details">
-                        <i class="fa-solid fa-pen-to-square"></i>
-                      </button>
-                      <button type="button" class="btn btn-gold btn-sm" onclick="openResetModal(<?= $st['id'] ?>, '<?= addslashes(h($st['first_name'] . ' ' . $st['last_name'])) ?>', '<?= addslashes(h($st['email'])) ?>')" title="Master Reset Password">
-                        <i class="fa-solid fa-key"></i>
-                      </button>
-                      <form action="" method="POST" style="display:inline;">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="action" value="toggle_status">
-                        <input type="hidden" name="staff_id" value="<?= $st['id'] ?>">
-                        <button type="submit" class="btn <?= $st['status'] === 'active' ? 'btn-ghost' : 'btn-success' ?> btn-sm" title="<?= $st['status'] === 'active' ? 'Deactivate Staff' : 'Activate Staff' ?>">
-                          <?= $st['status'] === 'active' ? '<i class="fa-solid fa-user-slash"></i>' : '<i class="fa-solid fa-user-check"></i>' ?>
+                <?php if (empty($staffMembers)): ?>
+                  <tr data-empty-row><td colspan="8" class="text-center" style="padding:30px;color:var(--text-muted);">No staff accounts created yet.</td></tr>
+                <?php else: ?>
+                  <?php foreach ($staffMembers as $st):
+                    $tempStaffPass = getAdminTempPasswordForRow($st);
+                  ?>
+                    <tr>
+                      <td class="col-nowrap">#<?= $st['id'] ?></td>
+                      <td>
+                        <div class="user-account-inline">
+                          <img class="user-account-avatar" src="<?= h(getUserAvatarUrl($st['avatar'] ?? null)) ?>" onerror="this.src='../frontend/assets/images/avatars/default-avatar.png'; this.onerror=null;" alt="">
+                          <div class="user-account-details">
+                            <strong style="color:#fff;"><?= h($st['first_name'] . ' ' . $st['last_name']) ?></strong>
+                            <div class="user-account-sub"><span class="badge badge-info" style="font-size:0.64rem;padding:2px 6px;">Frontdesk Staff</span></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td><?= h($st['email']) ?></td>
+                      <td class="col-nowrap"><?= h($st['phone'] ?: 'N/A') ?></td>
+                      <td class="col-nowrap"><?= renderAdminCredentialBadge($tempStaffPass) ?></td>
+                      <td class="col-nowrap"><?= $st['last_login'] ? formatDate($st['last_login'], 'M d, Y h:i A') : 'Never' ?></td>
+                      <td class="col-nowrap"><?= statusBadge($st['status']) ?></td>
+                      <td class="col-nowrap" style="white-space:nowrap;display:flex;gap:6px;align-items:center;">
+                        <button type="button" class="btn btn-ghost btn-sm" onclick='openEditStaffModal(<?= json_encode([
+                          "id" => $st["id"],
+                          "first_name" => $st["first_name"],
+                          "last_name" => $st["last_name"],
+                          "email" => $st["email"],
+                          "phone" => $st["phone"] ?? "",
+                          "status" => $st["status"]
+                        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' title="Edit Staff Details">
+                          <i class="fa-solid fa-pen-to-square"></i>
                         </button>
-                      </form>
-                      <form action="" method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete staff account for <?= addslashes(h($st['first_name'] . ' ' . $st['last_name'])) ?>? This cannot be undone!')">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="action" value="delete_staff">
-                        <input type="hidden" name="staff_id" value="<?= $st['id'] ?>">
-                        <button type="submit" class="btn btn-danger btn-sm" title="Delete Staff Account">
-                          <i class="fa-solid fa-trash"></i>
+                        <button type="button" class="btn btn-gold btn-sm" onclick="openResetModal(<?= $st['id'] ?>, '<?= addslashes(h($st['first_name'] . ' ' . $st['last_name'])) ?>', '<?= addslashes(h($st['email'])) ?>')" title="Set / Reset Staff Password">
+                          <i class="fa-solid fa-key"></i>
                         </button>
-                      </form>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
+                        <form action="" method="POST" style="display:inline;">
+                          <?= csrfField() ?>
+                          <input type="hidden" name="action" value="toggle_status">
+                          <input type="hidden" name="staff_id" value="<?= $st['id'] ?>">
+                          <button type="submit" class="btn <?= $st['status'] === 'active' ? 'btn-ghost' : 'btn-success' ?> btn-sm" title="<?= $st['status'] === 'active' ? 'Deactivate Staff' : 'Activate Staff' ?>">
+                            <?= $st['status'] === 'active' ? '<i class="fa-solid fa-user-slash"></i>' : '<i class="fa-solid fa-user-check"></i>' ?>
+                          </button>
+                        </form>
+                        <form action="" method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete staff account for <?= addslashes(h($st['first_name'] . ' ' . $st['last_name'])) ?>? This cannot be undone!')">
+                          <?= csrfField() ?>
+                          <input type="hidden" name="action" value="delete_staff">
+                          <input type="hidden" name="staff_id" value="<?= $st['id'] ?>">
+                          <button type="submit" class="btn btn-danger btn-sm" title="Delete Staff Account">
+                            <i class="fa-solid fa-trash"></i>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
               </tbody>
             </table>
           </div>
@@ -329,7 +360,7 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
 </div>
 
 <!-- Admin Edit Staff Modal -->
-<div id="editStaffModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(5px);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+<div id="editStaffModal" class="admin-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(5px);z-index:9999;align-items:center;justify-content:center;padding:16px;">
   <div class="glass-card" style="max-width:500px;width:100%;padding:28px;background:var(--navy-light);border:1px solid var(--border-gold);border-radius:14px;box-shadow:0 20px 40px rgba(0,0,0,0.6);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:12px;">
       <h3 style="font-family:var(--font-serif);color:var(--gold);font-size:1.3rem;margin:0;">
@@ -382,7 +413,7 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
 </div>
 
 <!-- Master Reset Password Modal for Staff -->
-<div id="resetPasswordModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+<div id="resetPasswordModal" class="admin-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;padding:16px;">
   <div class="glass-card" style="max-width:440px;width:100%;padding:28px;background:var(--navy-light);border:1px solid var(--border-gold);border-radius:14px;box-shadow:0 20px 40px rgba(0,0,0,0.5);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h3 style="font-family:var(--font-serif);color:var(--gold);font-size:1.25rem;margin:0;"><i class="fa-solid fa-key"></i> Master Staff Password Reset</h3>
@@ -479,7 +510,7 @@ function copyStaffPortalUrl() {
 }
 </script>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/admin.js"></script>
+<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

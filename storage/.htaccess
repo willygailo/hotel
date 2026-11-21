@@ -1,0 +1,3 @@
+# Block direct HTTP access to sessions, logs, and internal cache
+Order allow,deny
+Deny from all

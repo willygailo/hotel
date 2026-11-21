@@ -1,131 +1,106 @@
-# Marvelous Hotel — System Architecture & Directory Structure
+# Marvelous Hotel — 3-Tier System Architecture & Directory Structure
 
-Ipinapaliwanag ng dokumentong ito ang malinis at organisadong arkitektura ng codebase ng **Marvelous Hotel**.
+Ipinapaliwanag ng dokumentong ito ang malinis na **Framework-Powered 3-Tier Architecture** (`frontend/`, `backend/`, `database/`) ng **Marvelous Hotel & Dormitory Booking System**.
 
 ---
 
-## 1. Directory Tree Overview
+## 1. Technology Stack & Frameworks by Tier
+
+| Tier | Root Folder | Languages | Frameworks / Libraries |
+| :--- | :--- | :--- | :--- |
+| **Tier 1: Frontend** | `frontend/` | HTML5, CSS3, JavaScript (ES6+) | **Tailwind CSS v3** (`preflight: false`), **Alpine.js 3**, Font Awesome 6, `HotelAPI` (`fetch`) |
+| **Tier 2: Backend** | `backend/` | PHP 8 (JSON & SSE) | **Slim 4 Framework** (`slim/slim`, `slim/psr7`), **PSR-4 / PSR-15**, PHPMailer, NVIDIA NIM AI |
+| **Tier 3: Database** | `database/` | SQL (MySQL / MariaDB) | **PDO** (Prepared Statements), 17 Versioned SQL Migrations (`database/migrate.php`) |
+| **Testing / QA** | `tests/` | PHP 8 | **PHPUnit 10** (Unit + Slim 4 PSR-7 in-process route & middleware tests) |
+
+---
+
+## 2. Directory Tree Overview
 
 ```text
 /opt/lampp/htdocs/hotel/
-├── index.php                 # Public Landing Page (Hero, Showcase, Booking Bar)
-├── about.php                 # Hotel Background & Amenities
-├── rooms.php                 # Public Rooms Catalog
-├── contact.php               # Guest Contact Form & Inquiries
-├── 404.php / 500.php         # Error Handling Pages
-├── serve-file.php            # Secure Uploads File Proxy & Access Gate
-├── migrate.php               # CLI Database Migration Runner
+├── composer.json                   # Slim 4, PHPMailer, PSR-4 MarvelousHotel\ -> backend/src/
+├── phpunit.xml                     # PHPUnit 10 test runner configuration
 │
-├── admin/                    # 👑 Super Admin Portal (Restricted to 'admin' role)
-│   ├── dashboard.php         # Executive Metrics, Occupancy, & Financial Digest
-│   ├── bookings.php          # Master Reservations Ledger
-│   ├── payments.php          # Official Payment Verification & Audit Lightbox
-│   ├── rooms.php             # Room Inventory, Pricing & Floor Assignment
-│   ├── users.php             # Guest Accounts & KYC Document Verification
-│   ├── staff.php             # Staff Accounts Administration
-│   ├── audit-logs.php        # Security Audit Trail (Staff & User Actions)
-│   ├── ai-config.php         # AI System Configuration & Blocked Intent Logs
-│   ├── settings.php          # Global Policies & Hotel Metadata
-│   └── login.php             # Admin Authentication Entry
+├── frontend/                       # 🎨 TIER 1: ALL FRONTEND FILES
+│   ├── README.md                   # Frontend framework & HotelAPI docs
+│   ├── package.json                # Tailwind CSS & Alpine.js build scripts
+│   ├── tailwind.config.js          # Custom Navy/Gold theme tokens (preflight: false)
+│   ├── src/tailwind-input.css      # Tailwind source entry
+│   ├── pages/                      # Public pages (index, rooms, about, contact, 404, 500)
+│   ├── auth/                       # Auth UI pages (login, register, forgot/reset-password, verify-email, welcome)
+│   ├── user/                       # Guest Portal UI pages (dashboard, booking, payment, profile, reviews, ...)
+│   ├── staff/                      # Frontdesk Staff Portal UI pages (login, dashboard, check-in, payments, rooms-status)
+│   ├── admin/                      # Super Admin Portal UI pages (login, dashboard, bookings, payments, rooms, users, ai-config, ...)
+│   ├── assets/
+│   │   ├── css/                    # tailwind.css + base, public, auth, user, staff, admin, ai-chat
+│   │   ├── js/                     # api-client.js (HotelAPI), core, ai-chat (SSE + Voice), portals
+│   │   ├── vendor/                 # alpine.min.js (offline-ready Alpine.js 3)
+│   │   └── images/                 # Hotel photos, room thumbnails, avatars, Maya/GCash QR codes
+│   └── components/                 # Reusable UI Components
+│       ├── frontend-frameworks.php # Tailwind + Alpine.js + HotelAPI loader
+│       ├── sidebar.php             # Multi-portal sidebar navigation
+│       ├── central-nav.php         # Unified top/drawer navigation
+│       ├── ai-chatbot.php          # Marvi Live AI floating widget (SSE + Voice)
+│       └── reset-status-modal.php  # Real-time 1-time password reset popup
 │
-├── staff/                    # 🛎️ Frontdesk Staff Portal (Restricted to 'staff' role)
-│   ├── dashboard.php         # Shift Briefing, Pending Bookings, & Pending Payments
-│   ├── check-in.php          # Guest Arrivals & Departures (Check-in/Check-out)
-│   ├── payments.php          # Frontdesk Delegated Payment Approvals (When Admin is Away)
-│   ├── rooms-status.php      # Live Housekeeping & Room Status Board
-│   ├── guests.php            # (Locked - Redirects to dashboard; accounts are Admin-only)
-│   └── login.php             # Frontdesk Authentication Entry
+├── backend/                        # ⚙️ TIER 2: ALL BACKEND FILES
+│   ├── README.md                   # Backend Services & Slim 4 REST API v1 catalog
+│   ├── bootstrap.php               # Central backend bootstrap (Composer + core)
+│   ├── core/                       # Core libraries (.htaccess Deny from all)
+│   │   ├── config.php              # Environment, DB, 3-Tier paths, Isolated Sessions
+│   │   ├── db.php                  # PDO connection & prepared statement helpers
+│   │   ├── session.php             # Role guards, CSRF protection, Remember Me
+│   │   ├── functions.php           # Shared domain, KYC, AI, & reset helpers
+│   │   ├── logger.php              # Structured file & DB audit logging
+│   │   ├── rate-limiter.php        # Brute-force & AI quota throttling
+│   │   └── email.php               # Gmail SMTP / PHPMailer dispatcher
+│   ├── src/                        # PSR-4 Namespace: MarvelousHotel\ (.htaccess Deny from all)
+│   │   ├── ApiAppFactory.php       # Slim 4 application & route definitions
+│   │   ├── JsonResponder.php       # Standard JSON response envelope
+│   │   ├── Middleware/             # JsonBodyParser, RoleAuth, CsrfProtection (PSR-15)
+│   │   ├── Controllers/            # Health, Room, Booking, Payment, Auth, Dashboard
+│   │   └── Services/               # RoomService, BookingService, PaymentService, AuthService, DashboardService
+│   ├── ai/                         # Real-Time NVIDIA NIM AI Engine
+│   │   ├── nvidia-client.php       # Multi-turn SSE streamer + auto-fallback models
+│   │   ├── chatbot.php             # Streaming guest concierge + action resolver
+│   │   ├── staff-assistant.php     # Frontdesk shift operational briefing
+│   │   ├── admin-insights.php      # Executive BI analytics digest
+│   │   └── training-data/          # Bilingual FAQs & bad-intent security guardrails
+│   ├── endpoints/                  # Non-HTML Backend Endpoints
+│   │   ├── serve-file.php          # Role-protected uploads proxy
+│   │   ├── check-name.php          # Live unique name verification JSON
+│   │   ├── check-reset-status.php  # Live password reset polling JSON
+│   │   └── logout.php              # Role-aware session destroyer
+│   └── api/                        # 🌐 Slim 4 REST API Front Controller (/backend/api/v1/*)
+│       ├── .htaccess               # Clean REST URL rewriting
+│       └── index.php               # Slim 4 entrypoint
 │
-├── user/                     # 👤 Guest Portal (Restricted to 'user' role)
-│   ├── dashboard.php         # Guest Dashboard & Quick Stays Overview
-│   ├── booking.php           # Room Reservation Funnel (with Availability Lock)
-│   ├── booking-detail.php    # Official Booking Voucher & Payment Timestamps
-│   ├── my-bookings.php       # Past & Upcoming Reservations
-│   ├── payment.php           # QR Payment Settlement (Maya & GCash)
-│   ├── payment-history.php   # Detailed Transaction History (Date, Year & Time)
-│   ├── profile.php           # KYC Identity & Government ID Submission
-│   ├── reviews.php           # Room Reviews & Star Ratings
-│   ├── notifications.php     # Real-time System Alerts & Status Notifications
-│   └── ai-recommend.php      # AI-Powered Room Matcher
+├── database/                       # 🗄️ TIER 3: ALL DATABASE FILES
+│   ├── .htaccess                   # Deny direct HTTP access
+│   ├── README.md                   # Database import & migration guide
+│   ├── ERD.md                      # Mermaid ERD + 14-table Data Dictionary
+│   ├── marvelous_hotel.sql         # Master schema & initial seed data
+│   ├── migrate.php                 # Canonical CLI migration runner
+│   └── migrations/                 # 17 incremental SQL migrations (0001..0017)
 │
-├── auth/                     # 🔐 Authentication Module
-│   ├── login.php             # Universal User Login
-│   ├── register.php          # User Registration
-│   ├── register-staff.php    # Restricted Staff Registration
-│   ├── setup-admin.php       # First-Time Admin Bootstrap
-│   ├── forgot-password.php   # Password Reset Request
-│   ├── reset-password.php    # Password Reset Submission
-│   ├── verify-email.php      # Email Verification Token Handler
-│   ├── resend-verification.php # Resend Activation Token
-│   └── logout.php            # Session Destroyer (Role-Aware Return)
-│
-├── ai/                       # 🤖 AI Engine & Assistants
-│   ├── chatbot.php           # Public & Guest Concierge Chatbot Endpoint
-│   ├── staff-assistant.php   # Shift Briefing & Frontdesk Co-Pilot Generator
-│   ├── admin-insights.php    # Executive Business Intelligence & Revenue Digest
-│   ├── nvidia-client.php     # API Integration Client (NVIDIA NIM / Gemini)
-│   └── training-data/        # Knowledge Base & Prompts
-│
-├── includes/                 # ⚙️ Core Libraries & Shared Helpers
-│   ├── config.php            # Central Config (Environment, Database, Encryption)
-│   ├── db.php                # PDO Database Connection & Query Wrappers
-│   ├── session.php           # Session Guards, CSRF Protection, Flash Messaging
-│   ├── functions.php         # Shared Helpers (Formatters, Validation, KYC)
-│   ├── logger.php            # Structured Audit & Error Logging
-│   ├── rate-limiter.php      # Brute-force & Request Throttle
-│   ├── email.php             # Mail Dispatcher (SMTP / Native)
-│   ├── xml.php               # XML Data Parsing Helper
-│   └── components/           # Shared UI Layout Components
-│       ├── sidebar.php       # Unified Multi-Portal Sidebar
-│       └── ai-chatbot.php    # Floating AI Widget
-│
-├── assets/                   # 🎨 Static Assets
-│   ├── css/                  # Role-Separated CSS (base, public, user, staff, admin)
-│   ├── js/                   # Core & Portal-Specific JavaScript
-│   ├── images/               # Logos, Backgrounds, Maya QR Codes, Placeholders
-│   └── xml/                  # XML Data Catalogs & Navigation Schemas
-│
-├── config/                   # 🛠️ Server & Deployment Configurations
-│   └── apache/
-│       ├── vhosts-linux.conf # Multi-Port Setup for Linux XAMPP (/opt/lampp)
-│       └── vhosts-windows.conf # Multi-Port Setup for Windows XAMPP (C:\xampp)
-│
-├── database/                 # 🗄️ Database Schemas
-│   └── marvelous_hotel.sql   # Master Database Schema & Initial Data
-│
-├── migrations/               # 🔄 Incremental Database Migrations
-│   ├── 0001_contact_messages.sql
-│   ├── ...
-│   └── 0009_kyc_verification_lifecycle.sql
-│
-├── scripts/                  # 💻 Utility Scripts
-│   └── share-capstone.sh     # Cloudflare/Ngrok Tunnel & Capstone Presentation Script
-│
-├── tests/                    # 🧪 Automated Test Suite (PHPUnit)
-│   ├── bootstrap.php         # Test Harness Bootstrap
-│   └── Unit/
-│       └── FunctionsTest.php # Unit Tests for Core Business Logic
-│
-├── docs/                     # 📚 Documentation & Technical Guides
-│   ├── architecture.md       # Directory & Folder Organization Guide
-│   └── syntax.md             # Developer Coding Standards & Syntax Rules
-│
-└── uploads/                  # 📁 File Uploads (Protected by serve-file.php)
-    ├── avatars/              # Profile Pictures
-    ├── proofs/               # Payment Receipts (Maya / GCash)
-    └── ids/                  # KYC Valid Identity Documents
+├── .htaccess                       # 🔀 Clean Apache Internal Router (maps /, /rooms.php, /user/*, /staff/*, /admin/*, /auth/*, /ai/*, /serve-file.php)
+├── config/                         # 🛠️ Multi-port Apache VirtualHost configs
+├── scripts/                        # 💻 share-capstone.sh (+ root symlink)
+├── tests/                          # 🧪 PHPUnit 10 Automated Test Suite
+├── docs/                           # 📚 Architecture, syntax standards, & defense manuals
+└── uploads/ storage/ logs/         # 📁 Protected runtime writable directories
 ```
 
 ---
 
-## 2. Mga Prinsipyo ng Arkitektura
+## 3. Core Architectural Principles
 
-1. **3-Actor Portal Design (Guest & Public, Staff, Super Admin):**
-   * **Guest & Public Portal:** Ang public website (`index.php`, `rooms.php`, `about.php`, `contact.php`) at ang guest reservation hub (`user/*`) ay iisang customer experience. Ang mga bisita at rehistradong guests ay nagba-browse, nagbu-book, nag-a-upload ng KYC ID, at nagbabayad sa parehong domain.
-   * **Frontdesk Staff Portal (`staff/*`):** Nakatuon lamang sa daily operations (check-in, check-out, room status, delegated payment verification).
-   * **Super Admin Portal (`admin/*`):** May buong kontrol sa executive decision making, user/staff management, master ledger audits, at system configuration.
-2. **Security & Zero Direct Exposure:**
-   * Ang `uploads/` directory ay may sariling `.htaccess` na pumipigil sa direktang pag-download ng files; lahat ay dumadaan sa [`serve-file.php`](file:///opt/lampp/htdocs/hotel/serve-file.php) na nagve-verify ng user role bago ipakita ang government IDs o financial receipts.
-3. **Clean Root Directory:**
-   * Ang mga pansuportang scripts tulad ng Apache vhosts, tunnels, at dev docs ay maayos na nakalagay sa `config/`, `scripts/`, at `docs/`.
-
+1. **True 3-Tier Separation (`frontend/` ↔ `backend/` ↔ `database/`):**
+   * Presentation frameworks (**Tailwind CSS + Alpine.js**) and API client (`HotelAPI`) live cleanly inside `frontend/`.
+   * Application routing (**Slim 4**), PSR-15 security middleware, domain services, core infrastructure, and real-time AI live inside `backend/`.
+   * Schema, migrations, ERD, and CLI runner live inside `database/` and are strictly blocked from HTTP access.
+2. **3-Actor Isolated Session Design:**
+   * Separate cookies (`MH_USER_SESS`, `MH_STAFF_SESS`, `MH_ADMIN_SESS`) allow concurrent Admin, Staff, and Guest sessions in the same browser with zero session collisions — including across shared `/backend/api/v1/*` routes via `X-Portal` / `Referer` detection.
+3. **Security & Zero Direct Exposure:**
+   * `backend/core/`, `backend/src/`, `database/`, and `uploads/` are all protected by `.htaccess`; user IDs and payment receipts are served exclusively through role-verified [`serve-file.php`](file:///opt/lampp/htdocs/hotel/serve-file.php).

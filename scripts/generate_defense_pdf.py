@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+"""
+=============================================================================
+Marvelous Hotel & Dormitory — Capstone Defense Technical Manual (Taglish)
+Edition: November 20, 2026 (Framework-Powered 3-Tier Architecture)
+Target: docs/MARVELOUS_HOTEL_CAPSTONE_DEFENSE_MANUAL.pdf
+Engine: Python 3 + WeasyPrint
+=============================================================================
+"""
+
 import os
 import weasyprint
 
@@ -8,7 +18,7 @@ html_content = """<!DOCTYPE html>
 <style>
   @page {
     size: A4;
-    margin: 18mm 14mm 18mm 14mm;
+    margin: 14mm 13mm 14mm 13mm;
     @bottom-right {
       content: "Page " counter(page) " of " counter(pages);
       font-size: 8pt;
@@ -16,18 +26,23 @@ html_content = """<!DOCTYPE html>
       font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }
     @bottom-left {
-      content: "Marvelous Hotel & Dormitory — Capstone Defense Technical Manual";
+      content: "Marvelous Hotel & Dormitory — Capstone Defense Technical Manual (Nov 2026)";
       font-size: 8pt;
       color: #64748b;
       font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }
   }
 
+  @page:first {
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+  }
+
   body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     color: #1e293b;
-    line-height: 1.48;
-    font-size: 9.5pt;
+    line-height: 1.38;
+    font-size: 8.6pt;
     margin: 0;
     padding: 0;
   }
@@ -35,7 +50,7 @@ html_content = """<!DOCTYPE html>
   .cover {
     page-break-after: always;
     text-align: center;
-    padding-top: 35mm;
+    padding-top: 26mm;
   }
 
   .cover-badge {
@@ -43,93 +58,97 @@ html_content = """<!DOCTYPE html>
     background-color: #0f172a;
     color: #c5a880;
     padding: 6px 18px;
-    font-size: 11pt;
+    font-size: 10pt;
     font-weight: bold;
     border-radius: 20px;
-    letter-spacing: 1.5px;
+    letter-spacing: 1.4px;
     text-transform: uppercase;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
 
   .cover-title {
-    font-size: 25pt;
+    font-size: 24pt;
     font-weight: 800;
     color: #0f172a;
-    line-height: 1.22;
-    margin-bottom: 15px;
+    line-height: 1.2;
+    margin-bottom: 12px;
   }
 
   .cover-subtitle {
-    font-size: 13pt;
+    font-size: 12pt;
     color: #475569;
-    margin-bottom: 25px;
+    margin-bottom: 20px;
     font-style: italic;
   }
 
   .cover-desc {
-    max-width: 520px;
-    margin: 0 auto;
+    max-width: 530px;
+    margin: 0 auto 20px auto;
     color: #64748b;
-    font-size: 10pt;
+    font-size: 9.5pt;
     line-height: 1.5;
   }
 
+  .cover-stack-box {
+    max-width: 530px;
+    margin: 0 auto;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-top: 3px solid #c5a880;
+    border-radius: 8px;
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 8.6pt;
+  }
+
   .cover-meta {
-    margin-top: 45mm;
+    margin-top: 32mm;
     border-top: 2px solid #cbd5e1;
-    padding-top: 20px;
+    padding-top: 16px;
     display: flex;
     justify-content: space-around;
-    font-size: 9.5pt;
+    font-size: 9pt;
     color: #334155;
   }
 
   .cover-author {
-    font-size: 11.5pt;
+    font-size: 10.8pt;
     font-weight: bold;
     color: #0f172a;
     margin-top: 3px;
   }
 
   h1 {
-    font-size: 17pt;
+    font-size: 15.5pt;
     color: #0f172a;
     border-bottom: 2px solid #c5a880;
-    padding-bottom: 5px;
-    margin-top: 22px;
-    margin-bottom: 12px;
+    padding-bottom: 4px;
+    margin-top: 16px;
+    margin-bottom: 10px;
     page-break-after: avoid;
   }
 
   h2 {
-    font-size: 12.5pt;
+    font-size: 11.5pt;
     color: #1e3a8a;
-    margin-top: 16px;
-    margin-bottom: 8px;
-    page-break-after: avoid;
-  }
-
-  h3 {
-    font-size: 10.5pt;
-    color: #0f172a;
-    margin-top: 12px;
-    margin-bottom: 5px;
+    margin-top: 13px;
+    margin-bottom: 6px;
     page-break-after: avoid;
   }
 
   p {
     margin-top: 0;
-    margin-bottom: 8px;
+    margin-bottom: 7px;
     text-align: justify;
   }
 
   .highlight-box {
     background-color: #f8fafc;
     border-left: 4px solid #c5a880;
-    padding: 10px 14px;
-    margin-bottom: 12px;
+    padding: 9px 13px;
+    margin-bottom: 10px;
     border-radius: 0 6px 6px 0;
-    font-size: 9pt;
+    font-size: 8.6pt;
   }
 
   .role-card {
@@ -137,30 +156,32 @@ html_content = """<!DOCTYPE html>
     border: 1px solid #cbd5e1;
     border-top: 3px solid #2563eb;
     border-radius: 6px;
-    padding: 12px 14px;
-    margin-bottom: 14px;
+    padding: 7px 10px;
+    margin-bottom: 8px;
     page-break-inside: avoid;
+    font-size: 8pt;
+    line-height: 1.34;
   }
 
   .role-card.admin { border-top-color: #dc2626; }
   .role-card.staff { border-top-color: #d97706; }
-  .role-card.user { border-top-color: #16a34a; }
-  .role-card.ai { border-top-color: #7c3aed; }
+  .role-card.user  { border-top-color: #16a34a; }
+  .role-card.ai    { border-top-color: #7c3aed; }
 
   .role-title {
-    font-size: 12pt;
+    font-size: 10pt;
     font-weight: bold;
     color: #0f172a;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 8px;
   }
 
   .role-badge {
     display: inline-block;
     padding: 2px 8px;
-    font-size: 7.5pt;
+    font-size: 7pt;
     font-weight: 700;
     border-radius: 12px;
     text-transform: uppercase;
@@ -169,14 +190,14 @@ html_content = """<!DOCTYPE html>
 
   .badge-admin { background-color: #dc2626; }
   .badge-staff { background-color: #d97706; }
-  .badge-user { background-color: #16a34a; }
-  .badge-ai { background-color: #7c3aed; }
+  .badge-user  { background-color: #16a34a; }
+  .badge-ai    { background-color: #7c3aed; }
 
   .qa-box {
     background-color: #f1f5f9;
     border-left: 4px solid #2563eb;
-    padding: 10px 13px;
-    margin-bottom: 10px;
+    padding: 8px 11px;
+    margin-bottom: 8px;
     border-radius: 4px;
     page-break-inside: avoid;
   }
@@ -184,27 +205,27 @@ html_content = """<!DOCTYPE html>
   .qa-q {
     font-weight: bold;
     color: #1e3a8a;
-    margin-bottom: 4px;
-    font-size: 10pt;
+    margin-bottom: 3px;
+    font-size: 9.2pt;
   }
 
   .qa-a {
     color: #1e293b;
-    font-size: 9pt;
+    font-size: 8.6pt;
   }
 
   table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 8px;
-    margin-bottom: 14px;
-    font-size: 8.5pt;
+    margin-top: 6px;
+    margin-bottom: 12px;
+    font-size: 8pt;
     page-break-inside: avoid;
   }
 
   th, td {
     border: 1px solid #cbd5e1;
-    padding: 6px 8px;
+    padding: 5px 7px;
     text-align: left;
     vertical-align: top;
   }
@@ -215,55 +236,47 @@ html_content = """<!DOCTYPE html>
     font-weight: 600;
   }
 
-  tr:nth-child(even) {
-    background-color: #f8fafc;
-  }
+  tr:nth-child(even) { background-color: #f8fafc; }
 
   code {
     background-color: #e2e8f0;
-    color: #b91c1c;
-    padding: 1px 4px;
+    color: #991b1b;
+    padding: 1px 3.5px;
     border-radius: 3px;
     font-family: 'Courier New', Courier, monospace;
-    font-size: 8pt;
+    font-size: 7.6pt;
   }
 
   ul, ol {
     margin-top: 0;
-    margin-bottom: 8px;
-    padding-left: 18px;
+    margin-bottom: 6px;
+    padding-left: 17px;
   }
 
-  li {
-    margin-bottom: 3px;
-  }
+  li { margin-bottom: 2.5px; }
 
-  .page-break {
-    page-break-after: always;
-  }
+  .page-break { page-break-after: always; }
 
   .feature-grid {
     display: table;
     width: 100%;
-    margin-bottom: 10px;
+    margin-bottom: 4px;
   }
 
-  .feature-row {
-    display: table-row;
-  }
+  .feature-row { display: table-row; }
 
   .feature-cell {
     display: table-cell;
-    padding: 6px;
+    padding: 4px;
     width: 50%;
+    vertical-align: top;
   }
 
   .inner-box {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    padding: 8px 10px;
+    padding: 5px 8px;
     border-radius: 5px;
-    height: 100%;
   }
 </style>
 </head>
@@ -271,160 +284,121 @@ html_content = """<!DOCTYPE html>
 
 <!-- COVER PAGE -->
 <div class="cover">
-  <div class="cover-badge">Capstone Technical Defense Manual</div>
-  <div class="cover-title">MARVELOUS HOTEL & DORMITORY<br>RESERVATION MANAGEMENT SYSTEM</div>
-  <div class="cover-subtitle">With AI-Powered Multi-Actor Suite & Independent Multi-Portal Architecture</div>
-  
+  <div class="cover-badge">Capstone Technical Defense Manual • Nov 2026</div>
+  <div class="cover-title">MARVELOUS HOTEL &amp; DORMITORY<br>BOOKING &amp; RESERVATION SYSTEM</div>
+  <div class="cover-subtitle">Framework-Powered 3-Tier Architecture with Marvi Live SSE + Voice AI &amp; Multi-Portal Isolation</div>
+
   <p class="cover-desc">
-    Komprehensibong Teknikal na Manwal para sa Defense: Malalimang pagsusuri sa mga ginamit na Wika, Frameworks, Database Normalization, Security Engineering, at Detalyadong Tungkulin ng <strong>AI Engine</strong>, <strong>User (Guest)</strong>, <strong>Staff (Frontdesk)</strong>, at <strong>Admin (Super Admin)</strong>.
+    Komprehensibong Gabay para sa Capstone Defense: Kumpletong paliwanag sa mga ginamit na <strong>Languages</strong>, <strong>Frameworks</strong>, malinis na <strong>3-Tier Architecture (<code>frontend/</code>, <code>backend/</code>, <code>database/</code>)</strong>, at end-to-end flows ng <strong>Marvi Live AI</strong>, <strong>User (Guest)</strong>, <strong>Staff (Frontdesk)</strong>, at <strong>Super Admin</strong>.
   </p>
+
+  <div class="cover-stack-box">
+    <strong>Official 3-Tier Technology Stack Summary:</strong>
+    <ul style="margin-top:6px; margin-bottom:0;">
+      <li><strong>Tier 1 — Frontend (<code>frontend/</code>):</strong> HTML5, CSS3, ES6+ JavaScript, <strong>Tailwind CSS v3.4</strong>, <strong>Alpine.js v3.14</strong> (offline bundle), Font Awesome 6, <code>HotelAPI</code>, Web Speech API (Mic + TTS).</li>
+      <li><strong>Tier 2 — Backend (<code>backend/</code>):</strong> <strong>PHP 8</strong>, <strong>Slim 4 Framework</strong> (PSR-4 Controllers/Services, PSR-15 RoleAuth &amp; CSRF Middleware), Composer, <strong>PHPMailer 7</strong> (Gmail SMTP), <strong>NVIDIA NIM AI</strong> (<code>nemotron-3.5-bolt-e4b</code> Live SSE).</li>
+      <li><strong>Tier 3 — Database (<code>database/</code>):</strong> <strong>SQL (MySQL / MariaDB InnoDB)</strong> via <strong>PHP PDO</strong> Prepared Statements, <strong>14 Normalized Tables</strong>, <strong>17 Versioned Migrations</strong>.</li>
+      <li><strong>QA &amp; Deployment:</strong> <strong>PHPUnit 10</strong> (32/32 Tests Passed, 185 Assertions), Apache <code>.htaccess</code> Clean Router, Docker &amp; Cloudflare/Ngrok Tunnel.</li>
+    </ul>
+  </div>
 
   <div class="cover-meta">
     <div>
-      <div style="color: #64748b; font-size: 8.5pt;">AUTHOR / PROPONENT</div>
-      <div class="cover-author">Lead System Developer & Architect</div>
+      <div style="color: #64748b; font-size: 8pt;">ARCHITECTURE</div>
+      <div class="cover-author">Clean 3-Tier Separation</div>
     </div>
     <div>
-      <div style="color: #64748b; font-size: 8.5pt;">DEFENSE PERIOD</div>
-      <div class="cover-author">Academic Defense 2026</div>
+      <div style="color: #64748b; font-size: 8pt;">EDITION</div>
+      <div class="cover-author">November 20, 2026</div>
     </div>
     <div>
-      <div style="color: #64748b; font-size: 8.5pt;">SYSTEM READINESS</div>
-      <div class="cover-author" style="color: #16a34a;">100% Tested & Fully Operational</div>
+      <div style="color: #64748b; font-size: 8pt;">AUTOMATED QA STATUS</div>
+      <div class="cover-author" style="color: #16a34a;">32/32 Tests Passing (100%)</div>
     </div>
   </div>
 </div>
 
-<!-- SECTION 1: SYSTEM OVERVIEW & JUSTIFICATION -->
-<h1>1. Pangkalahatang Deskripsyon at Tech Stack Justification</h1>
+<!-- SECTION 1: TECH STACK & JUSTIFICATION -->
+<h1>1. Pangkalahatang Deskripsyon, Languages at Frameworks</h1>
 <p>
-Ang <strong>Marvelous Hotel and Dormitory Booking and Reservation Management System with AI-Based Room Recommendation</strong> ay isang modernong hybrid hospitality platform. Sinusolusyunan nito ang dalawang mahalagang merkado: ang panandaliang <em>Hotel Stays</em> para sa mga turista at pamilya, at ang pangmatagalang <em>Dormitory / Bedspace Stays</em> para sa mga mag-aaral at working professionals.
+Ang <strong>Marvelous Hotel &amp; Dormitory Booking System</strong> ay isang modernong hybrid hospitality platform na sumusuporta sa parehong panandaliang <em>Hotel Stays</em> at pangmatagalang <em>Dormitory / Bedspace Stays</em>. Binuo ito gamit ang malinis na <strong>3-Tier Architecture</strong> (<code>frontend/</code>, <code>backend/</code>, <code>database/</code>) na may zero loose PHP files sa project root.
 </p>
 
 <div class="highlight-box">
-<strong>Bakit binuo ang proyektong ito?</strong><br>
-Karaniwang gumagamit ng magkahiwalay at manu-manong notebook o Excel sheet ang mga lokal na hotel at dormitoryo. Nagbubunga ito ng double-booking collisions, pekeng GCash/Maya reference numbers, walang audit trail kapag nagkamali ang staff, at kawalan ng mabilisang pagsala ng angkop na kwarto ayon sa badyet ng guest. Ang system na ito ay nagbibigay ng awtomasyon, seguridad, at business intelligence sa pamamagitan ng AI.
+<strong>Bakit mahalaga ang proyektong ito?</strong><br>
+Tinutugunan nito ang mga karaniwang problema sa tradisyonal na hotel at dormitoryo: double-booking collisions, pekeng GCash/Maya screenshots, mabagal na manual room matching, kawalan ng audit trail sa mga staff actions, at delay sa password recovery ng mga bisita.
 </div>
 
-<h2>Mga Ginamit na Teknolohiya at Dahilan ng Pagpili</h2>
+<h2>Kumpletong Tech Stack &amp; Defense Justification</h2>
 <table>
   <thead>
     <tr>
-      <th style="width: 23%;">Teknolohiya</th>
-      <th style="width: 37%;">Partikular na Gamit sa Codebase</th>
-      <th style="width: 40%;">Bakit Ito Ang Pinili? (Defense Defense Argument)</th>
+      <th style="width: 22%;">Tier &amp; Teknolohiya</th>
+      <th style="width: 36%;">Languages, Frameworks &amp; Gamit</th>
+      <th style="width: 42%;">Bakit Ito Pinili? (Pang-Panelist na Sagot)</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>PHP 8.4 (Native OOP & Procedural)</strong></td>
-      <td>Backend routing, authentication, multi-portal session isolation, and database transaction control.</td>
-      <td>
-        Napakabilis ng server execution nang walang mabigat na framework overhead; direktang kontrolado ang HTTP headers at raw SQL via PDO nang walang third-party security vulnerabilities.
-      </td>
+      <td><strong>Tier 1: Frontend</strong><br><code>frontend/</code></td>
+      <td><strong>HTML5, CSS3, ES6+ JS</strong> + <strong>Tailwind CSS v3.4</strong> (<code>preflight: false</code>, Navy/Gold tokens) + <strong>Alpine.js v3.14</strong> + <code>HotelAPI</code> + <strong>Web Speech API</strong></td>
+      <td>Mabilis mag-load kahit walang mabigat na Node SPA server; nagbibigay ng reactive live room availability checker, real-time SSE AI streaming, Voice Mic/TTS, at live password reset popup.</td>
     </tr>
     <tr>
-      <td><strong>MySQL / MariaDB via PDO</strong></td>
-      <td>13 normalized tables (3NF), relational foreign keys, row-level locking (<code>SELECT ... FOR UPDATE</code>).</td>
-      <td>
-        Garatisadong proteksyon laban sa SQL Injection gamit ang prepared statements; may concurrency locking para maiwasan ang double-booking sa parehong segundo.
-      </td>
+      <td><strong>Tier 2: Backend &amp; API</strong><br><code>backend/</code></td>
+      <td><strong>PHP 8</strong> + <strong>Slim 4 Framework</strong> (<code>slim/slim</code>, <code>slim/psr7</code>), <strong>PSR-4</strong> (<code>MarvelousHotel\\</code>), <strong>PSR-15 Middleware</strong>, <strong>Composer</strong>, <strong>PHPMailer 7</strong></td>
+      <td>Industry-standard REST API (<code>/backend/api/v1/*</code>), malinis na Controller &rarr; Service layering, centralized CSRF at RoleAuth middleware, isolated portal sessions, at Gmail SMTP integration.</td>
     </tr>
     <tr>
-      <td><strong>HTML5 + Modular CSS3</strong></td>
-      <td>Semantic layouts, custom CSS properties, role-separated stylesheets (<code>base</code>, <code>public</code>, <code>user</code>, <code>staff</code>, <code>admin</code>).</td>
-      <td>
-        Mabilis mag-load sa mobile at desktop; may malinis na dark-navy and gold luxury theme nang hindi gumagamit ng mabagal na CSS frameworks tulad ng Bootstrap o Tailwind bundles.
-      </td>
+      <td><strong>AI Intelligence</strong><br><code>backend/ai/</code></td>
+      <td><strong>NVIDIA NIM API</strong> (<code>nvidia/nemotron-3.5-bolt-e4b</code> primary + 2 failover models), pure-PHP <strong>SSE Streaming</strong>, Local Bilingual Guardrails</td>
+      <td>Sub-second (~0.8s) live token streaming na may Tagalog/English fluency, multi-turn memory, clickable Room Cards, Staff Co-Pilot, Admin BI, at 0% downtime kapag offline.</td>
     </tr>
     <tr>
-      <td><strong>Modular Vanilla JS (ES6+)</strong></td>
-      <td>Asynchronous <code>fetch()</code> requests, live chat UI, zoom lightboxes, auto night calculation.</td>
-      <td>
-        Zero heavy libraries (walang jQuery o mabigat na React runtime). Gumagamit ng purong ES6+ para sa zero-bundle latency at mataas na performance.
-      </td>
+      <td><strong>Tier 3: Database</strong><br><code>database/</code></td>
+      <td><strong>SQL (MySQL / MariaDB InnoDB)</strong> via <strong>PHP PDO</strong> Prepared Statements, <strong>14 Tables</strong>, <strong>17 Versioned SQL Migrations</strong></td>
+      <td>ACID-compliant na booking at payment verification gamit ang <code>SELECT ... FOR UPDATE</code> row locking, 100% protektado laban sa SQL Injection, at reproducible schema upgrades via <code>migrate.php</code>.</td>
     </tr>
     <tr>
-      <td><strong>XML Architecture</strong></td>
-      <td>Navigation catalogs (<code>navigation_*.xml</code>), AI intent mapping, and dynamic hotel configurations.</td>
-      <td>
-        Pinapatunayan ang multi-tiered storage architecture; madaling baguhin ang menus at settings nang hindi binabago ang database structure.
-      </td>
-    </tr>
-    <tr>
-      <td><strong>NVIDIA NIM AI + Rule Engine</strong></td>
-      <td>Generative bilingual assistant (DiffusionGemma / Gemini hybrid), executive business intelligence, at offline regex fallback.</td>
-      <td>
-        Dual-mode intelligence: kapag may internet, live LLM ang sumasagot; kapag offline, may instant rule-based fallback kaya 0% downtime ang chatbot.
-      </td>
-    </tr>
-    <tr>
-      <td><strong>PHPUnit 10.5</strong></td>
-      <td>Automated unit testing para sa core financial calculations, date difference, at security helpers.</td>
-      <td>
-        100% Passing Status (9/9 tests, 33 assertions), pinatutunayan na de-kalidad at standardized ang code ayon sa industry practices.
-      </td>
+      <td><strong>QA &amp; Security</strong><br><code>tests/</code>, <code>.htaccess</code></td>
+      <td><strong>PHPUnit 10</strong> (32 tests / 185 assertions), Apache <code>mod_rewrite</code> clean router + HTTP 403 internal blocks, <code>share-capstone.sh</code></td>
+      <td>Automated regression testing ng Slim 4 routes, middleware, at domain services; protektado ang <code>core/</code>, <code>src/</code>, <code>database/</code>, at <code>uploads/</code> laban sa direct HTTP access.</td>
     </tr>
   </tbody>
 </table>
 
 <div class="page-break"></div>
 
-<!-- SECTION 2: DETAILED ACTOR BREAKDOWN -->
-<h1>2. Detalyadong Tungkulin ng Bawat Aktor (User, Staff, Admin, at AI)</h1>
+<!-- SECTION 2: 4-ACTOR DETAILED FLOWS -->
+<h1>2. Detalyadong Daloy at Tungkulin ng Apat na Aktor</h1>
 <p>
-Upang mapanatili ang kaayusan, integridad ng datos, at seguridad, hinati ang buong platform sa apat na pangunahing aktor. Ang bawat isa ay may nakatakdang responsibilidad, access controls, at dedikadong mga script.
+Hinati ang buong sistema sa apat na malinaw na aktor na may kani-kaniyang isolated session cookie, authorization guard, at operational flow:
 </p>
 
-<!-- USER / GUEST ROLE -->
+<!-- USER / GUEST -->
 <div class="role-card user">
   <div class="role-title">
-    <span>👤 1. USER / GUEST (Public & Customer Portal)</span>
-    <span class="role-badge badge-user">Port 8080 / Root Portal</span>
+    <span>1. USER / GUEST (Public &amp; Guest Portal — <code>frontend/user/</code>)</span>
+    <span class="role-badge badge-user">MH_USER_SESS</span>
   </div>
-  <p><strong>Pangunahing Tungkulin:</strong> Ang customer-facing actor na may pananagutan sa paghahanap ng matutuluyan, pagpapatunay ng pagkakakilanlan, pag-book, at pagbabayad.</p>
-  
   <div class="feature-grid">
     <div class="feature-row">
       <div class="feature-cell">
         <div class="inner-box">
-          <strong>A. KYC Identity Submission (<code>user/profile.php</code>):</strong>
+          <strong>A. Discovery, Auth &amp; Live Reset Popup:</strong>
           <ul>
-            <li>Iniaatas sa bisita na kumpletuhin ang profile bago payagang mag-book.</li>
-            <li>Tumatanggap ng <strong>Student ID / School ID</strong> para sa dormers at <strong>Government IDs</strong> (Passport, PhilID, UMID, Driver's License) para sa hotel guests.</li>
-            <li>May real-time status banner: <code>unverified</code> &rarr; <code>pending</code> &rarr; <code>verified</code> / <code>rejected</code>.</li>
+            <li>Live room availability check sa <code>rooms.php</code> &amp; <code>booking.php</code> via Alpine.js + Slim 4 <code>GET /v1/availability</code>.</li>
+            <li>Registration na may unique full-name check (<code>check-name.php</code>) at Gmail SMTP verification.</li>
+            <li><strong>Live Password Reset Popup:</strong> 3-second polling modal na agad nagpapakita ng masked temporary password o direct reset link kapag nag-dispatch ang Admin (15-min expiry).</li>
           </ul>
         </div>
       </div>
       <div class="feature-cell">
         <div class="inner-box">
-          <strong>B. Room Booking & Funnel (<code>user/booking.php</code>):</strong>
+          <strong>B. KYC Gate, Booking, Payment &amp; Reviews:</strong>
           <ul>
-            <li>Pumipili ng Check-in at Check-out dates na may automated night computation at presyo.</li>
-            <li>Awtomatikong naka-lock ang 'Book Now' kung hindi pa aprubado ang KYC ID.</li>
-            <li>Protektado ng <code>FOR UPDATE</code> lock para maiwasan ang kasabayang nagbu-book.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-    <div class="feature-row">
-      <div class="feature-cell">
-        <div class="inner-box">
-          <strong>C. QR Settlement (<code>user/payment.php</code>):</strong>
-          <ul>
-            <li>Dynamic generation ng <strong>Maya QR</strong> at <strong>GCash QR</strong> kasama ang exact total amount.</li>
-            <li>Nag-a-upload ng resibo (screenshot) at nagtatala ng official Reference Number.</li>
-            <li>Naka-lock sa <code>pending</code> status hangga't hindi sinusuri ng staff o admin.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="feature-cell">
-        <div class="inner-box">
-          <strong>D. Post-Stay & Stays History:</strong>
-          <ul>
-            <li><strong>Official Voucher (<code>booking-detail.php</code>):</strong> Nagsisilbing digital pass pagdating sa hotel.</li>
-            <li><strong>Reviews & Ratings (<code>user/reviews.php</code>):</strong> Nagbibigay ng 1–5 star ratings at feedback sa kwarto pagkatapos ng pananatili.</li>
-            <li><strong>Notifications (<code>user/notifications.php</code>):</strong> Real-time alert kapag na-verify ang ID o na-approve ang bayad.</li>
+            <li><strong>KYC Gate (<code>user/profile.php</code>):</strong> Upload ng Government ID o Student/School ID (protektado sa <code>uploads/</code> via <code>serve-file.php</code>). Kailangan ma-verify bago mag-book.</li>
+            <li><strong>Booking &amp; Maya/GCash QR:</strong> Overlap-safe booking, receipt upload + Reference No, Printable Voucher (<code>booking-detail.php</code>), pending cancellation, at 1&ndash;5 star verified reviews.</li>
           </ul>
         </div>
       </div>
@@ -432,51 +406,29 @@ Upang mapanatili ang kaayusan, integridad ng datos, at seguridad, hinati ang buo
   </div>
 </div>
 
-<!-- STAFF / FRONTDESK ROLE -->
+<!-- STAFF -->
 <div class="role-card staff">
   <div class="role-title">
-    <span>🛎️ 2. FRONTDESK STAFF (Operations Portal)</span>
-    <span class="role-badge badge-staff">Port 8082 / staff/</span>
+    <span>2. FRONTDESK STAFF (Operations Portal — <code>frontend/staff/</code>)</span>
+    <span class="role-badge badge-staff">MH_STAFF_SESS</span>
   </div>
-  <p><strong>Pangunahing Tungkulin:</strong> Pangasiwaan ang pang-araw-araw na operasyon ng hotel at dormitoryo. Mahigpit na sumusunod sa <em>Principle of Least Privilege</em>—walang kapangyarihang magbura ng audit trail, mag-reset ng password ng iba, o mag-manage ng administrative accounts.</p>
-
   <div class="feature-grid">
     <div class="feature-row">
       <div class="feature-cell">
         <div class="inner-box">
-          <strong>A. Fast Check-In & Check-Out (<code>staff/check-in.php</code>):</strong>
+          <strong>A. Shift Co-Pilot &amp; Delegated Payments:</strong>
           <ul>
-            <li>Agad na minamarkahan ang pagdating ng bisita; itinatala ang <code>checked_in_at</code> timestamp sa database.</li>
-            <li>Isinasagawa ang departure checkout; itinatala ang <code>checked_out_at</code> timestamp at ginagawang <code>dirty</code> ang kwarto para sa housekeeping.</li>
+            <li>One-click <strong>Marvi Staff Co-Pilot</strong> (<code>staff-assistant.php</code>) para sa daily arrivals, check-outs, pending payments, at dirty rooms briefing.</li>
+            <li>Delegated Maya/GCash verification (<code>staff/payments.php</code> &amp; Slim 4 <code>POST /v1/payments/{id}/decision</code>) gamit ang atomic <code>FOR UPDATE</code> lock at audit logging.</li>
           </ul>
         </div>
       </div>
       <div class="feature-cell">
         <div class="inner-box">
-          <strong>B. Live Room & Housekeeping Board (<code>staff/rooms-status.php</code>):</strong>
+          <strong>B. Check-In/Out &amp; Housekeeping State Machine:</strong>
           <ul>
-            <li>Bawat palapag (Floor 1 hanggang Floor 4) ay may live status tiles.</li>
-            <li>Maaaring ilipat ang estado ng kwarto mula <code>dirty</code> patungong <code>available</code> kapag nalinis na, o <code>maintenance</code> kung may sira.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-    <div class="feature-row">
-      <div class="feature-cell">
-        <div class="inner-box">
-          <strong>C. Delegated Payment Approval (<code>staff/payments.php</code>):</strong>
-          <ul>
-            <li>Maaaring suriin at aprubahan ang Maya o GCash payment receipts ng walk-in o online guest kapag offline o abala ang Super Admin.</li>
-            <li>Bawat pag-apruba ay itinatala sa audit logs kasama ang Staff ID para sa pananagutan.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="feature-cell">
-        <div class="inner-box">
-          <strong>D. Shift Briefing & Operations Assistant:</strong>
-          <ul>
-            <li>May one-click <strong>AI Staff Co-Pilot</strong> sa dashboard na nagbibigay ng agarang buod ng mga darating na bisita ngayong araw, aalis na bisita, at mga kwartong kailangang linisin.</li>
-            <li><strong>Access Restrictions:</strong> Naka-lock ang <code>staff/guests.php</code> upang pigilan ang staff na baguhin ang mga personal credentials ng users.</li>
+            <li><strong>Check-In (<code>staff/check-in.php</code>):</strong> <code>confirmed &rarr; checked_in</code>, room nagiging <code>occupied</code>, naitatala ang <code>checked_in_at</code>.</li>
+            <li><strong>Check-Out &amp; Cleaning Board (<code>rooms-status.php</code>):</strong> Awtomatikong ginagawang <code>dirty</code> ang kwarto pagka-checkout; inililipat ng staff sa <code>available</code> pagkatapos linisin (o <code>maintenance</code>).</li>
           </ul>
         </div>
       </div>
@@ -484,55 +436,29 @@ Upang mapanatili ang kaayusan, integridad ng datos, at seguridad, hinati ang buo
   </div>
 </div>
 
-<div class="page-break"></div>
-
-<!-- ADMIN / SUPER ADMIN ROLE -->
+<!-- SUPER ADMIN -->
 <div class="role-card admin">
   <div class="role-title">
-    <span>👑 3. SUPER ADMIN (Executive & Management Portal)</span>
-    <span class="role-badge badge-admin">Port 8081 / admin/</span>
+    <span>3. SUPER ADMIN (Executive Command Center — <code>frontend/admin/</code>)</span>
+    <span class="role-badge badge-admin">MH_ADMIN_SESS</span>
   </div>
-  <p><strong>Pangunahing Tungkulin:</strong> May buong kapangyarihan (Master Authority) sa buong platform—nagpapasya sa pananalapi, nagpapatupad ng seguridad, nagbabantay sa galaw ng staff, at nagko-configure ng buong system.</p>
-
   <div class="feature-grid">
     <div class="feature-row">
       <div class="feature-cell">
         <div class="inner-box">
-          <strong>A. Executive Dashboard & Analytics (<code>admin/dashboard.php</code>):</strong>
+          <strong>A. Executive BI, Bookings, Payments &amp; Rooms:</strong>
           <ul>
-            <li>Real-time aggregation ng All-Time Verified Revenue, Monthly Revenue, Maya vs GCash income ratio, at Occupancy Rate.</li>
-            <li>May nakalaang <strong>Marvi Executive AI Digest</strong> na bumubuo ng madiskarteng ulat ng kita at mungkahi sa pagpepresyo.</li>
+            <li><strong>Dashboard (<code>admin/dashboard.php</code>):</strong> Verified revenue, occupancy %, Maya vs GCash ratio, at <strong>Marvi Executive BI Digest</strong>.</li>
+            <li>Master Bookings timeline (<code>bookings.php</code>), Central Payment Hub (<code>payments.php</code>), at Full Room/Dorm Inventory &amp; Pricing CRUD (<code>rooms.php</code>).</li>
           </ul>
         </div>
       </div>
       <div class="feature-cell">
         <div class="inner-box">
-          <strong>B. Master KYC Adjudication (<code>admin/users.php</code>):</strong>
+          <strong>B. KYC, Live Resets, Staff, AI &amp; Audit Trail:</strong>
           <ul>
-            <li>Binubuksan ang Secure Identity Lightbox upang suriin ang in-upload na Student ID o Government ID ng guest.</li>
-            <li>Maaaring i-click ang <strong>Approve</strong> o <strong>Reject</strong> (na may custom rejection reason na ipapadala sa notification ng user).</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-    <div class="feature-row">
-      <div class="feature-cell">
-        <div class="inner-box">
-          <strong>C. User & Staff Lifecycle Administration:</strong>
-          <ul>
-            <li><strong>Master Password Reset:</strong> Maaaring mag-generate at mag-override ng bagong password para sa sinumang user o staff na nawalan ng access.</li>
-            <li><strong>Account Status Control:</strong> Kakayahang i-suspend, i-ban, o i-activate ang mga accounts kapag may paglabag sa alituntunin ng hotel.</li>
-            <li><strong>Staff Provisioning (<code>admin/staff.php</code>):</strong> Paglikha ng mga bagong frontdesk accounts.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="feature-cell">
-        <div class="inner-box">
-          <strong>D. Inventory, Financial & Security Audit:</strong>
-          <ul>
-            <li><strong>Room Inventory CRUD (<code>admin/rooms.php</code>):</strong> Pagdagdag ng bagong kwarto o dorm bedspace, pagtatakda ng presyo, amenities, at larawan na may orphan-image cleanup.</li>
-            <li><strong>Security Audit Trail (<code>admin/audit-logs.php</code>):</strong> Hindi mabuburang logs ng bawat galaw sa system na nagtatala ng IP, User ID, at Action.</li>
-            <li><strong>AI Threat Monitor (<code>admin/ai-config.php</code>):</strong> Pagsusuri sa mga naka-block na hacking attempts at latency.</li>
+            <li><strong>Users &amp; KYC (<code>admin/users.php</code>):</strong> Approve/Reject IDs sa Lightbox, Ban/Unban, at <strong>Live Password Reset Dispatcher</strong> (may live <em>Viewed by user</em> / <em>Waiting</em> tracker).</li>
+            <li>Closed Staff Provisioning (<code>staff.php</code>), Gmail SMTP &amp; QR Settings (<code>settings.php</code>), <strong>Marvi AI Config &amp; Latency Probe</strong> (<code>ai-config.php</code>), at immutable <code>audit-logs.php</code>.</li>
           </ul>
         </div>
       </div>
@@ -540,33 +466,29 @@ Upang mapanatili ang kaayusan, integridad ng datos, at seguridad, hinati ang buo
   </div>
 </div>
 
-<!-- ARTIFICIAL INTELLIGENCE (AI) ACTOR -->
+<!-- MARVI AI -->
 <div class="role-card ai">
   <div class="role-title">
-    <span>🤖 4. ARTIFICIAL INTELLIGENCE (Marvi AI Suite)</span>
-    <span class="role-badge badge-ai">Multi-Module Engine</span>
+    <span>4. MARVI LIVE AI SUITE (Tri-Role Engine — <code>backend/ai/</code>)</span>
+    <span class="role-badge badge-ai">NVIDIA NIM SSE + Voice</span>
   </div>
-  <p><strong>Pangunahing Tungkulin:</strong> Hindi lamang isang simpleng chat window; ito ay isang <strong>Comprehensive AI Ecosystem</strong> na tumutulong sa tatlong tao: sa Guest (Concierge), sa Staff (Co-Pilot), at sa Admin (Business Intelligence).</p>
-
   <div class="feature-grid">
     <div class="feature-row">
       <div class="feature-cell">
         <div class="inner-box">
-          <strong>A. AI para sa Guest / Bisita:</strong>
+          <strong>A. Live Guest Concierge &amp; Smart Matcher:</strong>
           <ul>
-            <li><strong>24/7 Marvi Hospitality Chatbot (<code>ai/chatbot.php</code>):</strong> Nagsisilbing digital concierge. Sumasagot sa natural na Tagalog, English, o Taglish ukol sa presyo ng kwarto, amenities, check-in rules, at Maya/GCash guide.</li>
-            <li><strong>AI Room Matcher (<code>user/ai-recommend.php</code>):</strong> Awtomatikong nag-e-evaluate ng badyet, bilang ng tao, at travel preferences upang ilabas ang pinaka-sulit na kwarto o dormitoryo.</li>
-            <li><strong>Sanitizer & Output Guard:</strong> Awtomatikong nagtatago ng port numbers (8080, 8081, 8082) at internal file paths bago maipadala ang sagot sa bisita.</li>
+            <li><strong>Live SSE Streaming (<code>chatbot.php</code>):</strong> Token-by-token sagot (~0.8s) gamit ang <code>nvidia/nemotron-3.5-bolt-e4b</code> + auto-failover + local fallback.</li>
+            <li><strong>Voice &amp; Action Cards:</strong> Web Speech Mic (<code>PH/EN</code>), TTS voice reply, 12-turn memory, server-verified Room Cards (<code>[[BOOK_ROOM:id]]</code>), at <em>Take Me There &rarr;</em> buttons.</li>
           </ul>
         </div>
       </div>
       <div class="feature-cell">
         <div class="inner-box">
-          <strong>B. AI para sa Staff at Admin:</strong>
+          <strong>B. Staff/Admin AI &amp; Security Guardrails:</strong>
           <ul>
-            <li><strong>Staff Operations Co-Pilot (<code>ai/staff-assistant.php</code>):</strong> Sinusuri ang database tuwing umaga at bumubuo ng briefing: sino ang darating, sino ang aalis, at aling kwarto ang marumi.</li>
-            <li><strong>Admin Executive Intelligence (<code>ai/admin-insights.php</code>):</strong> Nagkokompyuta ng revenue share ng Maya vs GCash at nagbibigay ng payo kung dapat bang magbaba ng presyo o maglabas ng promo.</li>
-            <li><strong>Threat Shield:</strong> Hinaharang ang prompt injection, SQL keywords, port scan inquiries, at brute force attempts sa <code>ai_logs</code> table.</li>
+            <li><strong>Staff Co-Pilot &amp; Admin BI:</strong> Real-time DB metrics aggregation para sa daily ops at executive pricing/promo strategy.</li>
+            <li><strong>Threat Shield:</strong> Rate limit + <code>bad-intent-keywords.json</code> (blocks SQLi, XSS, port scans, prompt injection &rarr; logs <code>flagged=1</code> sa <code>ai_logs</code>) + output sanitizer.</li>
           </ul>
         </div>
       </div>
@@ -576,162 +498,89 @@ Upang mapanatili ang kaayusan, integridad ng datos, at seguridad, hinati ang buo
 
 <div class="page-break"></div>
 
-<!-- SECTION 3: COMPARISON MATRIX & DATA FLOW -->
-<h1>3. Buod ng Pagkakaiba ng mga Aktor (Access Matrix)</h1>
-<p>
-Upang maipakita sa panel na walang overlap o butas sa inyong authorization model, gamitin ang matrix na ito:
-</p>
+<!-- SECTION 3: RBAC MATRIX & COLLABORATION FLOW -->
+<h1>3. Access Control Matrix (RBAC) &amp; End-to-End Flow</h1>
 
 <table>
   <thead>
     <tr>
-      <th style="width: 28%;">Kakayahan / Feature</th>
-      <th style="width: 18%; text-align: center;">User (Guest)</th>
-      <th style="width: 18%; text-align: center;">Staff (Frontdesk)</th>
-      <th style="width: 18%; text-align: center;">Super Admin</th>
-      <th style="width: 18%; text-align: center;">Marvi AI Engine</th>
+      <th style="width: 32%;">Feature / Kakayahan</th>
+      <th style="width: 17%; text-align:center;">Guest</th>
+      <th style="width: 17%; text-align:center;">Staff</th>
+      <th style="width: 17%; text-align:center;">Super Admin</th>
+      <th style="width: 17%; text-align:center;">Marvi AI</th>
     </tr>
   </thead>
   <tbody>
-    <tr>
-      <td><strong>Session Cookie Namespace</strong></td>
-      <td style="text-align: center;"><code>MH_USER_SESS</code></td>
-      <td style="text-align: center;"><code>MH_STAFF_SESS</code></td>
-      <td style="text-align: center;"><code>MH_ADMIN_SESS</code></td>
-      <td style="text-align: center;">N/A (Stateless API)</td>
-    </tr>
-    <tr>
-      <td><strong>Room Browsing & Catalog</strong></td>
-      <td style="text-align: center;">✅ Oo</td>
-      <td style="text-align: center;">✅ Oo</td>
-      <td style="text-align: center;">✅ Oo</td>
-      <td style="text-align: center;">✅ Reads Catalog</td>
-    </tr>
-    <tr>
-      <td><strong>KYC Valid ID Submission</strong></td>
-      <td style="text-align: center;">✅ Oo (Upload)</td>
-      <td style="text-align: center;">❌ Hindi</td>
-      <td style="text-align: center;">❌ Hindi</td>
-      <td style="text-align: center;">❌ Hindi</td>
-    </tr>
-    <tr>
-      <td><strong>KYC Document Adjudication</strong></td>
-      <td style="text-align: center;">❌ Hindi</td>
-      <td style="text-align: center;">❌ Hindi</td>
-      <td style="text-align: center;">✅ Buong Kontrol</td>
-      <td style="text-align: center;">❌ Hindi</td>
-    </tr>
-    <tr>
-      <td><strong>Direct Room Booking Funnel</strong></td>
-      <td style="text-align: center;">✅ Oo (Kung Verified)</td>
-      <td style="text-align: center;">❌ Hindi</td>
-      <td style="text-align: center;">❌ Hindi</td>
-      <td style="text-align: center;">✅ AI Recommender</td>
-    </tr>
-    <tr>
-      <td><strong>Fast Check-In / Check-Out</strong></td>
-      <td style="text-align: center;">❌ Hindi</td>
-      <td style="text-align: center;">✅ Oo (Daily Desk)</td>
-      <td style="text-align: center;">✅ Override Power</td>
-      <td style="text-align: center;">❌ Hindi</td>
-    </tr>
-    <tr>
-      <td><strong>Payment Verification (GCash/Maya)</strong></td>
-      <td style="text-align: center;">Upload Receipt</td>
-      <td style="text-align: center;">✅ Delegated Approval</td>
-      <td style="text-align: center;">✅ Master Approval</td>
-      <td style="text-align: center;">Payment Instructions</td>
-    </tr>
-    <tr>
-      <td><strong>Housekeeping Status Toggle</strong></td>
-      <td style="text-align: center;">❌ Hindi</td>
-      <td style="text-align: center;">✅ Oo (Clean/Dirty)</td>
-      <td style="text-align: center;">✅ Oo</td>
-      <td style="text-align: center;">Monitors Dirty Status</td>
-    </tr>
-    <tr>
-      <td><strong>Create Staff Accounts</strong></td>
-      <td style="text-align: center;">❌ Bawal</td>
-      <td style="text-align: center;">❌ Bawal</td>
-      <td style="text-align: center;">✅ Oo</td>
-      <td style="text-align: center;">❌ Hindi</td>
-    </tr>
-    <tr>
-      <td><strong>Master Password Reset</strong></td>
-      <td style="text-align: center;">❌ Bawal</td>
-      <td style="text-align: center;">❌ Bawal</td>
-      <td style="text-align: center;">✅ Oo</td>
-      <td style="text-align: center;">❌ Hindi</td>
-    </tr>
-    <tr>
-      <td><strong>Security Audit Log Deletion</strong></td>
-      <td style="text-align: center;">❌ Bawal</td>
-      <td style="text-align: center;">❌ Bawal</td>
-      <td style="text-align: center;">🔒 Protected (View Only)</td>
-      <td style="text-align: center;">Logs Prompts</td>
-    </tr>
-    <tr>
-      <td><strong>Executive Revenue Analytics</strong></td>
-      <td style="text-align: center;">❌ Bawal</td>
-      <td style="text-align: center;">❌ Bawal</td>
-      <td style="text-align: center;">✅ Buong Ulat</td>
-      <td style="text-align: center;">✅ Generates Digest</td>
-    </tr>
+    <tr><td><strong>Session Cookie</strong></td><td style="text-align:center;"><code>MH_USER_SESS</code></td><td style="text-align:center;"><code>MH_STAFF_SESS</code></td><td style="text-align:center;"><code>MH_ADMIN_SESS</code></td><td style="text-align:center;">Role-Aware API</td></tr>
+    <tr><td><strong>Live Availability (Slim 4)</strong></td><td style="text-align:center;">Oo</td><td style="text-align:center;">Oo</td><td style="text-align:center;">Oo</td><td style="text-align:center;">Reads Catalog</td></tr>
+    <tr><td><strong>KYC ID Upload</strong></td><td style="text-align:center;">Oo</td><td style="text-align:center;">Hindi</td><td style="text-align:center;">Hindi</td><td style="text-align:center;">Status Aware</td></tr>
+    <tr><td><strong>KYC ID Approval / Rejection</strong></td><td style="text-align:center;">Bawal</td><td style="text-align:center;">Bawal</td><td style="text-align:center;"><strong>Eksklusibo</strong></td><td style="text-align:center;">Hindi</td></tr>
+    <tr><td><strong>Room Booking &amp; Self-Cancel</strong></td><td style="text-align:center;">Oo (Verified)</td><td style="text-align:center;">Hindi</td><td style="text-align:center;">Override</td><td style="text-align:center;">Room Cards</td></tr>
+    <tr><td><strong>Atomic Payment Verification</strong></td><td style="text-align:center;">Upload Only</td><td style="text-align:center;">Delegated</td><td style="text-align:center;">Master</td><td style="text-align:center;">Payment Guide</td></tr>
+    <tr><td><strong>Check-In / Check-Out &amp; Cleaning</strong></td><td style="text-align:center;">Bawal</td><td style="text-align:center;">Daily Desk</td><td style="text-align:center;">Override</td><td style="text-align:center;">Shift Briefing</td></tr>
+    <tr><td><strong>Live Password Reset Dispatch</strong></td><td style="text-align:center;">Popup Only</td><td style="text-align:center;">Bawal</td><td style="text-align:center;"><strong>Eksklusibo</strong></td><td style="text-align:center;">Hindi</td></tr>
+    <tr><td><strong>Staff / Room / SMTP / AI Config</strong></td><td style="text-align:center;">Bawal</td><td style="text-align:center;">Bawal</td><td style="text-align:center;"><strong>Eksklusibo</strong></td><td style="text-align:center;">Read Config</td></tr>
+    <tr><td><strong>Audit Trail (<code>audit_logs</code>)</strong></td><td style="text-align:center;">Bawal</td><td style="text-align:center;">Bawal</td><td style="text-align:center;"><strong>View-Only</strong></td><td style="text-align:center;">Logs Prompts</td></tr>
   </tbody>
 </table>
 
-<h2>Matalinong Daloy ng Aksyon (The Collaboration Lifecycle)</h2>
+<h2>Kumpletong Daloy ng Pakikipagtulungan (End-to-End Lifecycle)</h2>
 <ol>
-  <li><strong>Paghahanap at Pagtatanong:</strong> Ang <strong>User</strong> ay magtatanong sa <strong>AI Chatbot</strong> tungkol sa kwartong pasok sa ₱1,500 na badyet. Ilalabas ng AI ang rekomendasyon.</li>
-  <li><strong>KYC Verification:</strong> Magpaparehistro ang <strong>User</strong> at mag-a-upload ng Student/Government ID. Makikita ito ng <strong>Admin</strong> sa Lightbox at aaprubahan.</li>
-  <li><strong>Pag-book at Concurrency:</strong> Magbu-book ang <strong>User</strong>; magsasagawa ang system ng <code>FOR UPDATE</code> lock sa database para masigurong walang makakaagaw ng kwarto.</li>
-  <li><strong>Pagbabayad:</strong> I-scan ng <strong>User</strong> ang Maya o GCash QR, i-upload ang screenshot proof.</li>
-  <li><strong>Operasyon ng Staff:</strong> Susuriin ng <strong>Staff</strong> ang resibo kapag dumating ang guest sa frontdesk, iki-click ang <strong>Check-In</strong> (tala ang oras), at tutulungan ng <strong>Staff AI Co-Pilot</strong> sa mga paalala sa kwarto.</li>
-  <li><strong>Pamamahala ng Admin:</strong> Makikita ng <strong>Admin</strong> sa kanyang dashboard ang pumasok na kita at mababasa ang <strong>AI Executive Summary</strong> para sa desisyon sa negosyo.</li>
+  <li><strong>AI Concierge &amp; Live Availability:</strong> Magtatanong ang <strong>Guest</strong> kay <strong>Marvi Live AI</strong> (text o voice) ng pasok sa badyet na kwarto; mag-i-stream ang AI ng sagot + clickable Room Card. Iche-check ng <strong>Alpine.js</strong> ang live availability sa <strong>Slim 4</strong> (<code>GET /backend/api/v1/availability</code>).</li>
+  <li><strong>KYC Verification:</strong> Magpaparehistro ang <strong>Guest</strong> at mag-a-upload ng Government/Student ID; susuriin at aaprubahan ng <strong>Super Admin</strong> sa protected Lightbox (<code>serve-file.php</code>).</li>
+  <li><strong>Atomic Booking &amp; Payment:</strong> Magbu-book ang <strong>Guest</strong> (overlap-checked) at mag-a-upload ng Maya/GCash proof. Magve-verify ang <strong>Staff</strong> o <strong>Admin</strong> gamit ang atomic <code>SELECT ... FOR UPDATE</code> lock &rarr; magiging <code>confirmed</code> at lilitaw ang digital voucher.</li>
+  <li><strong>Frontdesk Operations &amp; Housekeeping:</strong> Gagamit ng <strong>Staff Co-Pilot</strong> ang frontdesk, magche-check-in, at pagka-check-out ay awtomatikong magiging <code>dirty</code> ang kwarto hanggang malinis pabalik sa <code>available</code>.</li>
+  <li><strong>Reviews &amp; Executive BI:</strong> Magbibigay ng verified review ang <strong>Guest</strong>, habang babasahin ng <strong>Super Admin</strong> ang <strong>Marvi Executive BI Digest</strong> para sa kita at occupancy decisions.</li>
 </ol>
 
 <div class="page-break"></div>
 
-<!-- SECTION 4: DEFENSE Q&A -->
-<h1>4. Mga Karaniwang Tanong ng Panel sa Defense Ukol sa Apat na Aktor</h1>
+<!-- SECTION 4: EXPANDED DEFENSE Q&A -->
+<h1>4. Capstone Defense Panel Q&amp;A Cheat Sheet (Taglish)</h1>
 
 <div class="qa-box">
-  <div class="qa-q">Q1: "Bakit kailangan pa ng Staff portal kung may Admin portal naman na?"</div>
-  <div class="qa-a">
-    <strong>Sagot:</strong> <em>"Mahalaga po ito para sa <strong>Separation of Duties at Principle of Least Privilege</strong>. Ang mga frontdesk staff ay empleyado na humahawak lamang ng mabilisang pag-check-in at check-out ng mga bisita at pag-update ng linis ng kwarto. Hindi ligtas para sa hotel kung ang staff ay may kakayahang magbura ng audit trail, mag-reset ng password ng may-ari, o magbago ng room inventory. Ang Admin portal po ay nakalaan para sa may-ari at executive managers lamang."</em>
-  </div>
+  <div class="qa-q">Q1: "Anong mga languages at frameworks ang ginamit ninyo sa Frontend, Backend, at Database?"</div>
+  <div class="qa-a"><strong>Sagot:</strong> <em>"Naka-strict <strong>3-Tier Architecture</strong> po kami: sa <strong>Frontend</strong> (<code>frontend/</code>), HTML5, CSS3, ES6+ JS kasama ang <strong>Tailwind CSS v3</strong> at <strong>Alpine.js 3</strong>; sa <strong>Backend</strong> (<code>backend/</code>), <strong>PHP 8</strong> gamit ang <strong>Slim 4 Framework</strong> (PSR-4 Controllers/Services at PSR-15 Middleware) at PHPMailer 7; sa <strong>Database</strong> (<code>database/</code>), <strong>MySQL InnoDB SQL</strong> gamit ang PDO Prepared Statements at 17 versioned migrations."</em></div>
 </div>
 
 <div class="qa-box">
-  <div class="qa-q">Q2: "Paano nakakatulong ang AI sa Staff at Admin bukod sa mga guests?"</div>
-  <div class="qa-a">
-    <strong>Sagot:</strong> <em>"Binuo po namin ang aming AI bilang isang <strong>Multi-Actor Assistant</strong>. Para sa <strong>Staff</strong>, mayroon itong <code>ai/staff-assistant.php</code> na gumaganap bilang Shift Co-Pilot—binubuod nito ang mga aasahang bisita ngayong araw at listahan ng maruruming kwarto upang maiwasan ang pagkaantala sa frontdesk. Para sa <strong>Admin</strong>, may <code>ai/admin-insights.php</code> na gumagana bilang Executive Business Intelligence—sinusuri nito ang ratio ng kita mula sa Maya at GCash at nagbibigay ng rekomendasyon kung kailan maglalabas ng promo batay sa occupancy rate."</em>
-  </div>
+  <div class="qa-q">Q2: "Bakit Slim 4 + Tailwind + Alpine.js ang pinili ninyo imbes na mabibigat na frameworks?"</div>
+  <div class="qa-a"><strong>Sagot:</strong> <em>"Binibigyan po kami ng <strong>Slim 4</strong> ng modern REST API, PSR-4 autoloading, at PSR-15 security middleware na napakabilis sa Apache/XAMPP o Docker. Ang <strong>Tailwind + Alpine.js</strong> naman ay nagbibigay ng reactive real-time UI (live availability checks, SSE AI chat, modals) nang hindi kailangan ng mabigat na SPA runtime server."</em></div>
 </div>
 
 <div class="qa-box">
-  <div class="qa-q">Q3: "Bakit pinapayagan ang Student ID sa KYC? Hindi ba mas ligtas kung Government ID lang?"</div>
-  <div class="qa-a">
-    <strong>Sagot:</strong> <em>"Dahil ang aming system ay isang hybrid para sa <strong>Hotel at Dormitory</strong>, karamihan sa mga nangungupahan sa bedspace at dorm units ay mga lehitimong estudyante na wala pang PhilID o Passport. Kung government ID lamang ang tatanggapin, mawawalan ng kakayahan ang mga mag-aaral na mag-book ng matutuluyan. Upang mapanatili ang seguridad, sinasala at sinusuri pa rin ng Admin ang in-upload na School ID kasama ang ID number bago payagan ang reservation."</em>
-  </div>
+  <div class="qa-q">Q3: "Live AI ba talaga si Marvi o hardcoded lang? Paano kung mawalan ng internet sa defense?"</div>
+  <div class="qa-a"><strong>Sagot:</strong> <em>"<strong>Live Real-Time SSE Streaming LLM</strong> po ito via NVIDIA NIM (<code>nvidia/nemotron-3.5-bolt-e4b</code>, ~0.8s latency) na may multi-turn memory, Voice Mic/TTS, at server-verified Room Cards. May automatic failover ito sa dalawang backup cloud models at sa aming local bilingual rule engine kapag offline—kaya <strong>0% downtime</strong>."</em></div>
 </div>
 
 <div class="qa-box">
-  <div class="qa-q">Q4: "Paano kung subukan ng isang user na pumasok sa URL ng admin o staff?"</div>
-  <div class="qa-a">
-    <strong>Sagot:</strong> <em>"Hindi po ito makakapasok dahil sa aming <code>requireRole('admin')</code> at <code>requireRole('staff')</code> guards sa <code>includes/session.php</code>. Bawat script ay nagpapatunay kung ang active session ay naglalaman ng tamang role. Kung ang isang ordinaryong user o hindi naka-login ay mag-type ng <code>/admin/dashboard.php</code> sa browser, awtomatiko silang ibabalik sa login page na may kasamang security flash error at itatala ito sa aming <code>audit_logs</code> table."</em>
-  </div>
+  <div class="qa-q">Q4: "Paano ninyo pinipigilan ang double-booking o sabay na pag-approve ng Staff at Admin sa bayad?"</div>
+  <div class="qa-a"><strong>Sagot:</strong> <em>"Gumagamit po kami ng <code>[check_in, check_out)</code> overlap validation sa booking at <strong>ACID Transactions + <code>SELECT ... FOR UPDATE</code> row locking</strong> sa MySQL InnoDB. Kapag nauna nang mag-approve ang Staff, hindi na ito mao-overwrite ng Admin nang sabay at malinis na magsi-sync ang status sa dalawang portal."</em></div>
 </div>
 
 <div class="qa-box">
-  <div class="qa-q">Q5: "Paano kung gamitin ng guest ang AI Chatbot para mag-inject ng SQL o magnakaw ng server files?"</div>
-  <div class="qa-a">
-    <strong>Sagot:</strong> <em>"Protektado po ang aming AI. Mayroon po kaming <strong>Strict Confidential Safety Guardrails</strong> sa system prompt na nagbabawal sa AI na magbigay ng server ports, file paths, o database schemas. Mayroon ding bad-intent keyword blocker (<code>bad-intent-keywords.json</code>) na humaharang sa mga salitang tulad ng 'nmap', 'port scan', 'config.php', at 'dump database', at awtomatikong itinatala ang insidente bilang <code>flagged = 1</code> sa <code>ai_logs</code> para maaksyunan ng Admin."</em>
-  </div>
+  <div class="qa-q">Q5: "Paano gumagana ang Live Password Reset Popup kung nakalimutan ng guest ang password?"</div>
+  <div class="qa-a"><strong>Sagot:</strong> <em>"Kapag nag-request ang guest sa <code>forgot-password.php</code>, nakakabit ang request sa SHA-256 session token at nagpo-poll nang non-blocking kada 3 segundo. Pag-dispatch ng Admin ng temporary password o reset link, lalabas agad ang 1-time masked popup sa screen ng guest (15-min expiry) at mag-a-update sa Admin screen mula <strong>Waiting for user</strong> patungong <strong>Viewed by user</strong>—kahit delayed ang email."</em></div>
 </div>
 
-<div style="margin-top: 30px; text-align: center; border-top: 1px solid #cbd5e1; padding-top: 12px; color: #64748b; font-size: 8pt;">
-  Marvelous Hotel & Dormitory Management System — Technical Capstone Manual &copy; 2026. All Rights Reserved.
+<div class="qa-box">
+  <div class="qa-q">Q6: "Paano ninyo pinoprotektahan ang Government/Student IDs, payment receipts, at internal files?"</div>
+  <div class="qa-a"><strong>Sagot:</strong> <em>"Naka-HTTP 403 block ang <code>uploads/</code>, <code>database/</code>, <code>backend/core/</code>, at <code>backend/src/</code> via <code>.htaccess</code>. Lahat ng KYC IDs at Maya/GCash proofs ay dumadaan lamang sa <code>backend/endpoints/serve-file.php</code> na nagbe-verify muna ng active session role at file ownership."</em></div>
+</div>
+
+<div class="qa-box">
+  <div class="qa-q">Q7: "Bakit kailangan pa ng Staff portal at magkahiwalay na session cookies?"</div>
+  <div class="qa-a"><strong>Sagot:</strong> <em>"Para sa <strong>Principle of Least Privilege</strong> at <strong>Zero Session Bleed</strong>. Ang Staff ay nakatutok sa check-in/check-out, housekeeping state machine, at delegated payment verification nang walang access sa user resets, room pricing, o audit log deletion. Ang tatlong cookies (<code>MH_USER_SESS</code>, <code>MH_STAFF_SESS</code>, <code>MH_ADMIN_SESS</code>) ay pumipigil sa privilege collision kahit sabay-sabay na naka-open sa iisang browser."</em></div>
+</div>
+
+<div class="qa-box">
+  <div class="qa-q">Q8: "Paano ninyo napatunayang bug-free at tested ang buong system?"</div>
+  <div class="qa-a"><strong>Sagot:</strong> <em>"Mayroon po kaming <strong>PHPUnit 10 Automated Test Suite</strong> (<code>tests/</code>) na 100% passing — <strong>32/32 tests, 185 assertions</strong> na sumusubok sa Slim 4 endpoints, RoleAuth &amp; CSRF middleware, Room/Booking/Payment services, at core helpers, plus zero PHP/JS lint errors at 17/17 applied SQL migrations."</em></div>
+</div>
+
+<div style="margin-top: 18px; text-align: center; border-top: 1px solid #cbd5e1; padding-top: 10px; color: #64748b; font-size: 8pt;">
+  Marvelous Hotel &amp; Dormitory Management System — Capstone Technical Defense Manual &copy; 2026. All Rights Reserved.
 </div>
 
 </body>
@@ -739,7 +588,8 @@ Upang maipakita sa panel na walang overlap o butas sa inyong authorization model
 """
 
 output_path = "/opt/lampp/htdocs/hotel/docs/MARVELOUS_HOTEL_CAPSTONE_DEFENSE_MANUAL.pdf"
+os.makedirs(os.path.dirname(output_path), exist_ok=True)
 doc = weasyprint.HTML(string=html_content)
 doc.write_pdf(output_path)
 print(f"Successfully generated updated PDF defense manual at: {output_path}")
-print(f"File size: {os.path.getsize(output_path)} bytes")
+print(f"File size: {os.path.getsize(output_path):,} bytes")

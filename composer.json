@@ -1,5 +1,21 @@
 {
+    "name": "marvelous-hotel/booking-system",
+    "description": "Marvelous Hotel & Dormitory 3-Tier Booking System (Tailwind + Alpine.js / Slim 4 PHP / MySQL)",
+    "type": "project",
     "require": {
-        "phpmailer/phpmailer": "^7.2"
+        "php": ">=8.0",
+        "phpmailer/phpmailer": "^7.0 || ^6.9",
+        "slim/slim": "^4.12",
+        "slim/psr7": "^1.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "MarvelousHotel\\": "backend/src/"
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.0.30"
+        }
     }
 }

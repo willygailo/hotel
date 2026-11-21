@@ -1,23 +1,27 @@
-# Database Schema & Migrations
+# Tier 3: Database Layer (`database/`)
 
-Ang folder na ito ay naglalaman ng pangunahing database dump para sa **Marvelous Hotel**.
+Ang folder na ito ang kumakatawan sa **Persistence / Database Tier** ng **Marvelous Hotel** (MySQL / MariaDB SQL, InnoDB, `utf8mb4_unicode_ci`).
 
-## Mga Nilalaman:
-- `marvelous_hotel.sql`: Buong database schema, initial tables, foreign key constraints, at initial settings.
+## Mga Nilalaman
+- `marvelous_hotel.sql` — Master database schema, foreign keys, at initial seed data.
+- `migrations/` — 17 versioned incremental SQL migrations (`0001_...` hanggang `0017_...`).
+- `migrate.php` — Canonical CLI migration runner (naka-track sa `schema_migrations` table; ang root `migrate.php` ay wrapper lang dito).
+- `ERD.md` — Kumpletong Mermaid Entity-Relationship Diagram at 14-table Data Dictionary.
+- `.htaccess` — Harang laban sa direktang HTTP access ng mga `.sql` at PHP CLI scripts.
 
-## Paano Mag-import:
+## Paano Mag-import (Fresh Install)
 ```bash
-# Sa XAMPP Linux:
-/opt/lampp/bin/mysql -u root -p marvelous_hotel < database/marvelous_hotel.sql
+# Linux XAMPP
+/opt/lampp/bin/mysql -u root -e "CREATE DATABASE IF NOT EXISTS marvelous_hotel;"
+/opt/lampp/bin/mysql -u root marvelous_hotel < database/marvelous_hotel.sql
 
-# Sa XAMPP Windows (CMD / PowerShell):
+# Windows XAMPP
+C:\xampp\mysql\bin\mysql.exe -u root -e "CREATE DATABASE IF NOT EXISTS marvelous_hotel;"
 C:\xampp\mysql\bin\mysql.exe -u root marvelous_hotel < database\marvelous_hotel.sql
 ```
 
-## Incremental Migrations:
-Para sa mga pagbabago pagkatapos ng initial import, gamitin ang CLI migration runner mula sa project root:
+## Paano Mag-apply ng Migrations
 ```bash
-php migrate.php           # Ilapat ang mga bagong migration files mula sa migrations/
-php migrate.php --status  # Tingnan ang estado ng mga na-apply na migration
+php database/migrate.php
+php database/migrate.php --status
 ```
-

@@ -5,6 +5,34 @@
 Options -Indexes
 ServerSignature Off
 
+# ============================================================
+# 3-TIER CLEAN URL ROUTER (Zero-Breakage Internal Rewrites)
+# Maps all public, portal, auth, AI, and static URLs cleanly into
+# frontend/ and backend/ without changing browser URLs or POST payloads.
+# ============================================================
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 1. Public root pages (/, /index.php, /rooms.php, /about.php, /contact.php, /404.php, /500.php)
+    RewriteRule ^$ frontend/pages/index.php [L,QSA]
+    RewriteRule ^(index|rooms|about|contact|404|500)\.php$ frontend/pages/$1.php [L,QSA]
+
+    # 2. Backend non-HTML utility & AI endpoints
+    RewriteRule ^serve-file\.php$ backend/endpoints/serve-file.php [L,QSA]
+    RewriteRule ^auth/(check-name|check-reset-status|logout)\.php$ backend/endpoints/$1.php [L,QSA]
+    RewriteRule ^ai/(chatbot|staff-assistant|admin-insights)\.php$ backend/ai/$1.php [L,QSA]
+
+    # 3. Frontend Portal directories (user/, staff/, admin/, auth/)
+    RewriteRule ^admin/?$ frontend/admin/login.php [L,QSA]
+    RewriteRule ^staff/?$ frontend/staff/login.php [L,QSA]
+    RewriteRule ^user/?$ frontend/user/dashboard.php [L,QSA]
+    RewriteRule ^auth/?$ frontend/auth/login.php [L,QSA]
+    RewriteRule ^(user|staff|admin|auth)/(.+\.php)$ frontend/$1/$2 [L,QSA]
+
+    # 4. Legacy static assets bridge (/assets/* -> /frontend/assets/*)
+    RewriteRule ^assets/(.*)$ frontend/assets/$1 [L,NC]
+</IfModule>
+
 # Prevent direct access to sensitive config & json data
 <FilesMatch "\.(sql|json|env|md|phar|ini|log|bak)$">
     Order allow,deny

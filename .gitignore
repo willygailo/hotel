@@ -6,6 +6,7 @@
 .env
 .env.local
 .env.production
+LIVE_URL.txt
 
 # Cache & Temporary Files
 .phpunit.result.cache
@@ -23,6 +24,8 @@ Thumbs.db
 # Log Files (keep .gitkeep in logs directory)
 logs/*.log
 storage/logs/*.log
+storage/sessions/sess_*
+storage/cache/*
 !logs/.gitkeep
 !storage/logs/.gitkeep
 
@@ -37,4 +40,5 @@ uploads/ids/*
 
 # Composer & Vendor
 /vendor/
+frontend/node_modules/
 

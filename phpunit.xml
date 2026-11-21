@@ -5,13 +5,14 @@
          colors="true"
          testdox="true">
     <testsuites>
-        <testsuite name="Core Functions">
+        <testsuite name="Core Functions &amp; 3-Tier Slim API">
             <directory>tests/Unit</directory>
         </testsuite>
     </testsuites>
     <source>
         <include>
-            <directory>includes</directory>
+            <directory>backend/core</directory>
+            <directory>backend/src</directory>
         </include>
     </source>
     <php>

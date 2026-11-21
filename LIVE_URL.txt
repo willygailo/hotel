@@ -1,17 +1,22 @@
 ================================================================================
 🏨 MARVELOUS HOTEL & DORMITORY — LIVE CAPSTONE PRESENTATION LINKS
-Nilikha noong: Saturday, 14 November, 2026 06:11:39 PM PST
+Nilikha noong: Saturday, 21 November, 2026 07:08:06 PM PST
 Active Engine: Cloudflare
+GitHub Repository: https://github.com/gailowilly551-afk/hotel
 ================================================================================
 
 🌐 1. PUBLIC CLOUD SHAREABLE LINK (Internet / Mobile Data):
-   👉 Main Hotel Page: https://village-dns-surf-removing.trycloudflare.com/hotel/
-   👉 Admin Login:     https://village-dns-surf-removing.trycloudflare.com/hotel/admin/login.php
-   👉 Staff Login:     https://village-dns-surf-removing.trycloudflare.com/hotel/staff/login.php
-   👉 User Dashboard:  https://village-dns-surf-removing.trycloudflare.com/hotel/user/dashboard.php
+   👉 Main Hotel Page:   https://bids-console-helen-require.trycloudflare.com/hotel/
+   👉 Guest Login:       https://bids-console-helen-require.trycloudflare.com/hotel/auth/login.php
+   👉 User Dashboard:    https://bids-console-helen-require.trycloudflare.com/hotel/user/dashboard.php
+   👉 Forgot Password:   https://bids-console-helen-require.trycloudflare.com/hotel/auth/forgot-password.php
+   👉 Staff Login:       https://bids-console-helen-require.trycloudflare.com/hotel/staff/login.php
+   👉 Admin Login:       https://bids-console-helen-require.trycloudflare.com/hotel/admin/login.php
+   👉 Admin Reset Hub:   https://bids-console-helen-require.trycloudflare.com/hotel/admin/users.php?tab=resets
+   👉 REST API (Slim 4): https://bids-console-helen-require.trycloudflare.com/hotel/backend/api/v1/health
 
 📶 2. LOCAL WI-FI / LAN LINK (Same Network):
-   👉 Local URL:       http://192.168.1.11:80/hotel/
+   👉 Local URL:         http://192.168.0.155/hotel/
 
 --------------------------------------------------------------------------------
 📌 TEST ACCOUNTS & PASSWORDS:

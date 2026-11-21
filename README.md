@@ -1,6 +1,6 @@
 # 🏨 Marvelous Hotel and Dormitory Booking and Reservation Management System with AI-Based Room Recommendation
 
-A comprehensive Hotel & Dormitory Web Application built with **PHP, MySQL, HTML5, Modular CSS3, Modular Vanilla JavaScript, and XML Architecture**, designed to run seamlessly on **XAMPP**.
+A comprehensive **3-Tier Hotel & Dormitory Web Application** structured cleanly into **`frontend/`** (**Tailwind CSS + Alpine.js 3**, HTML5, CSS3, ES6+ JavaScript), **`backend/`** (**Slim 4 PHP 8 REST API Framework**, PSR-4 Services/Controllers/Middleware, Real-Time NVIDIA NIM SSE AI), and **`database/`** (**MySQL / MariaDB SQL** via PDO with 17 versioned migrations), designed to run natively on **XAMPP**.
 
 ---
 
@@ -141,7 +141,7 @@ Built for customers and guests wishing to explore accommodations, reserve rooms 
   * Live room and dormitory inventory showcase with dynamic pricing and stay duration calculator
   * Mandatory KYC Identity Verification requirement & valid government ID inspection before reservation
   * **Payment Channels:** **GCash and PayMaya (Maya) ONLY** with instant screenshot receipt uploader and reference number tracking
-  * **Secure file upload validation** (MIME type check, 5MB limit, random filenames)
+  * **Secure file upload validation** (MIME type check, 15MB limit, random filenames)
   * **Marvi AI Chatbot Assistant:** Interactive assistant answering questions on payment steps, booking procedures, check-in/out policies, and room recommendations
   * Booking voucher generator with exact activity timestamps (Date, Time, Year)
   * Star rating submission and guest feedback reviews
@@ -188,7 +188,7 @@ Built for customers and guests wishing to explore accommodations, reserve rooms 
 ### Secure File Uploads
 - **MIME type validation** via `finfo` (not just extension)
 - **Allowed types:** JPEG, PNG, WebP, GIF, PDF
-- **Size limit:** 5MB (configurable via `MAX_UPLOAD_SIZE`)
+- **Size limit:** 15MB (configurable via `MAX_UPLOAD_SIZE`)
 - **Randomized filenames:** 32-char hex + correct extension
 - **Protected storage:** Files served via `serve-file.php` proxy (not direct web access)
 - **Applied to:** Room thumbnails (admin), Payment proofs (user)
@@ -210,22 +210,13 @@ Built for customers and guests wishing to explore accommodations, reserve rooms 
 
 ---
 
-## 📁 Modular Asset Architecture & XML Data
+## 📁 Modular Asset Architecture
 
 To prevent style clashes, runtime script errors, and cross-portal bugs, all assets are decoupled into role-specific files:
 
 ```text
 hotel/
 ├── assets/
-│   ├── xml/                  <- XML Data & Schema
-│   │   ├── hotel_config.xml      <- Hotel metadata, payment account info, check-in policies
-│   │   ├── rooms_catalog.xml     <- Room types, amenities, dormitory specs, capacities
-│   │   ├── navigation_admin.xml  <- Admin sidebar navigation schema & permission nodes
-│   │   ├── navigation_staff.xml  <- Staff frontdesk navigation schema
-│   │   ├── navigation_user.xml   <- Guest portal navigation schema
-│   │   ├── ai_intents.xml        <- Chatbot training keywords, responses, and exploit filters
-│   │   └── sitemap.xml           <- Search engine XML sitemap
-│   │
 │   ├── css/                  <- Role-Dedicated Stylesheets
 │   │   ├── base.css              <- Shared variables, typography, badges, buttons, flash alerts
 │   │   ├── admin.css             <- Exclusive to the Admin portal
@@ -249,8 +240,7 @@ hotel/
 │   ├── functions.php           <- Shared helpers (formatting, validation, upload, audit)
 │   ├── logger.php              <- Structured logging (JSON + DB, error handlers)
 │   ├── rate-limiter.php        <- Rate limiting for auth endpoints
-│   ├── email.php               <- Email templates & sending (mail() or SMTP)
-│   └── xml.php                 <- XML loading utilities
+│   └── email.php               <- Email templates & sending (mail() or SMTP)
 │
 ├── auth/                       <- User authentication pages
 │   ├── login.php
@@ -271,9 +261,7 @@ hotel/
 │   ├── bootstrap.php
 │   └── Unit/
 │       ├── FunctionsTest.php
-│       ├── SessionTest.php
-│       ├── RateLimiterTest.php
-│       └── DatabaseTest.php
+│       └── SessionAndSecurityTest.php
 │
 ├── storage/
 │   └── logs/                   <- Application logs (auto-created)

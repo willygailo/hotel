@@ -29,18 +29,28 @@ CREATE TABLE `users` (
   `role`              ENUM('user','staff','admin') NOT NULL DEFAULT 'user',
   `phone`             VARCHAR(20) DEFAULT NULL,
   `address`           TEXT DEFAULT NULL,
+  `location`          TEXT DEFAULT NULL,
   `avatar`            VARCHAR(255) DEFAULT 'default-avatar.png',
   `gender`            ENUM('male','female','other') DEFAULT NULL,
   `date_of_birth`     DATE DEFAULT NULL,
   `id_type`           VARCHAR(50) DEFAULT NULL,
   `id_number`         VARCHAR(100) DEFAULT NULL,
+  `id_document`       VARCHAR(255) DEFAULT NULL,
   `status`            ENUM('active','inactive','banned') NOT NULL DEFAULT 'active',
   `email_verified`    TINYINT(1) NOT NULL DEFAULT 0,
+  `profile_verified`  TINYINT(1) NOT NULL DEFAULT 0,
+  `verification_status` ENUM('unverified','pending','verified','rejected') NOT NULL DEFAULT 'unverified',
+  `rejection_reason`  TEXT DEFAULT NULL,
+  `verified_by`       INT(11) DEFAULT NULL,
+  `verified_at`       DATETIME DEFAULT NULL,
+  `verification_submitted_at` DATETIME DEFAULT NULL,
   `verify_token`      VARCHAR(255) DEFAULT NULL,
   `reset_token`       VARCHAR(255) DEFAULT NULL,
   `reset_expires`     DATETIME DEFAULT NULL,
   `two_fa_secret`     VARCHAR(255) DEFAULT NULL,
   `two_fa_enabled`    TINYINT(1) NOT NULL DEFAULT 0,
+  `remember_token`    VARCHAR(255) DEFAULT NULL,
+  `remember_expires`  DATETIME DEFAULT NULL,
   `last_login`        DATETIME DEFAULT NULL,
   `created_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -48,7 +58,7 @@ CREATE TABLE `users` (
   KEY `idx_email` (`email`),
   KEY `idx_role` (`role`),
   KEY `idx_status` (`status`),
-  UNIQUE KEY `unique_user_fullname` (`first_name`, `last_name`)
+  KEY `idx_user_fullname` (`first_name`, `last_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
@@ -80,7 +90,7 @@ CREATE TABLE `rooms` (
   `tags`            JSON DEFAULT NULL,
   `images`          JSON DEFAULT NULL,
   `thumbnail`       VARCHAR(255) DEFAULT 'default-room.jpg',
-  `status`          ENUM('available','occupied','maintenance','reserved') NOT NULL DEFAULT 'available',
+  `status`          ENUM('available','occupied','dirty','maintenance','reserved') NOT NULL DEFAULT 'available',
   `is_dorm`         TINYINT(1) NOT NULL DEFAULT 0,
   `bed_count`       INT(5) DEFAULT NULL,
   `beds_available`  INT(5) DEFAULT NULL,
@@ -160,8 +170,8 @@ CREATE TABLE `payments` (
 CREATE TABLE `reviews` (
   `id`          INT(11) NOT NULL AUTO_INCREMENT,
   `user_id`     INT(11) NOT NULL,
-  `room_id`     INT(11) NOT NULL,
-  `booking_id`  INT(11) NOT NULL,
+  `room_id`     INT(11) DEFAULT NULL,
+  `booking_id`  INT(11) DEFAULT NULL,
   `rating`      TINYINT(1) NOT NULL CHECK (`rating` BETWEEN 1 AND 5),
   `title`       VARCHAR(200) DEFAULT NULL,
   `comment`     TEXT NOT NULL,
@@ -290,6 +300,41 @@ CREATE TABLE `contact_messages` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
+-- TABLE: rate_limits
+-- ============================================================
+CREATE TABLE `rate_limits` (
+  `id`         INT(11) NOT NULL AUTO_INCREMENT,
+  `key`        VARCHAR(255) NOT NULL,
+  `identifier` VARCHAR(191) NOT NULL,
+  `action`     VARCHAR(100) NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_rate_key_created` (`key`(191), `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLE: password_reset_requests
+-- ============================================================
+CREATE TABLE `password_reset_requests` (
+  `id`                    INT(11) NOT NULL AUTO_INCREMENT,
+  `user_id`               INT(11) DEFAULT NULL,
+  `email`                 VARCHAR(191) NOT NULL,
+  `phone`                 VARCHAR(30) DEFAULT NULL,
+  `request_token`         VARCHAR(64) DEFAULT NULL,
+  `status`                ENUM('pending','completed','dismissed') NOT NULL DEFAULT 'pending',
+  `dispatch_type`         ENUM('password','link') DEFAULT NULL,
+  `new_password_assigned` VARCHAR(255) DEFAULT NULL,
+  `requested_at`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `resolved_at`           DATETIME DEFAULT NULL,
+  `user_notified_at`      DATETIME DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_prr_status` (`status`),
+  KEY `idx_prr_user` (`user_id`),
+  KEY `idx_prr_token` (`request_token`),
+  CONSTRAINT `fk_prr_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
 -- SEED DATA: Room Types
 -- ============================================================
 INSERT INTO `room_types` (`name`, `description`, `icon`) VALUES
@@ -348,11 +393,19 @@ INSERT INTO `settings` (`key`,`value`,`description`) VALUES
 ('ai_enabled','1','Enable AI chatbot'),
 ('ai_provider','nvidia','AI Engine provider: nvidia or local'),
 ('ai_nvidia_key','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','NVIDIA NIM API Key'),
-('ai_nvidia_model','google/diffusiongemma-26b-a4b-it','NVIDIA NIM Model ID'),
+('ai_nvidia_model','nvidia/nemotron-3.5-bolt-e4b','NVIDIA NIM Model ID'),
 ('ai_model','local','AI model type: local or openai'),
 ('openai_key','','OpenAI API key (if using)'),
 ('max_booking_days','30','Maximum days allowed per booking'),
-('site_maintenance','0','Put site in maintenance mode');
+('site_maintenance','0','Put site in maintenance mode'),
+('mail_driver','smtp','Mail transport driver (smtp or mail)'),
+('smtp_host','smtp.gmail.com','SMTP Server Host (e.g. smtp.gmail.com)'),
+('smtp_port','587','SMTP Server Port (587 for TLS, 465 for SSL)'),
+('smtp_encryption','tls','SMTP Encryption (tls or ssl)'),
+('smtp_username','','SMTP Username / Sender Gmail (e.g. hotel@gmail.com)'),
+('smtp_password','','SMTP Password / Google App Password (16 characters)'),
+('mail_from_email','info@marveloushotel.com','Default From Email address'),
+('mail_from_name','Marvelous Hotel & Dormitory','Default From Sender Name');
 
 -- ============================================================
 -- SEED DATA: Promos

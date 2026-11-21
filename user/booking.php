@@ -36,14 +36,14 @@ foreach ($rooms as $rm) {
 $mayaName   = getSetting('hotel_maya_name', 'WILLY GAILO');
 $mayaHandle = getSetting('hotel_maya_handle', '@willygailojr');
 $mayaPhone  = getSetting('hotel_maya_phone', '+63 *** *** 6963');
-$mayaQrUrl  = '../assets/images/maya_qr.jpg';
+$mayaQrUrl  = '../frontend/assets/images/maya_qr.jpg';
 
 $gcashName   = getSetting('hotel_gcash_name', 'JU***N J.');
 $gcashPhone  = getSetting('hotel_gcash_phone', '+63 964 142 ****');
 $gcashUserId = getSetting('hotel_gcash_userid', '••••••••••6SONJP');
 $gcashNum    = getSetting('hotel_gcash', '0964 142 ****');
-$gcashQrUrl  = '../assets/images/gcash_qr_card.jpg';
-$gcashQrFull = '../assets/images/gcash_qr.jpg';
+$gcashQrUrl  = '../frontend/assets/images/gcash_qr_card.jpg';
+$gcashQrFull = '../frontend/assets/images/gcash_qr.jpg';
 
 $error = '';
 $success = '';
@@ -67,6 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$roomId || empty($checkIn) || empty($checkOut)) {
             $error = 'Please select a room, check-in, and check-out date.';
+        } elseif ($guests < 1) {
+            $error = 'Number of guests must be at least 1.';
         } elseif ($checkIn >= $checkOut) {
             $error = 'The check-out date must be later than the check-in date.';
         } elseif ($checkIn < date('Y-m-d')) {
@@ -100,7 +102,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $room = dbRow("SELECT * FROM rooms WHERE id = ? FOR UPDATE", [$roomId]);
                         $conflictLock = findConflictingBooking($roomId, $checkIn, $checkOut);
 
-                        if (!$room || $conflictLock) {
+                        if (!$room || $room['status'] === 'maintenance') {
+                            getDB()->rollBack();
+                            $error = 'The selected room is unavailable or currently under maintenance.';
+                        } elseif ($guests > (int)$room['capacity']) {
+                            getDB()->rollBack();
+                            $error = 'Selected guest count (' . $guests . ') exceeds the maximum capacity (' . (int)$room['capacity'] . ' pax) of ' . h($room['name']) . '.';
+                        } elseif ($conflictLock) {
                             getDB()->rollBack();
                             $error = 'This room was just booked by another guest for those dates. Please choose another date or room.';
                         } else {
@@ -161,8 +169,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <title>Book a Room — Marvelous Hotel</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../assets/css/base.css">
-  <link rel="stylesheet" href="../assets/css/user.css">
+  <link rel="stylesheet" href="../frontend/assets/css/base.css">
+  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../frontend/components/frontend-frameworks.php'; renderFrontendFrameworks(true, true); ?>
   <style>
     .verified-banner {
       display: flex;
@@ -403,14 +412,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
 
           <!-- 2. Stay Dates -->
+          <?php
+            $prefillCheckIn  = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['check_in'] ?? '') ? $_GET['check_in'] : '';
+            $prefillCheckOut = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['check_out'] ?? '') ? $_GET['check_out'] : '';
+          ?>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
             <div class="form-group">
               <label class="form-label">Check-in Date <span class="required">*</span></label>
-              <input type="date" name="check_in" id="checkInDate" class="form-control" min="<?= date('Y-m-d') ?>" required onchange="onRoomOrDateChanged('check_in')">
+              <input type="date" name="check_in" id="checkInDate" class="form-control" min="<?= date('Y-m-d') ?>" value="<?= h($prefillCheckIn) ?>" required onchange="onRoomOrDateChanged('check_in')">
             </div>
             <div class="form-group">
               <label class="form-label">Check-out Date <span class="required">*</span></label>
-              <input type="date" name="check_out" id="checkOutDate" class="form-control" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required onchange="onRoomOrDateChanged('check_out')">
+              <input type="date" name="check_out" id="checkOutDate" class="form-control" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" value="<?= h($prefillCheckOut) ?>" required onchange="onRoomOrDateChanged('check_out')">
+            </div>
+          </div>
+
+          <!-- Live Slim 4 REST API Availability Verification (Tailwind CSS + Alpine.js) -->
+          <div x-data="liveApiAvailabilityChecker()" x-init="init()" x-cloak class="mt-2 mb-3">
+            <div x-show="state === 'checking'" class="flex items-center gap-2 rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5 text-xs text-gold-light">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              <span>Verifying real-time availability via Slim 4 REST API...</span>
+            </div>
+            <div x-show="state === 'available'" class="flex items-center justify-between flex-wrap gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs text-emerald-300">
+              <div class="flex items-center gap-2 font-semibold">
+                <i class="fa-solid fa-shield-check text-emerald-400"></i>
+                <span x-text="message"></span>
+              </div>
+              <span class="rounded-full bg-emerald-500/20 px-2.5 py-0.5 font-mono text-[11px] text-emerald-200" x-text="quoteLabel"></span>
+            </div>
+            <div x-show="state === 'unavailable'" class="flex items-center gap-2 rounded-xl border border-rose-500/45 bg-rose-500/15 px-4 py-2.5 text-xs text-rose-200 font-medium">
+              <i class="fa-solid fa-circle-xmark text-rose-400"></i>
+              <span x-text="message"></span>
             </div>
           </div>
 
@@ -607,7 +639,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <div class="modal-file-drop" onclick="document.getElementById('modalFileInput').click()">
             <i class="fa-solid fa-cloud-arrow-up" style="font-size:1.6rem;color:var(--gold);margin-bottom:4px;"></i>
             <div style="font-size:0.85rem;font-weight:600;color:#fff;" id="modalFileLabel">Click to select receipt screenshot</div>
-            <div style="font-size:0.72rem;color:var(--text-muted);">Supports JPG, PNG, or WebP (Max 5MB)</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);">Supports JPG, PNG, or WebP (Max 15MB)</div>
             <div id="modalPreviewContainer" style="display:none;margin-top:10px;">
               <img id="modalPreviewImg" src="#" alt="Receipt" style="max-height:120px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);">
             </div>
@@ -637,8 +669,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
 </div>
 
-<script src="../assets/js/core.js"></script>
-<script src="../assets/js/user.js"></script>
+<script src="../frontend/assets/js/core.js"></script>
+<script src="../frontend/assets/js/user.js"></script>
 <script>
 let activeChannel = 'maya';
 
@@ -952,9 +984,55 @@ function submitModalCheckout(mode) {
   document.getElementById('bookingForm').submit();
 }
 
+function liveApiAvailabilityChecker() {
+  return {
+    state: 'idle',
+    message: '',
+    quoteLabel: '',
+    controller: null,
+    init() {
+      const bind = () => this.check();
+      ['roomSelect', 'checkInDate', 'checkOutDate'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', bind);
+      });
+      this.check();
+    },
+    async check() {
+      const roomId = document.getElementById('roomSelect')?.value || '';
+      const checkIn = document.getElementById('checkInDate')?.value || '';
+      const checkOut = document.getElementById('checkOutDate')?.value || '';
+      if (!roomId || !checkIn || !checkOut || checkIn >= checkOut || !window.HotelAPI) {
+        this.state = 'idle';
+        return;
+      }
+      if (this.controller) this.controller.abort();
+      this.controller = new AbortController();
+      this.state = 'checking';
+      try {
+        const res = await window.HotelAPI.checkAvailability(roomId, checkIn, checkOut, this.controller.signal);
+        const d = res.data || {};
+        if (d.available) {
+          this.state = 'available';
+          this.message = 'Live API Verified: ' + (d.reason || 'Room is open for these dates.');
+          this.quoteLabel = d.quote ? `${d.quote.nights} night(s) · ${d.quote.formatted_total}` : '';
+        } else {
+          this.state = 'unavailable';
+          this.message = d.reason || 'Room is unavailable on the selected dates.';
+          this.quoteLabel = '';
+        }
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+        this.state = 'idle';
+      }
+    }
+  };
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   onRoomOrDateChanged();
 });
 </script>
+<?php require_once __DIR__ . '/../includes/components/ai-chatbot.php'; ?>
 </body>
 </html>

@@ -7,8 +7,8 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 requireRole('staff');
 releaseReadOnlySession();
 
-// Throttled periodic housekeeping: cancel stale unpaid bookings older than 24 hours
-throttleStaleBookingSweep(24, 300);
+// Throttled periodic housekeeping: cancel stale unpaid bookings & auto-release expired stays
+throttleStaleBookingSweep(24, 15);
 
 $staffId = currentUserId();
 ensureTempCredentialSchema();

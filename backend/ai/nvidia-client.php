@@ -128,6 +128,9 @@ function buildDynamicRoomCatalogContext(): array {
 
     if (function_exists('isDbAvailable') && isDbAvailable() && function_exists('dbRows')) {
         try {
+            if (function_exists('throttleStaleBookingSweep')) {
+                throttleStaleBookingSweep(24, 15);
+            }
             $rooms = dbRows("
                 SELECT r.id, r.room_number, r.name, r.floor, r.capacity, r.price_per_night, r.status, r.amenities, r.thumbnail, rt.name AS type_name
                 FROM rooms r

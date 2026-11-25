@@ -1,6 +1,6 @@
 # 🏨 Marvelous Hotel and Dormitory Booking and Reservation Management System with AI-Based Room Recommendation
 
-A comprehensive **3-Tier Hotel & Dormitory Web Application** structured cleanly into **`frontend/`** (**Tailwind CSS + Alpine.js 3**, HTML5, CSS3, ES6+ JavaScript), **`backend/`** (**Slim 4 PHP 8 REST API Framework**, PSR-4 Services/Controllers/Middleware, Real-Time NVIDIA NIM SSE AI), and **`database/`** (**MySQL / MariaDB SQL** via PDO with 17 versioned migrations), designed to run natively on **XAMPP**.
+A comprehensive **3-Tier Hotel & Dormitory Web Application** structured cleanly into **`frontend/`** (**Tailwind CSS + Alpine.js 3**, HTML5, CSS3, ES6+ JavaScript), **`backend/`** (**Slim 4 PHP 8 REST API Framework**, PSR-4 Services/Controllers/Middleware, Real-Time NVIDIA NIM SSE AI), and **`database/`** (**MySQL / MariaDB SQL** via PDO with 18 versioned migrations), designed to run natively on **XAMPP**.
 
 ---
 
@@ -28,32 +28,27 @@ Navigate to `http://localhost/phpmyadmin/` in your browser or run the following 
 Pagkatapos ng import (at sa bawat bagong release na may schema change), patakbuhin ang migration runner:
 ```bash
 cd /opt/lampp/htdocs/hotel
-php migrate.php           # ilapat ang mga pending migration
-php migrate.php --status  # i-list ang applied/pending
+php database/migrate.php           # ilapat ang mga pending migration
+php database/migrate.php --status  # i-list ang applied/pending
 ```
-Naka-track ang bawat migration sa `schema_migrations` table — isang beses lang ito binubuksan bawat file sa `migrations/`.
+Naka-track ang bawat migration sa `schema_migrations` table — isang beses lang ito binubuksan bawat file sa `database/migrations/`.
 
 ### 4. Set Up Secure Uploads Directory (Optional - for file serving)
 ```bash
-mkdir -p /opt/lampp/htdocs/hotel/uploads/rooms /opt/lampp/htdocs/hotel/uploads/proofs
+mkdir -p /opt/lampp/htdocs/hotel/uploads/rooms /opt/lampp/htdocs/hotel/uploads/proofs /opt/lampp/htdocs/hotel/uploads/documents /opt/lampp/htdocs/hotel/uploads/avatars
 chmod -R 755 /opt/lampp/htdocs/hotel/uploads
 ```
 
-### 5. Run Tests (Optional)
-```bash
-cd /opt/lampp/htdocs/hotel
-php phpunit.phar --bootstrap tests/bootstrap.php
-```
-
-### 6. Enable Multi-Server VirtualHosts in XAMPP (Optional)
+### 5. Enable Multi-Server VirtualHosts in XAMPP (Optional)
 To host each portal on its dedicated port (`:8080`, `:8081`, `:8082`):
 1. Open `/opt/lampp/etc/httpd.conf` and uncomment:
    ```apache
    Include etc/extra/httpd-vhosts.conf
    ```
-2. Copy the configuration file:
+2. Copy the configuration file for your OS:
    ```bash
-   sudo cp /opt/lampp/htdocs/hotel/apache-vhosts-setup.conf /opt/lampp/etc/extra/httpd-vhosts.conf
+   sudo cp /opt/lampp/htdocs/hotel/config/apache/vhosts-linux.conf /opt/lampp/etc/extra/httpd-vhosts.conf
+   # Windows XAMPP: copy config/apache/vhosts-windows.conf to C:/xampp/apache/conf/extra/httpd-vhosts.conf
    ```
 3. Restart Apache:
    ```bash
@@ -64,7 +59,7 @@ To host each portal on its dedicated port (`:8080`, `:8081`, `:8082`):
 
 ## 🌐 Multi-Server Architecture & How to Access Each Portal
 
-Every module features its own dedicated URL, distinct access credentials, and isolated CSS/JS scripts. In addition to standard XAMPP paths, the system includes a ready-to-run multi-port Apache configuration ([`apache-vhosts-setup.conf`](file:///opt/lampp/htdocs/hotel/apache-vhosts-setup.conf)) to run each portal on dedicated servers/ports:
+Every module features its own dedicated URL, distinct access credentials, and isolated CSS/JS scripts. In addition to standard XAMPP paths, the system includes ready-to-run multi-port Apache configurations ([`vhosts-linux.conf`](file:///opt/lampp/htdocs/hotel/config/apache/vhosts-linux.conf) & [`vhosts-windows.conf`](file:///opt/lampp/htdocs/hotel/config/apache/vhosts-windows.conf)) to run each portal on dedicated servers/ports:
 
 | Server / Portal | Multi-Port URL | Standard XAMPP URL | Access Level & Permissions |
 |---|---|---|---|
@@ -210,112 +205,78 @@ Built for customers and guests wishing to explore accommodations, reserve rooms 
 
 ---
 
-## 📁 Modular Asset Architecture
+## 📁 3-Tier Modular Project Architecture
 
-To prevent style clashes, runtime script errors, and cross-portal bugs, all assets are decoupled into role-specific files:
+To prevent style clashes, runtime script errors, and cross-portal bugs, the application is separated into `frontend/`, `backend/`, and `database/` layers:
 
 ```text
 hotel/
-├── assets/
-│   ├── css/                  <- Role-Dedicated Stylesheets
-│   │   ├── base.css              <- Shared variables, typography, badges, buttons, flash alerts
-│   │   ├── admin.css             <- Exclusive to the Admin portal
-│   │   ├── staff.css             <- Exclusive to the Staff frontdesk portal
-│   │   ├── user.css              <- Exclusive to the User/Guest portal
-│   │   ├── auth.css              <- Login and registration forms
-│   │   └── public.css            <- Landing page, hero section, and room showcase
-│   │
-│   └── js/                   <- Role-Dedicated Scripts
-│       ├── core.js               <- Global flash notification dismisser & mobile sidebar drawer
-│       ├── admin.js              <- Admin real-time table search & deletion confirmation prompts
-│       ├── staff.js              <- Frontdesk guest search & status category filter
-│       ├── user.js               <- Real-time booking price calculation & receipt preview
-│       ├── public.js             <- Navbar scroll effects & room search filters
-│       └── ai-chat.js            <- Chatbot client with auto-detecting API routing
+├── frontend/
+│   ├── admin/                  <- Super Admin Portal (dashboard, rooms, bookings, payments, users, staff, ai-config, audit-logs, settings)
+│   ├── staff/                  <- Frontdesk Operations Portal (dashboard, payments, check-in, rooms-status, account)
+│   ├── user/                   <- Authenticated Guest Hub (dashboard, booking, my-bookings, payment, payment-history, ai-recommend, profile, reviews, notifications)
+│   ├── auth/                   <- Authentication UI (login, register, forgot-password, reset-password, verify-email, resend-verification, welcome, setup-admin, register-staff)
+│   ├── pages/                  <- Public Website (index, rooms, about, contact, 404, 500)
+│   ├── components/             <- Shared UI components (sidebar, central-nav, ai-chatbot, reset-status-modal, frontend-frameworks)
+│   └── assets/
+│       ├── css/                <- Role-dedicated stylesheets (base, admin, staff, user, auth, public, ai-chat, tailwind)
+│       └── js/                 <- Role-dedicated scripts (core, admin, staff, user, public, api-client, ai-chat)
 │
-├── includes/
-│   ├── config.php              <- Central configuration (ENV, DB, paths, security)
-│   ├── db.php                  <- PDO database connection & helpers
-│   ├── session.php             <- Session management, CSRF, auth guards, flash messages
-│   ├── functions.php           <- Shared helpers (formatting, validation, upload, audit)
-│   ├── logger.php              <- Structured logging (JSON + DB, error handlers)
-│   ├── rate-limiter.php        <- Rate limiting for auth endpoints
-│   └── email.php               <- Email templates & sending (mail() or SMTP)
+├── backend/
+│   ├── core/                   <- Core infrastructure (config.php, db.php, session.php, functions.php, logger.php, rate-limiter.php, email.php)
+│   ├── ai/                     <- Marvi AI engine (chatbot.php, nvidia-client.php, staff-assistant.php, admin-insights.php, training-data/)
+│   ├── api/                    <- Slim 4 REST API front controller (index.php)
+│   ├── src/                    <- PSR-4 Controllers, Services, Middleware (RoleAuth, CsrfProtection, JsonBodyParser), ApiAppFactory
+│   └── endpoints/              <- Secure endpoints (serve-file.php, check-reset-status.php, check-name.php, logout.php)
 │
-├── auth/                       <- User authentication pages
-│   ├── login.php
-│   ├── register.php
-│   ├── register-staff.php      <- CLOSED (redirects to staff login)
-│   ├── setup-admin.php         <- First-time admin bootstrap only
-│   ├── forgot-password.php
-│   ├── reset-password.php
-│   ├── verify-email.php
-│   ├── resend-verification.php
-│   └── logout.php              <- Role-aware (returns to own portal login)
+├── database/
+│   ├── marvelous_hotel.sql     <- Initial database schema & seed data
+│   ├── migrate.php             <- Versioned SQL migration runner (schema_migrations ledger)
+│   ├── migrations/             <- 18 versioned SQL migrations
+│   └── ERD.md                  <- 14-table Entity-Relationship Diagram & Data Dictionary
 │
-├── phpunit.xml                 <- PHPUnit configuration (project root)
-│
-├── serve-file.php              <- Secure file proxy (serves uploads from protected path)
-│
-├── tests/                      <- PHPUnit test suite
-│   ├── bootstrap.php
-│   └── Unit/
-│       ├── FunctionsTest.php
-│       └── SessionAndSecurityTest.php
-│
-├── storage/
-│   └── logs/                   <- Application logs (auto-created)
-│
-└── uploads/                    <- Uploaded files (rooms/, proofs/)
+├── config/apache/              <- Multi-port Apache VirtualHost templates (vhosts-linux.conf, vhosts-windows.conf)
+├── scripts/                    <- Utility & PDF documentation generators (generate_roles_architecture_pdf.py, share-capstone.sh, etc.)
+├── storage/                    <- Runtime logs, PHP sessions, and short-TTL AI/sweep caches (git-ignored)
+└── uploads/                    <- Protected uploads (rooms/, proofs/, documents/, avatars/ via serve-file.php)
 ```
 
 ---
 
 ## 🤖 AI Module Features
 
-* **Marvi AI Chatbot (`ai/chatbot.php`, `ai/nvidia-client.php`, `assets/js/ai-chat.js`, `includes/components/ai-chatbot.php`):** Live conversational AI powered by **NVIDIA NIM (`google/diffusiongemma-26b-a4b-it`)** with intelligent fallback to local bilingual FAQs:
-  * **Automatic Bilingual Language Detection:** The AI automatically detects the user's language—when a guest asks in **English**, Marvi responds 100% in polite, professional English; when a guest asks in **Tagalog / Filipino**, Marvi responds in natural, warm Tagalog/Taglish with polite markers ("po" and "opo").
-  * **Payment Inquiries:** Explains step-by-step how to pay using **GCash and PayMaya (Maya) ONLY** (official accounts, copying reference numbers, and uploading screenshots).
-  * **Booking Inquiries:** Guides guests through the step-by-step reservation workflow (selecting dates, confirming rooms, and uploading receipts).
-  * **Hotel Schedule & Policies:** Instant answers for Check-in (2:00 PM) and Check-out (12:00 PM / Tanghali) policies.
-  * **Budget & Dormitory Recommendations:** Real-time database query recommending budget dorm beds (₱350/night) or private rooms according to the guest's budget.
-* **Security & Exploits Filter:** Automatically intercepts malicious payloads (such as SQL injection patterns or script tags), flagging the incident in `ai_logs` and `audit_logs` as a security alert for Admin review.
-* **AI Room Recommender (`user/ai-recommend.php`):** Matches guests with suitable room accommodations according to their stated budget and party size.
-* **Admin Monitoring & Status Banner (`admin/ai-config.php`):** Displays live connection status, active model ID, and full transcript logs with flagged threat indicators.
-
----
-
-## 🧪 Testing
-
-### Unit Tests (PHPUnit 10)
-```bash
-cd /opt/lampp/htdocs/hotel
-php phpunit.phar --bootstrap tests/bootstrap.php          # Run all tests
-php phpunit.phar --bootstrap tests/bootstrap.php --testdox # Verbose output
-```
-
-**Test Coverage:**
-- **FunctionsTest** — Currency, dates, booking codes, badges, stars, truncation, weekends, JSON
-- **SessionTest** — CSRF tokens, login state, role checks, current user
-- **RateLimiterTest** — Attempt tracking, per-IP/action limits, client IP detection
-- **DatabaseTest** — CRUD operations, row/rows fetching, settings
+* **Marvi AI Concierge Chatbot (`backend/ai/chatbot.php`, `backend/ai/nvidia-client.php`, `frontend/assets/js/ai-chat.js`, `frontend/components/ai-chatbot.php`):** Live **Server-Sent Events (SSE)** streaming AI powered by **NVIDIA NIM (`nvidia/nemotron-3.5-bolt-e4b` default, with automatic failover to `nvidia/nemotron-3.5-lightning-30b-a3b`, `minimaxai/minimax-m3.1-flash`, and local bilingual rule/FAQ fallback)**:
+  * **Automatic Bilingual Language Detection:** Automatically detects English vs. Tagalog/Taglish (`detectMessageLanguage()`), supports multi-turn session memory, and includes optional Voice Mic input & Speech Synthesis (TTS).
+  * **Server-Verified Room Cards & Action Buttons:** Emits clickable Room Cards (`[[BOOK_ROOM:<id>]]`) and verified navigation buttons (`[[GOTO:<route>]]`) backed by live MySQL availability and logged-in guest context.
+  * **Payment & Policy Guidance:** Explains **GCash and PayMaya (Maya) ONLY** QR payment steps, check-in/check-out policies, and budget-based room matching.
+* **Security & Exploits Filter:** Intercepts malicious payloads via `backend/ai/training-data/bad-intent-keywords.json`, logging flagged attempts in `ai_logs` and `audit_logs` for Admin review.
+* **Smart AI Room Matcher (`frontend/user/ai-recommend.php`):** Filters rooms by budget, pax count, check-in/check-out date availability (`isRoomAvailable()`), and stay preference.
+* **Staff Operations AI Co-Pilot (`backend/ai/staff-assistant.php`):** Generates live Taglish Frontdesk Shift Briefings (arrivals, departures, dirty/maintenance rooms, pending queues) with 5-minute caching.
+* **Admin Executive AI Insights (`backend/ai/admin-insights.php`):** Generates strategic Taglish business digests from live revenue, Maya vs. GCash mix, occupancy rate, and operational backlogs.
+* **Admin AI Control & Threat Monitoring (`frontend/admin/ai-config.php`):** Toggle Live AI vs. Local FAQ fallback, switch NVIDIA NIM model IDs, update API keys, test live connection latency, and inspect flagged security logs.
 
 ---
 
 ## 📦 Production Deployment Checklist
 
-- [ ] Set `ENVIRONMENT` to `'production'` in `includes/config.php`
-- [ ] Configure SMTP settings in database `settings` table (`smtp_host`, `smtp_port`, `smtp_username`, `smtp_password`, `smtp_encryption`, `mail_from_email`, `mail_from_name`)
-- [ ] Enable HTTPS and set `session.cookie_secure = true` in `includes/session.php`
-- [ ] Set strong `HASH_COST` (12+) in `includes/config.php`
+- [ ] Set `ENVIRONMENT` to `'production'` (via `MH_ENV` or `backend/core/config.php`)
+- [ ] Configure optional SMTP credentials via environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_ENCRYPTION`) or `settings` table
+- [ ] Enable HTTPS (`session.cookie_secure` auto-enables on HTTPS connections in `backend/core/session.php`)
+- [ ] Keep strong `HASH_COST` (`12+`) in `backend/core/config.php`
 - [x] Removed demo user account; system uses real user registrations only
 - [ ] Configure backup for database and `uploads/` directory
 - [ ] Set up log rotation for `storage/logs/`
-- [ ] Run security scan: `php phpunit.phar --bootstrap tests/bootstrap.php`
 
 ---
 
 ## 📋 Changelog
+
+### v1.1.8 (Auto-Release Expired Bookings, Settings Cleanup & Role Architecture Guide — 2026-11-25)
+- ✅ **Automatic Stay Expiration & Room Release (`autoReleaseExpiredStays()`, `isBookingStayExpired()`)** — Bookings (`checked_in`, `confirmed`, `pending`) whose `check_out` date and configured `settings.check_out_time` (default `12:00` PM Asia/Manila) have elapsed are automatically transitioned (`checked_out` or `cancelled`), releasing idle rooms back to `available` (`releaseRoomOccupancyIfIdle()`), notifying guests, and recording `audit_logs`.
+- ✅ **Cross-Portal Sweep & Availability Sync** — Wired `throttleStaleBookingSweep(24, 15)` across Staff (`rooms-status.php`, `check-in.php`, `dashboard.php`), Admin (`dashboard.php`, `bookings.php`, `rooms.php`), User (`booking.php`, `ai-recommend.php`), Public (`index.php`, `rooms.php`), Slim 4 REST API (`RoomService.php`), and Marvi AI (`nvidia-client.php`), while excluding `checked_out` bookings from conflict checks.
+- ✅ **Admin System Settings Cleanup (`frontend/admin/settings.php`)** — Removed the Gmail SMTP & test email dispatch UI so System Settings focuses cleanly on Hotel Information, Check-in/Check-out times, and Maya/GCash E-Wallet accounts.
+- ✅ **Role Guide & Architecture Blueprint PDF** — Added `scripts/generate_roles_architecture_pdf.py` generating a 10-page Taglish PDF explaining **AI / USER / STAFF / ADMIN** capabilities, workflows, and architecture connections.
+- ✅ **Hardened `.gitignore`** — Added ignore rules for `storage/.cred_vault.key`, `storage/*.key`, `docs/*.pdf`, `storage/sessions/*`, `storage/cache/*`, and `uploads/documents/*`.
 
 ### v1.1.7 (Unified Guest & Public Portal & Capstone Tunnel Optimization — 2026-11-06)
 - ✅ **Unified Guest & Public Portal Architecture** — Pagsasama ng Public Hotel Website at Guest / User Portal sa iisang cohesive 3-actor model (Guest & Public Portal, Staff Portal, Super Admin Portal) sa console dashboard (`share-capstone.sh`), navigation bar, at system documentation (`README.md`, `architecture.md`).
@@ -416,4 +377,4 @@ MIT License — Feel free to use, modify, and distribute.
 
 ---
 
-*Last Updated: 2026-11-06 | Marvelous Hotel & Dormitory Booking System v1.1.7*
+*Last Updated: 2026-11-25 | Marvelous Hotel & Dormitory Booking System v1.1.8*

@@ -7,6 +7,8 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 requireRole('staff');
 releaseReadOnlySession();
 
+throttleStaleBookingSweep(24, 15);
+
 $staffId = currentUserId();
 $tab = $_GET['tab'] ?? 'all';
 if (!in_array($tab, ['all', 'arrivals', 'inhouse'], true)) {

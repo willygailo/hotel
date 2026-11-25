@@ -25,6 +25,8 @@ if (!$kyc['is_verified']) {
 
 releaseReadOnlySession();
 
+throttleStaleBookingSweep(24, 15);
+
 $selectedRoomId = (int)($_GET['room_id'] ?? 0);
 $rooms = dbRows("SELECT * FROM rooms WHERE status != 'maintenance' ORDER BY price_per_night ASC");
 $allBookingsMap = getAllRoomsActiveBookingsMap();

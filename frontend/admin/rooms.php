@@ -7,6 +7,8 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 requireRole('admin');
 releaseReadOnlySession();
 
+throttleStaleBookingSweep(24, 15);
+
 // Add Room handler
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_room'])) {
     $token = $_POST[CSRF_TOKEN_NAME] ?? '';

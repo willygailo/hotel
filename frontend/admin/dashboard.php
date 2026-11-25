@@ -7,8 +7,8 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 requireRole('admin');
 releaseReadOnlySession();
 
-// Throttled housekeeping: cancel stale unpaid bookings older than 24 hours (max once every 5 mins)
-throttleStaleBookingSweep(24, 300);
+// Throttled housekeeping: cancel stale unpaid bookings & auto-release expired stays
+throttleStaleBookingSweep(24, 15);
 
 $adminId = currentUserId();
 $admin = dbRow("SELECT * FROM users WHERE id = ?", [$adminId]);

@@ -8,6 +8,8 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 requireRole('admin');
 releaseReadOnlySession();
 
+throttleStaleBookingSweep(24, 15);
+
 $adminId = currentUserId();
 $tab = $_GET['tab'] ?? 'all';
 

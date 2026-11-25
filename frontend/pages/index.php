@@ -13,6 +13,8 @@ if (!isLoggedIn()) {
 // Release PHP session lock for high-concurrency read requests (GET) so concurrent users load instantly
 releaseReadOnlySession();
 
+throttleStaleBookingSweep(24, 15);
+
 // Fetch data for homepage
 $rooms = dbRows("
     SELECT r.*, rt.name as type_name 

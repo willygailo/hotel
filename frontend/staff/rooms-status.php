@@ -7,6 +7,11 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 requireRole('staff');
 releaseReadOnlySession();
 
+// Auto-release any checked-in/past bookings whose scheduled check-out date & time have elapsed
+throttleStaleBookingSweep(24, 15);
+$configuredCheckOutTime = getNormalizedCheckOutTime();
+$formattedCheckOutTime  = date('g:i A', strtotime('2000-01-01 ' . $configuredCheckOutTime));
+
 $staffId = currentUserId();
 
 // Update status (available / dirty / maintenance)
@@ -51,7 +56,7 @@ $rooms = dbRows("
 
 // Batch load all currently checked-in occupants per room (supports multi-guest dorms without N+1 queries)
 $occupantRows = dbRows("
-    SELECT b.room_id, b.booking_code, u.first_name, u.last_name
+    SELECT b.room_id, b.booking_code, b.check_in, b.check_out, u.first_name, u.last_name
     FROM bookings b
     JOIN users u ON b.user_id = u.id
     WHERE b.status = 'checked_in'
@@ -192,11 +197,23 @@ unset($rm);
                     <div style="font-weight:700;color:#fff;margin-bottom:4px;"><i class="fa-solid fa-users"></i> <?= count($occupants) ?> Dorm Guests Checked In:</div>
                   <?php endif; ?>
                   <?php foreach ($occupants as $occ): ?>
-                    <div style="margin-bottom:3px;">
-                      <i class="fa-solid fa-user"></i> <?= h(trim(($occ['first_name'] ?? '') . ' ' . ($occ['last_name'] ?? '')) ?: 'Checked-in') ?>
-                      <span style="color:#cbd5e1;">(#<?= h($occ['booking_code']) ?>)</span>
+                    <div style="margin-bottom:4px;">
+                      <div>
+                        <i class="fa-solid fa-user"></i> <?= h(trim(($occ['first_name'] ?? '') . ' ' . ($occ['last_name'] ?? '')) ?: 'Checked-in') ?>
+                        <span style="color:#cbd5e1;">(#<?= h($occ['booking_code']) ?>)</span>
+                      </div>
+                      <?php if (!empty($occ['check_out'])): ?>
+                        <div style="font-size:0.72rem;color:#cbd5e1;margin-top:2px;">
+                          <i class="fa-regular fa-clock"></i> Until <?= formatDate($occ['check_out'], 'M d, Y') ?> &middot; <?= h($formattedCheckOutTime) ?>
+                        </div>
+                      <?php endif; ?>
                     </div>
                   <?php endforeach; ?>
+                  <div style="margin-top:6px;">
+                    <a href="check-in.php?tab=inhouse" style="font-size:0.74rem;color:var(--gold);text-decoration:underline;">
+                      <i class="fa-solid fa-door-closed"></i> Manage Check-out
+                    </a>
+                  </div>
                 <?php endif; ?>
               </div>
               <?php if (empty($occupants)): ?>

@@ -7,6 +7,8 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 requireRole('user');
 releaseReadOnlySession();
 
+throttleStaleBookingSweep(24, 15);
+
 $recommendations = [];
 $searched = false;
 $budget = 0.0;

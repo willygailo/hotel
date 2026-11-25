@@ -4,16 +4,22 @@
 
 # Environment & Sensitive Config
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 LIVE_URL.txt
+storage/.cred_vault.key
+storage/*.key
 
 # Cache & Temporary Files
 .phpunit.result.cache
 *.cache
 *.tmp
+*.zip
 .DS_Store
 Thumbs.db
+
+# Generated Documentation PDFs
+docs/*.pdf
 
 # IDE & Editor Settings
 .vscode/
@@ -21,22 +27,26 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 
-# Log Files (keep .gitkeep in logs directory)
+# Log Files, Sessions & Runtime Cache (keep .gitkeep)
 logs/*.log
 storage/logs/*.log
-storage/sessions/sess_*
+storage/sessions/*
 storage/cache/*
 !logs/.gitkeep
 !storage/logs/.gitkeep
+!storage/sessions/.gitkeep
+!storage/cache/.gitkeep
 
 # User Uploads (keep directory structure and default images)
 uploads/avatars/*
 uploads/proofs/*
 uploads/ids/*
+uploads/documents/*
 !uploads/avatars/default-avatar.png
 !uploads/avatars/.gitkeep
 !uploads/proofs/.gitkeep
 !uploads/ids/.gitkeep
+!uploads/documents/.gitkeep
 
 # Composer & Vendor
 /vendor/

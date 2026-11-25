@@ -13,6 +13,8 @@ if (!isLoggedIn()) {
 
 releaseReadOnlySession();
 
+throttleStaleBookingSweep(24, 15);
+
 $hotelName = getSetting('hotel_name', 'Marvelous Hotel');
 
 // Filter inputs

@@ -42,6 +42,9 @@ class RoomService
      */
     public function listRooms(array $filters = []): array
     {
+        if (\function_exists('throttleStaleBookingSweep')) {
+            \throttleStaleBookingSweep(24, 15);
+        }
         $sql = "SELECT r.*, rt.name AS type_name, rt.icon AS type_icon
                 FROM rooms r
                 JOIN room_types rt ON r.room_type_id = rt.id
@@ -96,6 +99,9 @@ class RoomService
      */
     public function getRoomById(int $roomId): ?array
     {
+        if (\function_exists('throttleStaleBookingSweep')) {
+            \throttleStaleBookingSweep(24, 15);
+        }
         $row = \dbRow(
             "SELECT r.*, rt.name AS type_name, rt.icon AS type_icon
              FROM rooms r
@@ -137,6 +143,9 @@ class RoomService
             return ['valid' => false, 'error' => 'Check-out date must be after the check-in date.'];
         }
 
+        if (\function_exists('throttleStaleBookingSweep')) {
+            \throttleStaleBookingSweep(24, 15);
+        }
         $room = \dbRow(
             "SELECT r.*, rt.name AS type_name FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id WHERE r.id = ? LIMIT 1",
             [$roomId]

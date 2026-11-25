@@ -47,13 +47,45 @@ function datesOverlap(string $in1, string $out1, string $in2, string $out2): boo
     return ($in1 < $out2 && $out1 > $in2);
 }
 
+// ---- Normalize configured check-out time (HH:MM, default 12:00) ----
+function getNormalizedCheckOutTime(): string {
+    $raw = function_exists('getSetting') ? trim((string)getSetting('check_out_time', '12:00')) : '12:00';
+    if (preg_match('/^(\d{1,2}):(\d{2})/', $raw, $m)) {
+        $h = max(0, min(23, (int)$m[1]));
+        $min = max(0, min(59, (int)$m[2]));
+        return sprintf('%02d:%02d', $h, $min);
+    }
+    return '12:00';
+}
+
+// ---- Check whether a booking's check-out date + check-out time has already passed ----
+function isBookingStayExpired(string $checkOutDate, ?string $checkOutTime = null, ?int $nowTs = null): bool {
+    $datePart = trim($checkOutDate);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $datePart)) {
+        return false;
+    }
+    $timePart = $checkOutTime !== null && trim($checkOutTime) !== ''
+        ? trim($checkOutTime)
+        : getNormalizedCheckOutTime();
+    if (preg_match('/^(\d{1,2}):(\d{2})/', $timePart, $m)) {
+        $timePart = sprintf('%02d:%02d:00', max(0, min(23, (int)$m[1])), max(0, min(59, (int)$m[2])));
+    } else {
+        $timePart = '12:00:00';
+    }
+    $cutoffTs = strtotime($datePart . ' ' . $timePart);
+    if ($cutoffTs === false) {
+        return false;
+    }
+    return ($nowTs ?? time()) >= $cutoffTs;
+}
+
 // ---- Find specific conflicting booking (if any) ----
 function findConflictingBooking(int $roomId, string $checkIn, string $checkOut, ?int $excludeBookingId = null): ?array {
     $sql = "SELECT b.id, b.booking_code, b.room_id, b.check_in, b.check_out, b.status, r.name as room_name, r.room_number
             FROM bookings b
             JOIN rooms r ON b.room_id = r.id
             WHERE b.room_id = ? 
-              AND b.status NOT IN ('cancelled','rejected')
+              AND b.status NOT IN ('cancelled', 'rejected', 'checked_out')
               AND b.check_in < ? AND b.check_out > ?";
     $params = [$roomId, $checkOut, $checkIn];
     if ($excludeBookingId) {
@@ -74,7 +106,7 @@ function getRoomActiveBookings(int $roomId, ?int $excludeBookingId = null): arra
     $sql = "SELECT id, booking_code, check_in, check_out, status, nights
             FROM bookings
             WHERE room_id = ?
-              AND status NOT IN ('cancelled', 'rejected')
+              AND status NOT IN ('cancelled', 'rejected', 'checked_out')
               AND check_out >= CURDATE()
             ORDER BY check_in ASC";
     $params = [$roomId];
@@ -83,22 +115,33 @@ function getRoomActiveBookings(int $roomId, ?int $excludeBookingId = null): arra
         $params[] = $excludeBookingId;
     }
     $rows = dbRows($sql, $params);
-    foreach ($rows as &$r) {
+    $checkOutTime = getNormalizedCheckOutTime();
+    $nowTs = time();
+    $active = [];
+    foreach ($rows as $r) {
+        if (isBookingStayExpired((string)$r['check_out'], $checkOutTime, $nowTs)) {
+            continue;
+        }
         $r['display_dates'] = formatDate($r['check_in'], 'M d, Y') . ' — ' . formatDate($r['check_out'], 'M d, Y');
+        $active[] = $r;
     }
-    unset($r);
-    return $rows;
+    return $active;
 }
 
 // ---- Get active bookings map for all rooms (indexed by room_id) ----
 function getAllRoomsActiveBookingsMap(): array {
     $rows = dbRows("SELECT b.id, b.room_id, b.booking_code, b.check_in, b.check_out, b.status, b.nights
                     FROM bookings b
-                    WHERE b.status NOT IN ('cancelled', 'rejected')
+                    WHERE b.status NOT IN ('cancelled', 'rejected', 'checked_out')
                       AND b.check_out >= CURDATE()
                     ORDER BY b.check_in ASC");
+    $checkOutTime = getNormalizedCheckOutTime();
+    $nowTs = time();
     $map = [];
     foreach ($rows as $r) {
+        if (isBookingStayExpired((string)$r['check_out'], $checkOutTime, $nowTs)) {
+            continue;
+        }
         $rid = (int)$r['room_id'];
         if (!isset($map[$rid])) {
             $map[$rid] = [];
@@ -1292,14 +1335,112 @@ function assetUrl(string $subpath): string {
 }
 
 /**
- * Throttle autoExpireStaleBookings() so executive dashboard loads don't run cleanup queries on every refresh.
+ * Automatically check out active stays and expire un-checked-in bookings whose
+ * scheduled check-out date + check-out time (settings.check_out_time) have elapsed.
  */
-function throttleStaleBookingSweep(int $hoursThreshold = 24, int $cooldownSeconds = 300): void {
+function autoReleaseExpiredStays(string $idleRoomStatus = 'available'): array {
+    if (!in_array($idleRoomStatus, ['available', 'dirty'], true)) {
+        $idleRoomStatus = 'available';
+    }
+    $stats = ['checked_out' => 0, 'expired_noshows' => 0];
+    try {
+        $checkOutTime = getNormalizedCheckOutTime();
+        $nowStr       = date('Y-m-d H:i:s');
+        $cutoffExpr   = "CONCAT(b.check_out, ' ', ?, ':00') <= ?";
+
+        // 1. Auto check-out active checked_in bookings whose stay window ended
+        $expiredStays = dbRows("
+            SELECT b.id, b.booking_code, b.user_id, b.room_id, b.check_out
+            FROM bookings b
+            WHERE b.status = 'checked_in'
+              AND {$cutoffExpr}
+        ", [$checkOutTime, $nowStr]);
+
+        foreach ($expiredStays as $stay) {
+            $updated = dbExec(
+                "UPDATE bookings
+                 SET status = 'checked_out', checked_out_at = COALESCE(checked_out_at, NOW())
+                 WHERE id = ? AND status = 'checked_in'",
+                [(int)$stay['id']]
+            );
+            if ($updated > 0) {
+                releaseRoomOccupancyIfIdle((int)$stay['room_id'], (int)$stay['id'], $idleRoomStatus);
+                createNotification(
+                    (int)$stay['user_id'],
+                    'Stay Completed — Checked Out',
+                    "Your stay for Booking #{$stay['booking_code']} reached its scheduled check-out ({$stay['check_out']} {$checkOutTime}) and was automatically marked Checked Out. Thank you for staying with us!",
+                    'booking',
+                    'reviews.php'
+                );
+                auditLog(
+                    'Booking Auto-Checked Out',
+                    'System Daemon',
+                    "Booking #{$stay['booking_code']} automatically checked out after scheduled check-out ({$stay['check_out']} {$checkOutTime}) elapsed."
+                );
+                $stats['checked_out']++;
+            }
+        }
+
+        // 2. Auto-expire un-checked-in confirmed/pending bookings whose stay window completely ended
+        $expiredUnchecked = dbRows("
+            SELECT b.id, b.booking_code, b.user_id, b.check_out, b.status
+            FROM bookings b
+            WHERE b.status IN ('confirmed', 'pending')
+              AND {$cutoffExpr}
+        ", [$checkOutTime, $nowStr]);
+
+        foreach ($expiredUnchecked as $bk) {
+            $reason = "Auto-expired: Scheduled check-out ({$bk['check_out']} {$checkOutTime}) passed without check-in.";
+            $updated = dbExec(
+                "UPDATE bookings
+                 SET status = 'cancelled', cancelled_reason = ?, cancelled_at = COALESCE(cancelled_at, NOW())
+                 WHERE id = ? AND status IN ('confirmed', 'pending')",
+                [$reason, (int)$bk['id']]
+            );
+            if ($updated > 0) {
+                createNotification(
+                    (int)$bk['user_id'],
+                    'Reservation Window Ended',
+                    "Your reservation #{$bk['booking_code']} expired because the scheduled check-out ({$bk['check_out']} {$checkOutTime}) passed without check-in.",
+                    'alert',
+                    'my-bookings.php'
+                );
+                auditLog(
+                    'Booking Auto-Expired',
+                    'System Daemon',
+                    "Booking #{$bk['booking_code']} ({$bk['status']}) auto-cancelled after check-out ({$bk['check_out']} {$checkOutTime}) elapsed."
+                );
+                $stats['expired_noshows']++;
+            }
+        }
+
+        // 3. Heal any stale rooms still flagged 'occupied' with zero checked_in bookings remaining
+        dbExec(
+            "UPDATE rooms r
+             SET r.status = ?
+             WHERE r.status = 'occupied'
+               AND NOT EXISTS (
+                   SELECT 1 FROM bookings b WHERE b.room_id = r.id AND b.status = 'checked_in'
+               )",
+            [$idleRoomStatus]
+        );
+    } catch (\Throwable $e) {
+        if (function_exists('logError')) {
+            logError("autoReleaseExpiredStays failed: " . $e->getMessage(), ['exception' => $e]);
+        }
+    }
+    return $stats;
+}
+
+/**
+ * Throttle autoExpireStaleBookings() and autoReleaseExpiredStays() across dashboards, room boards, and booking portals.
+ */
+function throttleStaleBookingSweep(int $hoursThreshold = 24, int $cooldownSeconds = 60): void {
     $cacheDir = SITE_ROOT . '/storage/cache';
     $stampFile = $cacheDir . '/stale_booking_sweep.ts';
     $now = time();
 
-    if (is_file($stampFile)) {
+    if ($cooldownSeconds > 0 && is_file($stampFile)) {
         $lastRun = (int)@file_get_contents($stampFile);
         if ($lastRun > 0 && ($now - $lastRun) < $cooldownSeconds) {
             return;
@@ -1307,6 +1448,7 @@ function throttleStaleBookingSweep(int $hoursThreshold = 24, int $cooldownSecond
     }
 
     autoExpireStaleBookings($hoursThreshold);
+    autoReleaseExpiredStays('available');
 
     if (!is_dir($cacheDir)) {
         @mkdir($cacheDir, 0775, true);

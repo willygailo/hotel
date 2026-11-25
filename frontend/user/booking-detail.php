@@ -10,12 +10,13 @@ $userId = currentUserId();
 $bId = (int)($_GET['id'] ?? 0);
 
 $booking = dbRow("
-    SELECT b.*, r.name as room_name, r.room_number, r.price_per_night, rt.name as type_name, r.floor, r.capacity 
+    SELECT b.*, r.name as room_name, r.room_number, r.thumbnail, r.description as room_description, r.amenities as room_amenities, r.price_per_night, rt.name as type_name, r.floor, r.capacity 
     FROM bookings b 
     JOIN rooms r ON b.room_id = r.id 
     JOIN room_types rt ON r.room_type_id = rt.id 
     WHERE b.id = ? AND b.user_id = ?
 ", [$bId, $userId]);
+$defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
 
 if (!$booking) {
     setFlash('error', 'The requested booking could not be found.');
@@ -71,11 +72,32 @@ $payments = dbRows("
           <div><?= statusBadge($booking['status']) ?></div>
         </div>
 
+        <?php
+          $voucherRoomImg = roomThumbUrl($booking['thumbnail'] ?? null);
+          $voucherAmenities = safeJson($booking['room_amenities'] ?? null);
+        ?>
         <div class="form-row-2col" style="gap:24px;margin-bottom:24px;">
           <div>
-            <h4 style="color:var(--gold);font-size:0.85rem;text-transform:uppercase;margin-bottom:8px;">Room and Floor</h4>
-            <div style="font-size:1.1rem;font-weight:700;color:#fff;"><?= h($booking['room_name']) ?></div>
-            <div style="font-size:0.85rem;color:var(--text-muted);">Room #<?= h($booking['room_number']) ?> · Floor <?= $booking['floor'] ?> (<?= h($booking['type_name']) ?>)</div>
+            <h4 style="color:var(--gold);font-size:0.85rem;text-transform:uppercase;margin-bottom:10px;">Room and Floor</h4>
+            <div class="booking-voucher-room-card">
+              <img src="<?= h($voucherRoomImg) ?>"
+                   alt="<?= h($booking['room_name']) ?>"
+                   class="booking-voucher-room-img"
+                   onclick="openVoucherRoomLightbox()"
+                   title="Click to enlarge room photo"
+                   onerror="this.src='<?= h($defaultRoomImg) ?>';this.onerror=null;">
+              <div>
+                <div style="font-size:1.1rem;font-weight:700;color:#fff;"><?= h($booking['room_name']) ?></div>
+                <div style="font-size:0.85rem;color:var(--text-muted);margin-top:2px;">Room #<?= h($booking['room_number']) ?> · Floor <?= $booking['floor'] ?> (<?= h($booking['type_name']) ?>)</div>
+                <?php if (!empty($voucherAmenities)): ?>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">
+                    <?php foreach (array_slice($voucherAmenities, 0, 4) as $am): ?>
+                      <span class="room-amenity-tag"><i class="fa-solid fa-check" style="color:var(--gold);font-size:0.6rem;"></i> <?= h($am) ?></span>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
+              </div>
+            </div>
           </div>
           <div>
             <h4 style="color:var(--gold);font-size:0.85rem;text-transform:uppercase;margin-bottom:8px;">Stay Dates</h4>
@@ -227,6 +249,34 @@ $payments = dbRows("
   </main>
 </div>
 
+<!-- Room Photo Lightbox Modal -->
+<div class="room-lightbox-overlay" id="voucherRoomLightbox" onclick="closeVoucherRoomLightbox()">
+  <div class="room-lightbox-card" onclick="event.stopPropagation()">
+    <div class="room-lightbox-img-wrap">
+      <img src="<?= h($voucherRoomImg) ?>" alt="<?= h($booking['room_name']) ?>" onerror="this.src='<?= h($defaultRoomImg) ?>';this.onerror=null;">
+      <button type="button" class="room-lightbox-close" onclick="closeVoucherRoomLightbox()" aria-label="Close photo preview">&times;</button>
+    </div>
+    <div class="room-lightbox-footer">
+      <div>
+        <div style="font-family:var(--font-serif);font-size:1.15rem;font-weight:700;color:#fff;"><?= h($booking['room_name']) ?></div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;">Room #<?= h($booking['room_number']) ?> · Floor <?= (int)$booking['floor'] ?> · <?= h($booking['type_name']) ?></div>
+      </div>
+      <div style="color:var(--gold);font-weight:700;font-size:1.05rem;"><?= formatCurrency((float)$booking['price_per_night']) ?>/night</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function openVoucherRoomLightbox() {
+  document.getElementById('voucherRoomLightbox')?.classList.add('active');
+}
+function closeVoucherRoomLightbox() {
+  document.getElementById('voucherRoomLightbox')?.classList.remove('active');
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeVoucherRoomLightbox();
+});
+</script>
 <script src="../frontend/assets/js/core.js"></script>
 <script src="../frontend/assets/js/user.js"></script>
 <?php require_once __DIR__ . '/../components/ai-chatbot.php'; ?>

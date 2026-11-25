@@ -28,12 +28,36 @@ releaseReadOnlySession();
 throttleStaleBookingSweep(24, 15);
 
 $selectedRoomId = (int)($_GET['room_id'] ?? 0);
-$rooms = dbRows("SELECT * FROM rooms WHERE status != 'maintenance' ORDER BY price_per_night ASC");
+$rooms = dbRows("
+    SELECT r.*, rt.name AS type_name
+    FROM rooms r
+    LEFT JOIN room_types rt ON r.room_type_id = rt.id
+    WHERE r.status != 'maintenance'
+    ORDER BY r.price_per_night ASC
+");
 $allBookingsMap = getAllRoomsActiveBookingsMap();
+$defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
 
 $roomOccupancyMap = [];
+$roomsClientMap = [];
 foreach ($rooms as $rm) {
-    $roomOccupancyMap[$rm['id']] = getRoomOccupancyStatus((int)$rm['id'], $rm['status'], $allBookingsMap[(int)$rm['id']] ?? []);
+    $rid = (int)$rm['id'];
+    $occ = getRoomOccupancyStatus($rid, $rm['status'], $allBookingsMap[$rid] ?? []);
+    $roomOccupancyMap[$rid] = $occ;
+    $roomsClientMap[$rid] = [
+        'id'              => $rid,
+        'name'            => (string)$rm['name'],
+        'room_number'     => (string)($rm['room_number'] ?? ''),
+        'type_name'       => (string)($rm['type_name'] ?? 'Room'),
+        'floor'           => (int)($rm['floor'] ?? 1),
+        'capacity'        => (int)($rm['capacity'] ?? 1),
+        'price_per_night' => (float)$rm['price_per_night'],
+        'description'     => (string)($rm['description'] ?? ''),
+        'amenities'       => safeJson($rm['amenities'] ?? null),
+        'thumbnail_url'   => roomThumbUrl($rm['thumbnail'] ?? null),
+        'status_state'    => (string)$occ['state'],
+        'status_label'    => (string)$occ['label'],
+    ];
 }
 
 // Payment Channel Settings
@@ -369,15 +393,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
       </div>
 
-      <div class="glass-card" style="max-width:820px;padding:32px;">
+      <div class="glass-card" style="max-width:960px;padding:32px;">
         <form action="" method="POST" id="bookingForm" enctype="multipart/form-data">
           <?= csrfField() ?>
           <input type="hidden" name="action_mode" id="actionModeInput" value="book_and_pay">
           <input type="hidden" name="payment_method" id="selectedMethodInput" value="maya">
 
-          <!-- 1. Room Selection -->
+          <!-- 1. Room Selection (Visual Room Gallery + Synced Dropdown) -->
           <div class="form-group">
-            <label class="form-label">Choose a Room or Dormitory <span class="required">*</span></label>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+              <label class="form-label" style="margin-bottom:0;">Choose a Room or Dormitory <span class="required">*</span></label>
+              <span style="font-size:0.76rem;color:var(--text-muted);"><i class="fa-solid fa-images" style="color:var(--gold);"></i> Click a room card to select, or click <i class="fa-solid fa-expand"></i> to view photo</span>
+            </div>
+
+            <?php if (!empty($rooms)): ?>
+              <div class="booking-room-picker-grid" id="bookingRoomPickerGrid">
+                <?php foreach ($rooms as $rm):
+                  $rid = (int)$rm['id'];
+                  $occ = $roomOccupancyMap[$rid];
+                  $thumbUrl = roomThumbUrl($rm['thumbnail'] ?? null);
+                  $isSelected = ($selectedRoomId === $rid);
+                ?>
+                  <div class="booking-room-card<?= $isSelected ? ' selected' : '' ?>"
+                       data-room-id="<?= $rid ?>"
+                       role="button"
+                       tabindex="0"
+                       aria-pressed="<?= $isSelected ? 'true' : 'false' ?>"
+                       onclick="selectBookingRoom(<?= $rid ?>)"
+                       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectBookingRoom(<?= $rid ?>);}">
+                    <div class="booking-room-card-media">
+                      <img src="<?= h($thumbUrl) ?>"
+                           alt="<?= h($rm['name']) ?>"
+                           loading="lazy"
+                           decoding="async"
+                           onerror="this.src='<?= h($defaultRoomImg) ?>';this.onerror=null;">
+                      <div class="booking-room-card-status"><?= $occ['tag_html'] ?></div>
+                      <button type="button"
+                              class="booking-room-card-zoom"
+                              title="View full room photo"
+                              aria-label="View full photo of <?= h($rm['name']) ?>"
+                              onclick="event.stopPropagation();openRoomLightbox(<?= $rid ?>);">
+                        <i class="fa-solid fa-expand"></i>
+                      </button>
+                      <span class="booking-room-selected-pill"><i class="fa-solid fa-check"></i> Selected</span>
+                    </div>
+                    <div class="booking-room-card-body">
+                      <div class="booking-room-card-type"><?= h($rm['type_name'] ?: 'Room') ?> · #<?= h($rm['room_number']) ?></div>
+                      <div class="booking-room-card-title"><?= h($rm['name']) ?></div>
+                      <div class="booking-room-card-meta">Floor <?= (int)$rm['floor'] ?> · Max <?= (int)$rm['capacity'] ?> pax</div>
+                      <div class="booking-room-card-price">₱<?= number_format((float)$rm['price_per_night'], 2) ?> <span>/night</span></div>
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
+
             <select name="room_id" id="roomSelect" class="form-control" required onchange="onRoomOrDateChanged('room')">
               <option value="" data-price="0" data-capacity="0">-- Select Room Here --</option>
               <?php foreach ($rooms as $rm): 
@@ -401,6 +471,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </option>
               <?php endforeach; ?>
             </select>
+          </div>
+
+          <!-- Selected Room Featured Photo Preview -->
+          <div class="selected-room-preview" id="selectedRoomPreview">
+            <div class="selected-room-preview-media" id="selectedRoomPreviewMedia" onclick="openSelectedRoomLightbox()" title="Click to enlarge room photo">
+              <img id="selectedRoomPreviewImg" src="<?= h($defaultRoomImg) ?>" alt="Selected Room Photo">
+              <span class="selected-room-zoom-hint"><i class="fa-solid fa-magnifying-glass-plus"></i> View Photo</span>
+            </div>
+            <div class="selected-room-preview-info">
+              <div class="selected-room-preview-header">
+                <div>
+                  <span class="badge badge-gold" id="selectedRoomPreviewType" style="font-size:0.68rem;margin-bottom:4px;display:inline-block;">Room</span>
+                  <div class="selected-room-preview-name" id="selectedRoomPreviewName">--</div>
+                </div>
+                <div class="selected-room-preview-price" id="selectedRoomPreviewPrice">₱0.00/night</div>
+              </div>
+              <div class="selected-room-preview-meta" id="selectedRoomPreviewMeta"></div>
+              <p class="selected-room-preview-desc" id="selectedRoomPreviewDesc"></p>
+              <div class="selected-room-preview-amenities" id="selectedRoomPreviewAmenities"></div>
+            </div>
           </div>
 
           <!-- Real-Time Room Schedule & Reserved Dates Display -->
@@ -481,10 +571,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
           <!-- 5. Dynamic Live Stay & Payment Calculator Summary -->
           <div class="calc-summary-card" id="calcSummaryBox">
-            <div>
-              <div style="font-size:0.75rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.5px;">Stay Summary</div>
-              <div style="color:#fff;font-weight:600;font-size:0.95rem;margin-top:2px;" id="summaryRoomName">Select a room and stay dates</div>
-              <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;" id="summaryDatesText">0 nights · Rate: ₱0.00/night</div>
+            <div style="display:flex;align-items:center;gap:14px;">
+              <img id="summaryRoomThumb" src="<?= h($defaultRoomImg) ?>" alt="Selected room thumbnail" class="booking-thumb-md" style="display:none;cursor:pointer;" onclick="openSelectedRoomLightbox()" title="Click to enlarge room photo">
+              <div>
+                <div style="font-size:0.75rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.5px;">Stay Summary</div>
+                <div style="color:#fff;font-weight:600;font-size:0.95rem;margin-top:2px;" id="summaryRoomName">Select a room and stay dates</div>
+                <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;" id="summaryDatesText">0 nights · Rate: ₱0.00/night</div>
+              </div>
             </div>
             <div style="text-align:right;">
               <div style="font-size:0.75rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.5px;">Estimated Total</div>
@@ -533,10 +626,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       
       <!-- Summary Bar in Modal -->
       <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-        <div>
-          <div style="font-size:0.75rem;text-transform:uppercase;color:var(--text-muted);">Assigned Room</div>
-          <div style="color:#fff;font-weight:700;font-size:1.05rem;" id="modalRoomName">--</div>
-          <div style="font-size:0.8rem;color:var(--text-muted);" id="modalStayDates">--</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img id="modalRoomThumb" src="<?= h($defaultRoomImg) ?>" alt="Room thumbnail" class="booking-thumb-md" style="display:none;">
+          <div>
+            <div style="font-size:0.75rem;text-transform:uppercase;color:var(--text-muted);">Assigned Room</div>
+            <div style="color:#fff;font-weight:700;font-size:1.05rem;" id="modalRoomName">--</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);" id="modalStayDates">--</div>
+          </div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:0.75rem;text-transform:uppercase;color:var(--text-muted);">Amount to Pay</div>
@@ -677,6 +773,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
 </div>
 
+<!-- Room Photo Lightbox Modal -->
+<div class="room-lightbox-overlay" id="roomImageLightbox" onclick="closeRoomLightbox(event)">
+  <div class="room-lightbox-card" onclick="event.stopPropagation()">
+    <div class="room-lightbox-img-wrap">
+      <img id="roomLightboxImg" src="<?= h($defaultRoomImg) ?>" alt="Room Photo">
+      <button type="button" class="room-lightbox-close" onclick="closeRoomLightbox()" aria-label="Close photo preview">&times;</button>
+    </div>
+    <div class="room-lightbox-footer">
+      <div>
+        <div style="font-family:var(--font-serif);font-size:1.15rem;font-weight:700;color:#fff;" id="roomLightboxTitle">--</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;" id="roomLightboxMeta">--</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="color:var(--gold);font-weight:700;font-size:1.05rem;" id="roomLightboxPrice">₱0.00/night</div>
+        <button type="button" class="btn btn-gold btn-sm" id="roomLightboxSelectBtn" onclick="selectRoomFromLightbox()">
+          <i class="fa-solid fa-check"></i> Select Room
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="../frontend/assets/js/core.js"></script>
 <script src="../frontend/assets/js/user.js"></script>
 <script>
@@ -704,9 +822,171 @@ function switchModalChannel(channel) {
   }
 }
 
-// Global data for room availability & anti-duplicate schedule checking
+// Global data for room availability, room visuals & anti-duplicate schedule checking
 window.ROOM_ACTIVE_BOOKINGS = <?= json_encode($allBookingsMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+window.BOOKING_ROOMS_DATA = <?= json_encode($roomsClientMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+window.DEFAULT_ROOM_IMG = <?= json_encode($defaultRoomImg, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 window.TODAY_DATE = "<?= date('Y-m-d') ?>";
+
+let lightboxRoomId = null;
+
+function getRoomData(roomId) {
+  if (!roomId || !window.BOOKING_ROOMS_DATA) return null;
+  return window.BOOKING_ROOMS_DATA[String(roomId)] || window.BOOKING_ROOMS_DATA[Number(roomId)] || null;
+}
+
+function setImgWithFallback(imgEl, url, altText) {
+  if (!imgEl) return;
+  const fallback = window.DEFAULT_ROOM_IMG || '../frontend/assets/images/rooms/default-room.jpg';
+  imgEl.onerror = function() {
+    this.onerror = null;
+    this.src = fallback;
+  };
+  imgEl.src = url || fallback;
+  if (altText !== undefined) {
+    imgEl.alt = altText;
+  }
+}
+
+function selectBookingRoom(roomId) {
+  const roomSelect = document.getElementById('roomSelect');
+  if (!roomSelect) return;
+  const targetVal = String(roomId);
+  if (roomSelect.value !== targetVal) {
+    roomSelect.value = targetVal;
+    roomSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  } else {
+    syncSelectedRoomVisuals();
+  }
+}
+
+function syncSelectedRoomVisuals() {
+  const roomSelect = document.getElementById('roomSelect');
+  const previewEl = document.getElementById('selectedRoomPreview');
+  const summaryThumb = document.getElementById('summaryRoomThumb');
+  const guestsInput = document.getElementById('guestsCount');
+  const selectedId = roomSelect ? roomSelect.value : '';
+  const room = getRoomData(selectedId);
+
+  // Sync card selection state
+  document.querySelectorAll('#bookingRoomPickerGrid .booking-room-card').forEach((card) => {
+    const isMatch = selectedId && card.getAttribute('data-room-id') === String(selectedId);
+    card.classList.toggle('selected', Boolean(isMatch));
+    card.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+  });
+
+  if (!room) {
+    if (previewEl) previewEl.classList.remove('visible');
+    if (summaryThumb) summaryThumb.style.display = 'none';
+    if (guestsInput) guestsInput.max = '10';
+    return;
+  }
+
+  if (previewEl) {
+    previewEl.classList.add('visible');
+    const previewImg = document.getElementById('selectedRoomPreviewImg');
+    const typeEl = document.getElementById('selectedRoomPreviewType');
+    const nameEl = document.getElementById('selectedRoomPreviewName');
+    const priceEl = document.getElementById('selectedRoomPreviewPrice');
+    const metaEl = document.getElementById('selectedRoomPreviewMeta');
+    const descEl = document.getElementById('selectedRoomPreviewDesc');
+    const amenitiesEl = document.getElementById('selectedRoomPreviewAmenities');
+
+    setImgWithFallback(previewImg, room.thumbnail_url, room.name);
+    if (typeEl) typeEl.textContent = room.type_name || 'Room';
+    if (nameEl) nameEl.textContent = room.name;
+    if (priceEl) {
+      priceEl.textContent = '₱' + Number(room.price_per_night || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '/night';
+    }
+    if (metaEl) {
+      metaEl.innerHTML = '';
+      const metaItems = [
+        { icon: 'fa-door-closed', text: 'Room #' + (room.room_number || '-') },
+        { icon: 'fa-layer-group', text: 'Floor ' + (room.floor || 1) },
+        { icon: 'fa-users', text: 'Max ' + (room.capacity || 1) + ' pax' }
+      ];
+      metaItems.forEach((m) => {
+        const span = document.createElement('span');
+        span.innerHTML = '<i class="fa-solid ' + m.icon + '" style="color:var(--gold);margin-right:4px;"></i>';
+        span.appendChild(document.createTextNode(m.text));
+        metaEl.appendChild(span);
+      });
+    }
+    if (descEl) {
+      descEl.textContent = room.description || 'Comfortable accommodation ready for your stay.';
+    }
+    if (amenitiesEl) {
+      amenitiesEl.innerHTML = '';
+      const list = Array.isArray(room.amenities) ? room.amenities.slice(0, 6) : [];
+      list.forEach((am) => {
+        const chip = document.createElement('span');
+        chip.className = 'room-amenity-tag';
+        chip.innerHTML = '<i class="fa-solid fa-check" style="color:var(--gold);font-size:0.62rem;"></i>';
+        chip.appendChild(document.createTextNode(' ' + String(am)));
+        amenitiesEl.appendChild(chip);
+      });
+    }
+  }
+
+  if (summaryThumb) {
+    setImgWithFallback(summaryThumb, room.thumbnail_url, room.name);
+    summaryThumb.style.display = 'block';
+  }
+
+  if (guestsInput && room.capacity > 0) {
+    guestsInput.max = String(room.capacity);
+    if (parseInt(guestsInput.value, 10) > room.capacity) {
+      guestsInput.value = String(room.capacity);
+    }
+  }
+}
+
+function openRoomLightbox(roomId) {
+  const room = getRoomData(roomId);
+  if (!room) return;
+  lightboxRoomId = room.id;
+
+  setImgWithFallback(document.getElementById('roomLightboxImg'), room.thumbnail_url, room.name);
+  document.getElementById('roomLightboxTitle').textContent = room.name;
+  document.getElementById('roomLightboxMeta').textContent =
+    (room.type_name || 'Room') + ' · Room #' + (room.room_number || '-') + ' · Floor ' + (room.floor || 1) + ' · Max ' + (room.capacity || 1) + ' pax';
+  document.getElementById('roomLightboxPrice').textContent =
+    '₱' + Number(room.price_per_night || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '/night';
+
+  const selectBtn = document.getElementById('roomLightboxSelectBtn');
+  const currentSelected = document.getElementById('roomSelect')?.value || '';
+  if (selectBtn) {
+    if (String(currentSelected) === String(room.id)) {
+      selectBtn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Selected';
+    } else {
+      selectBtn.innerHTML = '<i class="fa-solid fa-check"></i> Select Room';
+    }
+  }
+
+  document.getElementById('roomImageLightbox').classList.add('active');
+}
+
+function openSelectedRoomLightbox() {
+  const roomId = document.getElementById('roomSelect')?.value;
+  if (roomId) openRoomLightbox(roomId);
+}
+
+function selectRoomFromLightbox() {
+  if (lightboxRoomId) {
+    selectBookingRoom(lightboxRoomId);
+  }
+  closeRoomLightbox();
+}
+
+function closeRoomLightbox(e) {
+  document.getElementById('roomImageLightbox')?.classList.remove('active');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeRoomLightbox();
+  }
+});
 
 function onRoomOrDateChanged(triggerSource) {
   const checkInInput = document.getElementById('checkInDate');
@@ -723,6 +1003,7 @@ function onRoomOrDateChanged(triggerSource) {
     }
   }
 
+  syncSelectedRoomVisuals();
   updatePriceCalculator();
   checkRoomScheduleAndConflict();
 }
@@ -919,6 +1200,15 @@ function openPaymentModal() {
   document.getElementById('modalRoomName').textContent = roomName;
   document.getElementById('modalStayDates').textContent = checkIn + ' to ' + checkOut + ' (' + diffDays + (diffDays === 1 ? ' night' : ' nights') + ')';
   document.getElementById('modalTotalAmount').textContent = '₱' + total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  const modalThumb = document.getElementById('modalRoomThumb');
+  const selectedRoomData = getRoomData(roomSelect.value);
+  if (modalThumb && selectedRoomData) {
+    setImgWithFallback(modalThumb, selectedRoomData.thumbnail_url, selectedRoomData.name);
+    modalThumb.style.display = 'block';
+  } else if (modalThumb) {
+    modalThumb.style.display = 'none';
+  }
 
   // Open the pop-up modal
   document.getElementById('paymentCheckoutModal').classList.add('active');

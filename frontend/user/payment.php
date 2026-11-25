@@ -21,7 +21,8 @@ if (!$kyc['is_verified']) {
 }
 
 $bookingId = (int)($_GET['booking_id'] ?? 0);
-$booking = dbRow("SELECT b.*, r.name as room_name, r.room_number FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE b.id = ? AND b.user_id = ?", [$bookingId, $userId]);
+$booking = dbRow("SELECT b.*, r.name as room_name, r.room_number, r.thumbnail FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE b.id = ? AND b.user_id = ?", [$bookingId, $userId]);
+$defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
 
 if (!$booking) {
     setFlash('error', 'The requested booking could not be found.');
@@ -304,9 +305,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <span style="font-size:0.8rem;text-transform:uppercase;color:var(--gold);font-weight:700;letter-spacing:1px;">Booking Settlement</span>
       <h2 style="font-family:var(--font-serif);font-size:1.75rem;color:#fff;margin:4px 0 8px;">Pay for Booking #<?= h($booking['booking_code']) ?></h2>
       <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:14px 18px;">
-        <div>
-          <div style="font-size:0.8rem;color:var(--text-muted);">Assigned Room</div>
-          <div style="font-size:1.05rem;font-weight:600;color:#fff;"><?= h($booking['room_name']) ?> <span style="font-size:0.85rem;color:var(--text-muted);">(Room <?= h($booking['room_number']) ?>)</span></div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <img src="<?= h(roomThumbUrl($booking['thumbnail'] ?? null)) ?>"
+               alt="<?= h($booking['room_name']) ?>"
+               class="booking-thumb-md"
+               onerror="this.src='<?= h($defaultRoomImg) ?>';this.onerror=null;">
+          <div>
+            <div style="font-size:0.8rem;color:var(--text-muted);">Assigned Room</div>
+            <div style="font-size:1.05rem;font-weight:600;color:#fff;"><?= h($booking['room_name']) ?> <span style="font-size:0.85rem;color:var(--text-muted);">(Room <?= h($booking['room_number']) ?>)</span></div>
+          </div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:0.8rem;color:var(--text-muted);">Total Amount Payable</div>

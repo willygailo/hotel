@@ -25,6 +25,7 @@ $recentBookings = dbRows("
     ORDER BY b.id DESC 
     LIMIT 5
 ", [$userId]);
+$defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -152,7 +153,17 @@ $recentBookings = dbRows("
                   <?php foreach ($recentBookings as $b): ?>
                     <tr>
                       <td><strong><?= h($b['booking_code']) ?></strong></td>
-                      <td><?= h($b['room_name']) ?></td>
+                      <td>
+                        <div class="booking-room-cell">
+                          <img src="<?= h(roomThumbUrl($b['thumbnail'] ?? null)) ?>"
+                               alt="<?= h($b['room_name']) ?>"
+                               class="booking-thumb-sm"
+                               loading="lazy"
+                               decoding="async"
+                               onerror="this.src='<?= h($defaultRoomImg) ?>';this.onerror=null;">
+                          <span><?= h($b['room_name']) ?></span>
+                        </div>
+                      </td>
                       <td><?= formatDate($b['check_in']) ?> - <?= formatDate($b['check_out']) ?></td>
                       <td style="color:var(--gold);font-weight:600;"><?= formatCurrency($b['total_amount']) ?></td>
                       <td><?= statusBadge($b['status']) ?></td>
@@ -177,10 +188,18 @@ $recentBookings = dbRows("
               <?php foreach ($recentBookings as $b): ?>
                 <div class="booking-mobile-card">
                   <div class="bmc-header">
-                    <div>
-                      <div class="bmc-code"><?= h($b['booking_code']) ?></div>
-                      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">
-                        <?= h($b['room_name']) ?>
+                    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                      <img src="<?= h(roomThumbUrl($b['thumbnail'] ?? null)) ?>"
+                           alt="<?= h($b['room_name']) ?>"
+                           class="booking-thumb-sm"
+                           loading="lazy"
+                           decoding="async"
+                           onerror="this.src='<?= h($defaultRoomImg) ?>';this.onerror=null;">
+                      <div style="min-width:0;">
+                        <div class="bmc-code"><?= h($b['booking_code']) ?></div>
+                        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">
+                          <?= h($b['room_name']) ?>
+                        </div>
                       </div>
                     </div>
                     <div>

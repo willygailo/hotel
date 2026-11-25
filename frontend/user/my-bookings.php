@@ -32,13 +32,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_booking'])) {
 }
 
 $bookings = dbRows("
-    SELECT b.*, r.name as room_name, r.price_per_night, rt.name as type_name 
+    SELECT b.*, r.name as room_name, r.room_number, r.thumbnail, r.price_per_night, rt.name as type_name 
     FROM bookings b 
     JOIN rooms r ON b.room_id = r.id 
     JOIN room_types rt ON r.room_type_id = rt.id 
     WHERE b.user_id = ? 
     ORDER BY b.id DESC
 ", [$userId]);
+$defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -100,7 +101,25 @@ $bookings = dbRows("
                   <?php foreach ($bookings as $b): ?>
                     <tr>
                       <td class="col-nowrap"><strong><?= h($b['booking_code']) ?></strong></td>
-                      <td><?= h($b['room_name']) ?> <span class="badge badge-gold" style="font-size:0.65rem;"><?= h($b['type_name']) ?></span></td>
+                      <td>
+                        <div class="booking-room-cell">
+                          <img src="<?= h(roomThumbUrl($b['thumbnail'] ?? null)) ?>"
+                               alt="<?= h($b['room_name']) ?>"
+                               class="booking-thumb-sm"
+                               loading="lazy"
+                               decoding="async"
+                               onerror="this.src='<?= h($defaultRoomImg) ?>';this.onerror=null;">
+                          <div>
+                            <div style="font-weight:600;color:#fff;"><?= h($b['room_name']) ?></div>
+                            <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+                              <span class="badge badge-gold" style="font-size:0.65rem;"><?= h($b['type_name']) ?></span>
+                              <?php if (!empty($b['room_number'])): ?>
+                                <span style="font-size:0.72rem;color:var(--text-muted);">#<?= h($b['room_number']) ?></span>
+                              <?php endif; ?>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
                       <td class="col-nowrap" style="white-space:nowrap;"><?= formatDate($b['check_in']) ?> &rarr; <?= formatDate($b['check_out']) ?></td>
                       <td class="col-nowrap"><?= $b['nights'] ?> nights</td>
                       <td class="col-amount">
@@ -173,12 +192,21 @@ $bookings = dbRows("
                   </div>
 
                   <div class="bmc-body">
-                    <div class="bmc-row">
-                      <span class="bmc-label"><i class="fa-solid fa-bed"></i> Room:</span>
-                      <span class="bmc-value">
-                        <strong><?= h($b['room_name']) ?></strong>
-                        <span class="badge badge-gold" style="font-size:0.65rem;margin-left:4px;"><?= h($b['type_name']) ?></span>
-                      </span>
+                    <div class="bmc-room-strip">
+                      <img src="<?= h(roomThumbUrl($b['thumbnail'] ?? null)) ?>"
+                           alt="<?= h($b['room_name']) ?>"
+                           loading="lazy"
+                           decoding="async"
+                           onerror="this.src='<?= h($defaultRoomImg) ?>';this.onerror=null;">
+                      <div style="min-width:0;">
+                        <div style="font-weight:700;color:#fff;font-size:0.9rem;line-height:1.25;"><?= h($b['room_name']) ?></div>
+                        <div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap;">
+                          <span class="badge badge-gold" style="font-size:0.65rem;"><?= h($b['type_name']) ?></span>
+                          <?php if (!empty($b['room_number'])): ?>
+                            <span style="font-size:0.72rem;color:var(--text-muted);">Room #<?= h($b['room_number']) ?></span>
+                          <?php endif; ?>
+                        </div>
+                      </div>
                     </div>
 
                     <div class="bmc-row">

@@ -52,6 +52,7 @@ if ($requestId <= 0) {
 }
 
 try {
+    ensurePasswordResetSchema();
     $row = dbRow(
         "SELECT pr.id, pr.user_id, pr.email, pr.status, pr.dispatch_type,
                 pr.new_password_assigned, pr.requested_at, pr.resolved_at,
@@ -64,6 +65,7 @@ try {
         [$requestId]
     );
 } catch (\Throwable $e) {
+    error_log('check-reset-status query failed: ' . $e->getMessage());
     echo json_encode(['status' => 'pending', 'email' => (string)($watch['email'] ?? '')]);
     exit;
 }

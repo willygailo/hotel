@@ -18,6 +18,10 @@ if (!function_exists('renderPasswordResetStatusModal')) {
         $inlineStatusId = (string)($options['inline_status_id'] ?? '');
         $csrfToken = function_exists('generateCsrfToken') ? generateCsrfToken() : '';
         $watchEmail = (string)($watch['email'] ?? '');
+        $authBase = defined('SITE_URL') ? rtrim((string)SITE_URL, '/') . '/auth/' : '';
+        $pollUrl = $authBase . 'check-reset-status.php';
+        $forgotUrl = $authBase . 'forgot-password.php';
+        $loginFallbackUrl = $authBase . 'login.php';
         ?>
 <style>
   .pr-modal-backdrop {
@@ -267,7 +271,9 @@ if (!function_exists('renderPasswordResetStatusModal')) {
 
 <script>
 (function() {
-  const POLL_URL = 'check-reset-status.php';
+  const POLL_URL = <?= json_encode($pollUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+  const FORGOT_URL = <?= json_encode($forgotUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+  const LOGIN_FALLBACK_URL = <?= json_encode($loginFallbackUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
   const POLL_INTERVAL = <?= (int)$pollIntervalMs ?>;
   const CSRF_TOKEN = <?= json_encode($csrfToken, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
   const INLINE_CARD_ID = <?= json_encode($inlineStatusId, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
@@ -466,7 +472,15 @@ if (!function_exists('renderPasswordResetStatusModal')) {
         cache: 'no-store',
         headers: { 'Accept': 'application/json' }
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        if (isManual && manualBtn) {
+          manualBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Retry Check';
+          setTimeout(() => {
+            if (!inFlight) manualBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Check Now';
+          }, 2200);
+        }
+        return;
+      }
       const data = await res.json();
 
       if (data.status === 'completed') {
@@ -481,12 +495,20 @@ if (!function_exists('renderPasswordResetStatusModal')) {
         updateInlineCard(data.status, data);
       }
     } catch (e) {
-      // Transient network error — keep polling quietly
+      // Transient network error — keep polling quietly, show brief retry cue on manual click
+      if (isManual && manualBtn) {
+        manualBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Retry Check';
+        setTimeout(() => {
+          if (!inFlight) manualBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Check Now';
+        }, 2200);
+      }
     } finally {
       inFlight = false;
-      if (isManual && manualBtn) {
+      if (isManual && manualBtn && manualBtn.innerHTML.includes('Checking')) {
         manualBtn.disabled = false;
         manualBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Check Now';
+      } else if (isManual && manualBtn) {
+        manualBtn.disabled = false;
       }
     }
   }
@@ -552,7 +574,7 @@ if (!function_exists('renderPasswordResetStatusModal')) {
 
   if (proceedLoginBtn) {
     proceedLoginBtn.addEventListener('click', () => {
-      const target = (latestCompletedPayload && latestCompletedPayload.login_url) ? latestCompletedPayload.login_url : 'login.php';
+      const target = (latestCompletedPayload && latestCompletedPayload.login_url) ? latestCompletedPayload.login_url : LOGIN_FALLBACK_URL;
       acknowledgeAndGo(target);
     });
   }
@@ -563,7 +585,7 @@ if (!function_exists('renderPasswordResetStatusModal')) {
 
   if (openResetLinkBtn) {
     openResetLinkBtn.addEventListener('click', () => {
-      const target = (latestCompletedPayload && latestCompletedPayload.reset_url) ? latestCompletedPayload.reset_url : 'forgot-password.php';
+      const target = (latestCompletedPayload && latestCompletedPayload.reset_url) ? latestCompletedPayload.reset_url : FORGOT_URL;
       acknowledgeAndGo(target);
     });
   }
@@ -590,7 +612,7 @@ if (!function_exists('renderPasswordResetStatusModal')) {
       await postAction('cancel');
       document.title = ORIGINAL_TITLE;
       updateInlineCard('none', null);
-      window.location.href = 'forgot-password.php';
+      window.location.href = FORGOT_URL;
     }
   };
 

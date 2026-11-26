@@ -10,9 +10,14 @@ require_once __DIR__ . '/../../backend/core/session.php';
 require_once __DIR__ . '/../../backend/core/functions.php';
 require_once __DIR__ . '/../../backend/core/rate-limiter.php';
 
-redirectIfLoggedIn();
+if (isLoggedIn()) {
+    if (!isUser() || (empty($_GET['token']) && empty($_SESSION['password_reset_watch']['token']))) {
+        redirectIfLoggedIn();
+    }
+}
 
 applyAuthRateLimit('reset');
+ensurePasswordResetSchema();
 
 $token = trim($_GET['token'] ?? '');
 $error = '';
@@ -20,12 +25,12 @@ $success = '';
 $validToken = false;
 $user = null;
 
-// Validate token
+// Validate token using PHP timezone timestamp to match reset_expires written by PHP
 if ($token) {
     $user = dbRow(
         "SELECT id, first_name, last_name, email FROM users 
-         WHERE reset_token = ? AND reset_expires > NOW() AND role = 'user'",
-        [$token]
+         WHERE reset_token = ? AND reset_expires > ? AND role = 'user'",
+        [$token, appNowSql()]
     );
     if ($user) {
         $validToken = true;

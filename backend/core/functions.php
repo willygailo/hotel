@@ -1142,6 +1142,9 @@ function buildResetStatusPayload(?array $row, array $watch, int $expiryMinutes =
             ? formatDate($row['resolved_at'], 'M d, Y h:i A')
             : date('M d, Y h:i A', $now);
 
+        // Absolute auth URLs so popup redirects work from any page path
+        $authBase = defined('SITE_URL') ? rtrim((string)SITE_URL, '/') . '/auth/' : '';
+
         if ($dispatchType === 'link') {
             $resetToken = (string)($row['reset_token'] ?? '');
             $resetExpiresTs = !empty($row['reset_expires']) ? strtotime((string)$row['reset_expires']) : false;
@@ -1156,8 +1159,8 @@ function buildResetStatusPayload(?array $row, array $watch, int $expiryMinutes =
                 'dispatch_type' => 'link',
                 'email'         => $email,
                 'resolved_at'   => $resolvedFormatted,
-                'reset_url'     => 'reset-password.php?token=' . urlencode($resetToken),
-                'login_url'     => 'login.php?email=' . urlencode($email),
+                'reset_url'     => $authBase . 'reset-password.php?token=' . urlencode($resetToken),
+                'login_url'     => $authBase . 'login.php?email=' . urlencode($email),
             ];
         }
 
@@ -1175,7 +1178,7 @@ function buildResetStatusPayload(?array $row, array $watch, int $expiryMinutes =
             'email'         => $email,
             'resolved_at'   => $resolvedFormatted,
             'new_password'  => $newPass,
-            'login_url'     => 'login.php?email=' . urlencode($email),
+            'login_url'     => $authBase . 'login.php?email=' . urlencode($email),
         ];
     }
 
@@ -1199,8 +1202,8 @@ function consumePasswordResetWatch(): void {
             $row = dbRow("SELECT id, request_token FROM password_reset_requests WHERE id = ? LIMIT 1", [$requestId]);
             if ($row && verifyResetRequestToken($row['request_token'] ?? null, $rawToken)) {
                 dbExec(
-                    "UPDATE password_reset_requests SET user_notified_at = COALESCE(user_notified_at, NOW()) WHERE id = ?",
-                    [$requestId]
+                    "UPDATE password_reset_requests SET user_notified_at = COALESCE(user_notified_at, ?) WHERE id = ?",
+                    [date('Y-m-d H:i:s'), $requestId]
                 );
             }
         } catch (\Throwable $e) {
@@ -1490,6 +1493,92 @@ function ensureTempCredentialSchema(): bool {
 }
 
 /**
+ * Idempotently ensure the password_reset_requests table matches the live-popup schema
+ * (status ENUM incl. 'dismissed', request_token, dispatch_type, user_notified_at, ...).
+ * Safety bridge if migrations 0014 / 0016 / 0019 were not (fully) applied.
+ */
+function ensurePasswordResetSchema(): bool {
+    static $ready = null;
+    if ($ready !== null) {
+        return $ready;
+    }
+    try {
+        dbExec("CREATE TABLE IF NOT EXISTS `password_reset_requests` (
+            `id`                    INT(11) NOT NULL AUTO_INCREMENT,
+            `user_id`               INT(11) DEFAULT NULL,
+            `email`                 VARCHAR(191) NOT NULL,
+            `phone`                 VARCHAR(30) DEFAULT NULL,
+            `request_token`         VARCHAR(64) DEFAULT NULL,
+            `status`                ENUM('pending','completed','dismissed') NOT NULL DEFAULT 'pending',
+            `dispatch_type`         ENUM('password','link') DEFAULT NULL,
+            `new_password_assigned` VARCHAR(255) DEFAULT NULL,
+            `requested_at`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `resolved_at`           DATETIME DEFAULT NULL,
+            `user_notified_at`      DATETIME DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            KEY `idx_prr_status` (`status`),
+            KEY `idx_prr_user` (`user_id`),
+            KEY `idx_prr_token` (`request_token`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+        $cols = [];
+        foreach (dbRows("SHOW COLUMNS FROM `password_reset_requests`") as $c) {
+            $cols[strtolower((string)$c['Field'])] = strtolower((string)$c['Type']);
+        }
+
+        // 1. status ENUM must contain pending/completed/dismissed (keep any legacy values to avoid truncation)
+        $statusType = $cols['status'] ?? '';
+        if (strpos($statusType, "'dismissed'") === false || strpos($statusType, "'completed'") === false || strpos($statusType, "'pending'") === false) {
+            $values = ['pending', 'completed', 'dismissed'];
+            if (preg_match_all("/'([^']*)'/", $statusType, $m)) {
+                $values = array_values(array_unique(array_merge($values, $m[1])));
+            }
+            $enumSql = implode(',', array_map(fn($v) => "'" . str_replace("'", "''", $v) . "'", $values));
+            dbExec("ALTER TABLE `password_reset_requests` MODIFY COLUMN `status` ENUM({$enumSql}) NOT NULL DEFAULT 'pending'");
+        }
+
+        // 2. Live-popup columns
+        $adds = [
+            'request_token'         => "ADD COLUMN `request_token` VARCHAR(64) DEFAULT NULL",
+            'dispatch_type'         => "ADD COLUMN `dispatch_type` ENUM('password','link') DEFAULT NULL",
+            'new_password_assigned' => "ADD COLUMN `new_password_assigned` VARCHAR(255) DEFAULT NULL",
+            'resolved_at'           => "ADD COLUMN `resolved_at` DATETIME DEFAULT NULL",
+            'user_notified_at'      => "ADD COLUMN `user_notified_at` DATETIME DEFAULT NULL",
+        ];
+        foreach ($adds as $col => $ddl) {
+            if (!isset($cols[$col])) {
+                dbExec("ALTER TABLE `password_reset_requests` {$ddl}");
+            }
+        }
+
+        // 3. Token index
+        if (!dbRow("SHOW INDEX FROM `password_reset_requests` WHERE Key_name = 'idx_prr_token'")) {
+            dbExec("ALTER TABLE `password_reset_requests` ADD INDEX `idx_prr_token` (`request_token`)");
+        }
+
+        try {
+            if (dbRow("SHOW TABLES LIKE 'schema_migrations'")) {
+                dbExec("INSERT IGNORE INTO schema_migrations (migration) VALUES ('0019_fix_password_reset_status_enum.sql')");
+            }
+        } catch (\Throwable $e) {}
+
+        $ready = true;
+    } catch (\Throwable $e) {
+        error_log('ensurePasswordResetSchema failed: ' . $e->getMessage());
+        $ready = false;
+    }
+    return $ready;
+}
+
+/**
+ * Current timestamp in PHP's configured timezone (Asia/Manila) for DATETIME columns.
+ * Avoids MySQL NOW() vs PHP time() skew when the DB server runs in a different timezone.
+ */
+function appNowSql(): string {
+    return date('Y-m-d H:i:s');
+}
+
+/**
  * Resolve 32-byte encryption key for Admin-assigned temporary credentials vault.
  */
 function getTempCredentialVaultKey(): string {
@@ -1605,9 +1694,9 @@ function clearAdminTempPassword(int $userId): void {
             "UPDATE password_reset_requests
              SET new_password_assigned = NULL,
                  status = CASE WHEN status = 'pending' THEN 'dismissed' ELSE status END,
-                 resolved_at = COALESCE(resolved_at, NOW())
+                 resolved_at = COALESCE(resolved_at, ?)
              WHERE user_id = ? AND (new_password_assigned IS NOT NULL OR status = 'pending')",
-            [$userId]
+            [date('Y-m-d H:i:s'), $userId]
         );
     } catch (\Throwable $e) {}
 }

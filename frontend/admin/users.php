@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../backend/core/email.php';
 requireRole('admin');
 releaseReadOnlySession();
 ensureTempCredentialSchema();
+ensurePasswordResetSchema();
 
 $adminId = currentUserId();
 $tab = $_GET['tab'] ?? 'all';
@@ -184,23 +185,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
         } elseif ($action === 'generate_link') {
             $resetToken = bin2hex(random_bytes(32));
             $resetExpires = date('Y-m-d H:i:s', strtotime('+2 hours'));
+            $nowSql = appNowSql();
             dbExec("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [$resetToken, $resetExpires, $uId]);
 
             if ($reqId > 0) {
                 dbExec(
-                    "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'link', new_password_assigned = NULL, resolved_at = NOW(), user_notified_at = NULL WHERE id = ?",
-                    [$reqId]
+                    "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'link', new_password_assigned = NULL, resolved_at = ?, user_notified_at = NULL WHERE id = ?",
+                    [$nowSql, $reqId]
                 );
             }
             $updatedPending = dbExec(
-                "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'link', new_password_assigned = NULL, resolved_at = NOW(), user_notified_at = NULL WHERE (user_id = ? OR email = ?) AND status = 'pending'",
-                [$uId, $target['email']]
+                "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'link', new_password_assigned = NULL, resolved_at = ?, user_notified_at = NULL WHERE (user_id = ? OR email = ?) AND status = 'pending'",
+                [$nowSql, $uId, $target['email']]
             );
             if ($reqId <= 0 && $updatedPending === 0) {
                 dbInsert(
                     "INSERT INTO password_reset_requests (user_id, email, phone, status, dispatch_type, new_password_assigned, requested_at, resolved_at)
-                     VALUES (?, ?, ?, 'completed', 'link', NULL, NOW(), NOW())",
-                    [$uId, $target['email'], $target['phone'] ?? null]
+                     VALUES (?, ?, ?, 'completed', 'link', NULL, ?, ?)",
+                    [$uId, $target['email'], $target['phone'] ?? null, $nowSql, $nowSql]
                 );
             }
 
@@ -227,25 +229,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 setFlash('error', 'New password must be at least 8 characters long.');
             } else {
                 $hashed = password_hash($newPass, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
+                $nowSql = appNowSql();
                 dbExec("UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL, status = 'active' WHERE id = ?", [$hashed, $uId]);
                 setAdminAssignedTempPassword($uId, $newPass);
 
                 if ($reqId > 0) {
                     dbExec(
-                        "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'password', new_password_assigned = ?, resolved_at = NOW(), user_notified_at = NULL WHERE id = ?",
-                        [$newPass, $reqId]
+                        "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'password', new_password_assigned = ?, resolved_at = ?, user_notified_at = NULL WHERE id = ?",
+                        [$newPass, $nowSql, $reqId]
                     );
                 }
                 $updatedPending = dbExec(
-                    "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'password', new_password_assigned = ?, resolved_at = NOW(), user_notified_at = NULL WHERE (user_id = ? OR email = ?) AND status = 'pending'",
-                    [$newPass, $uId, $target['email']]
+                    "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'password', new_password_assigned = ?, resolved_at = ?, user_notified_at = NULL WHERE (user_id = ? OR email = ?) AND status = 'pending'",
+                    [$newPass, $nowSql, $uId, $target['email']]
                 );
                 // Always record admin-initiated reset in password_reset_requests even if user did not submit Forgot Password form
                 if ($reqId <= 0 && $updatedPending === 0) {
                     dbInsert(
                         "INSERT INTO password_reset_requests (user_id, email, phone, status, dispatch_type, new_password_assigned, requested_at, resolved_at)
-                         VALUES (?, ?, ?, 'completed', 'password', ?, NOW(), NOW())",
-                        [$uId, $target['email'], $target['phone'] ?? null, $newPass]
+                         VALUES (?, ?, ?, 'completed', 'password', ?, ?, ?)",
+                        [$uId, $target['email'], $target['phone'] ?? null, $newPass, $nowSql, $nowSql]
                     );
                 }
 
@@ -608,7 +611,12 @@ if ($tab === 'resets') {
                       </td>
                       <td style="text-align:right;">
                         <?php if ($req['user_id']): ?>
-                          <button type="button" class="btn btn-gold btn-sm" onclick="openResetModal(<?= $req['user_id'] ?>, '<?= h(addslashes(trim(($req['first_name'] ?? '') . ' ' . ($req['last_name'] ?? '')) ?: 'Guest')) ?>', '<?= h(addslashes($req['email'])) ?>', <?= $req['id'] ?>)">
+                          <?php
+                            $reqDisplayName = trim(($req['first_name'] ?? '') . ' ' . ($req['last_name'] ?? '')) ?: 'Guest';
+                            $reqBtnNameJson = json_encode($reqDisplayName, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                            $reqBtnEmailJson = json_encode((string)$req['email'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                          ?>
+                          <button type="button" class="btn btn-gold btn-sm" onclick='openResetModal(<?= (int)$req['user_id'] ?>, <?= $reqBtnNameJson ?>, <?= $reqBtnEmailJson ?>, <?= (int)$req['id'] ?>)'>
                             <i class="fa-solid fa-key"></i> <?= $req['status'] === 'pending' ? 'Dispatch Password' : 'Change Again' ?>
                           </button>
                         <?php else: ?>
@@ -752,7 +760,11 @@ if ($tab === 'resets') {
                           <i class="fa-solid fa-pen-to-square"></i>
                         </button>
 
-                        <button type="button" class="btn btn-ghost btn-sm" onclick="openResetModal(<?= $u['id'] ?>, '<?= addslashes(h(formatFullName($u))) ?>', '<?= addslashes(h($u['email'])) ?>')" title="Set / Reset Temporary Password">
+                        <?php
+                          $uResetNameJson = json_encode(formatFullName($u), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                          $uResetEmailJson = json_encode((string)$u['email'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                        ?>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick='openResetModal(<?= (int)$u['id'] ?>, <?= $uResetNameJson ?>, <?= $uResetEmailJson ?>)' title="Set / Reset Temporary Password">
                           <i class="fa-solid fa-key"></i>
                         </button>
 
@@ -974,6 +986,9 @@ if ($tab === 'resets') {
           <button type="button" class="btn btn-ghost btn-sm" onclick="generateRandomPass()" style="white-space:nowrap;" title="Generate random secure password"><i class="fa-solid fa-dice"></i> Gen</button>
         </div>
         <small style="color:var(--text-muted);font-size:0.75rem;margin-top:4px;display:block;">Required when manually updating password. Not required when generating a reset link.</small>
+        <div id="modalResetPassError" style="display:none;margin-top:6px;padding:7px 10px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.38);border-radius:8px;font-size:0.76rem;color:#fca5a5;">
+          <i class="fa-solid fa-circle-exclamation"></i> Please enter at least 8 characters (or click <strong>Gen</strong>) before clicking Update Password.
+        </div>
         <div style="margin-top:10px;padding:8px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.28);border-radius:8px;font-size:0.76rem;color:#bbf7d0;">
           <i class="fa-solid fa-bolt" style="color:#4ade80;margin-right:4px;"></i> Assigned temporary passwords appear cleanly under the <strong>Credentials</strong> column until the guest sets a personal password.
         </div>
@@ -1183,6 +1198,8 @@ function openResetModal(id, name, email, reqId = 0) {
   document.getElementById('modalUserEmail').textContent = email;
   document.getElementById('modalRequestId').value = reqId;
   document.getElementById('modalNewPassword').value = '';
+  const errEl = document.getElementById('modalResetPassError');
+  if (errEl) errEl.style.display = 'none';
   document.getElementById('resetPasswordModal').style.display = 'flex';
 }
 function closeResetModal() {
@@ -1190,7 +1207,31 @@ function closeResetModal() {
 }
 function generateRandomPass() {
   document.getElementById('modalNewPassword').value = generateSecureTempString();
+  const errEl = document.getElementById('modalResetPassError');
+  if (errEl) errEl.style.display = 'none';
 }
+
+(function() {
+  const resetForm = document.getElementById('resetPassForm');
+  const passInput = document.getElementById('modalNewPassword');
+  const errEl = document.getElementById('modalResetPassError');
+  if (!resetForm || !passInput) return;
+  passInput.addEventListener('input', () => {
+    if (errEl && passInput.value.length >= 8) errEl.style.display = 'none';
+  });
+  resetForm.addEventListener('submit', (e) => {
+    const submitter = e.submitter;
+    if (submitter && submitter.value === 'generate_link') {
+      if (errEl) errEl.style.display = 'none';
+      return;
+    }
+    if (passInput.value.length < 8) {
+      e.preventDefault();
+      if (errEl) errEl.style.display = 'block';
+      passInput.focus();
+    }
+  });
+})();
 
 function openKycReviewModal(data) {
   document.getElementById('kycApproveUserId').value = data.id;

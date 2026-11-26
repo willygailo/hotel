@@ -11,9 +11,15 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 require_once __DIR__ . '/../../backend/core/email.php';
 require_once __DIR__ . '/../../backend/core/rate-limiter.php';
 
-redirectIfLoggedIn();
+$fromProfile = (($_GET['from'] ?? '') === 'profile') || (($_POST['from'] ?? '') === 'profile');
+if (isLoggedIn()) {
+    if (!isUser() || (!$fromProfile && empty($_SESSION['password_reset_watch']['token']))) {
+        redirectIfLoggedIn();
+    }
+}
 
 applyAuthRateLimit('forgot');
+ensurePasswordResetSchema();
 
 $error = '';
 $successHtml = '';
@@ -45,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // 1. Create or refresh active pending row in password_reset_requests with session-bound token
             $rawWatchToken = bin2hex(random_bytes(32));
             $tokenHash = hashResetRequestToken($rawWatchToken);
+            $nowSql = appNowSql();
 
             $existingPending = dbRows(
                 "SELECT id FROM password_reset_requests WHERE user_id = ? AND status = 'pending' ORDER BY id DESC",
@@ -53,19 +60,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($existingPending)) {
                 $requestId = (int)$existingPending[0]['id'];
                 dbExec(
-                    "UPDATE password_reset_requests SET email = ?, phone = ?, request_token = ?, requested_at = NOW(), user_notified_at = NULL WHERE id = ?",
-                    [$targetEmail, $targetPhone, $tokenHash, $requestId]
+                    "UPDATE password_reset_requests SET email = ?, phone = ?, request_token = ?, requested_at = ?, user_notified_at = NULL WHERE id = ?",
+                    [$targetEmail, $targetPhone, $tokenHash, $nowSql, $requestId]
                 );
                 if (count($existingPending) > 1) {
-                    dbExec(
-                        "UPDATE password_reset_requests SET status = 'dismissed', resolved_at = NOW() WHERE user_id = ? AND status = 'pending' AND id != ?",
-                        [$userId, $requestId]
-                    );
+                    try {
+                        dbExec(
+                            "UPDATE password_reset_requests SET status = 'dismissed', resolved_at = ? WHERE user_id = ? AND status = 'pending' AND id != ?",
+                            [$nowSql, $userId, $requestId]
+                        );
+                    } catch (\Throwable $e) {
+                        error_log('Secondary pending reset cleanup failed: ' . $e->getMessage());
+                    }
                 }
             } else {
                 $requestId = dbInsert(
-                    "INSERT INTO password_reset_requests (user_id, email, phone, request_token, status, requested_at) VALUES (?, ?, ?, ?, 'pending', NOW())",
-                    [$userId, $targetEmail, $targetPhone, $tokenHash]
+                    "INSERT INTO password_reset_requests (user_id, email, phone, request_token, status, requested_at) VALUES (?, ?, ?, ?, 'pending', ?)",
+                    [$userId, $targetEmail, $targetPhone, $tokenHash, $nowSql]
                 );
             }
 
@@ -84,17 +95,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             auditLog('Password Reset Requested', 'User Auth', "Reset request submitted to Admin for {$targetEmail}");
 
-            // 3. Send real email via SMTP if configured or attempted
+            // 3. Send real email via SMTP only when SMTP is configured
             $emailSent = false;
             $resetToken = bin2hex(random_bytes(32));
             $resetExpires = date('Y-m-d H:i:s', strtotime('+1 hour'));
             dbExec("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [$resetToken, $resetExpires, $userId]);
-            $resetLink = SITE_URL . '/auth/reset-password.php?token=' . $resetToken;
-            $userName = formatFullName($user);
-            $htmlBody = emailTemplateResetPassword($resetLink, $userName, 1);
-            $textBody = "Password Reset Request\n\nHello {$userName},\n\nClick the link below to reset your password:\n{$resetLink}\n\nThis link will expire in 1 hour.\n\n" . SITE_NAME;
-            $sendErr = null;
-            $emailSent = sendEmail($targetEmail, 'Password Reset Link — ' . SITE_NAME, $htmlBody, $textBody, $sendErr);
+            if (isSmtpConfigured()) {
+                $resetLink = SITE_URL . '/auth/reset-password.php?token=' . $resetToken;
+                $userName = formatFullName($user);
+                $htmlBody = emailTemplateResetPassword($resetLink, $userName, 1);
+                $textBody = "Password Reset Request\n\nHello {$userName},\n\nClick the link below to reset your password:\n{$resetLink}\n\nThis link will expire in 1 hour.\n\n" . SITE_NAME;
+                $sendErr = null;
+                $emailSent = sendEmail($targetEmail, 'Password Reset Link — ' . SITE_NAME, $htmlBody, $textBody, $sendErr);
+            }
 
             // 4. Bind live status watcher strictly to this browser's isolated user session
             $_SESSION['password_reset_watch'] = [
@@ -116,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // PRG pattern: prevents form resubmission prompts on reload while resuming live polling
-        header('Location: forgot-password.php');
+        header('Location: forgot-password.php' . ($fromProfile ? '?from=profile' : ''));
         exit;
     }
 }
@@ -289,6 +302,9 @@ $prefillEmail = $_POST['email'] ?? ($_GET['email'] ?? ($activeWatch['email'] ?? 
 
     <form action="" method="POST">
       <?= csrfField() ?>
+      <?php if ($fromProfile): ?>
+        <input type="hidden" name="from" value="profile">
+      <?php endif; ?>
 
       <div class="form-group">
         <label class="form-label">Registered Email Address <span class="required">*</span></label>

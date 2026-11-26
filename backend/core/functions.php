@@ -545,7 +545,7 @@ function roomThumbUrl(?string $thumbnail): string {
     if (!empty($thumbnail) && strpos($thumbnail, '/') !== false) {
         return getUploadUrl($thumbnail);
     }
-    return ASSETS_URL . '/images/rooms/' . ($thumbnail ?: 'default-room.jpg');
+    return assetUrl('images/rooms/' . ($thumbnail ?: 'default-room.jpg'));
 }
 
 /**

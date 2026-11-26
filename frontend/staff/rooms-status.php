@@ -172,6 +172,9 @@ unset($rm);
           $arrivals  = $rm['arrivals'];
         ?>
           <div class="room-status-card <?= h($effStatus) ?>">
+            <div style="margin:-2px 0 10px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);height:110px;background:#0b132b;">
+              <img src="<?= h(roomThumbUrl($rm['thumbnail'] ?? null)) ?>" alt="<?= h($rm['name']) ?>" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.src='<?= h(assetUrl('images/rooms/default-room.jpg')) ?>';this.onerror=null;">
+            </div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
               <h3 class="room-status-num">Room #<?= h($rm['room_number']) ?></h3>
               <?= statusBadge($effStatus) ?>

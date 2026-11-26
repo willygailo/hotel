@@ -294,6 +294,7 @@ $roomTypes = dbRows("SELECT * FROM room_types");
                                 data-price="<?= h($r['price_per_night']) ?>"
                                 data-status="<?= h($r['status']) ?>"
                                 data-description="<?= h($r['description'] ?? '') ?>"
+                                data-thumb="<?= h(roomThumbUrl($r['thumbnail'] ?? '')) ?>"
                                 title="Edit Room">
                           <i class="fa-solid fa-pen-to-square"></i>
                         </button>
@@ -368,7 +369,11 @@ $roomTypes = dbRows("SELECT * FROM room_types");
       </div>
       <div>
         <label class="form-label">Replace Thumbnail <small style="color:var(--text-muted);">(optional)</small></label>
-        <input type="file" name="thumbnail" id="editRoomThumbInput" class="form-control" accept="image/*" onchange="optimizeImageInput(this, { maxDim: 1600, quality: 0.85, statusElId: 'editRoomThumbStatus' })">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <img id="editRoomThumbPreview" src="<?= h(assetUrl('images/rooms/default-room.jpg')) ?>" alt="Current room photo" style="width:72px;height:48px;border-radius:8px;object-fit:cover;border:1px solid rgba(201,168,76,0.35);background:#0b132b;">
+          <small style="color:var(--text-muted);font-size:0.74rem;">Current room photo</small>
+        </div>
+        <input type="file" name="thumbnail" id="editRoomThumbInput" class="form-control" accept="image/*" onchange="previewEditRoomThumb(this); optimizeImageInput(this, { maxDim: 1600, quality: 0.85, statusElId: 'editRoomThumbStatus' })">
         <small id="editRoomThumbStatus" style="display:none;color:var(--gold);font-size:0.74rem;margin-top:3px;"></small>
       </div>
       <div style="grid-column:1/-1;">
@@ -396,9 +401,22 @@ function openEditRoomModal(btn) {
   document.getElementById('edit_room_price').value = btn.dataset.price;
   document.getElementById('edit_room_status').value = btn.dataset.status;
   document.getElementById('edit_room_description').value = btn.dataset.description;
+  const thumbPrev = document.getElementById('editRoomThumbPreview');
+  if (thumbPrev) {
+    thumbPrev.src = btn.dataset.thumb || '<?= h(assetUrl('images/rooms/default-room.jpg')) ?>';
+  }
+  const thumbInput = document.getElementById('editRoomThumbInput');
+  if (thumbInput) thumbInput.value = '';
   const st = document.getElementById('editRoomThumbStatus');
   if (st) st.style.display = 'none';
   document.getElementById('editRoomModal').style.display = 'flex';
+}
+function previewEditRoomThumb(input) {
+  const thumbPrev = document.getElementById('editRoomThumbPreview');
+  if (!thumbPrev || !input || !input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = (e) => { thumbPrev.src = e.target.result; };
+  reader.readAsDataURL(input.files[0]);
 }
 function closeEditRoomModal() {
   document.getElementById('editRoomModal').style.display = 'none';

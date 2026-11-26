@@ -1,47 +1,128 @@
 [
   {
-    "keywords": ["check in", "check out", "oras", "time", "dating", "alis", "schedule", "timing"],
-    "response_tl": "Ang aming standard <strong>Check-in Time</strong> ay <strong>2:00 PM</strong> at ang <strong>Check-out Time</strong> ay <strong>12:00 PM (Tanghali)</strong>. Kung nais ninyo ng early check-in o late check-out, maaari kayong mag-iwan ng request sa inyong booking depende sa availability ng kwarto.",
-    "response_en": "Our standard <strong>Check-in Time</strong> is <strong>2:00 PM</strong> and <strong>Check-out Time</strong> is <strong>12:00 PM (Noon)</strong>. Early check-in or late check-out requests can be made upon booking, subject to room availability."
+    "id": "checkin_checkout",
+    "keywords": ["check in", "check-in", "check out", "check-out", "oras ng check", "anong oras", "check in time", "check out time", "early check in", "late check out", "schedule ng check"],
+    "routes": ["rooms"],
+    "response_tl": "🕒 <strong>Oras ng Check-in at Check-out:</strong><br>• <strong>Check-in:</strong> 2:00 PM<br>• <strong>Check-out:</strong> 12:00 PM (Tanghali)<br><br>Kung kailangan po ng early check-in o late check-out, maaari itong ilagay sa Special Requests kapag nagbo-book (depende sa availability ng kwarto).",
+    "response_en": "🕒 <strong>Check-in &amp; Check-out Schedule:</strong><br>• <strong>Check-in:</strong> 2:00 PM<br>• <strong>Check-out:</strong> 12:00 PM (Noon)<br><br>Early check-in or late check-out can be requested in the Special Requests field when booking, subject to room availability."
   },
   {
-    "keywords": ["bayad", "payment", "gcash", "maya", "paymaya", "paano magbayad", "paano ang bayad", "how to pay", "mode of payment", "qr", "qr code", "methods", "pay"],
-    "response_tl": "Tumatanggap po kami ng <strong>PayMaya (Maya) at GCash ONLY</strong>!<br><ol style='margin:6px 0 0 18px;padding-left:0;'><li><strong>Maya / InstaPay QR:</strong> I-scan lamang ang aming opisyal na Maya QR code sa pangalang <strong>WILLY GAILO (@willygailojr)</strong> gamit ang Maya app o GCash app (Scan QR / QR Ph).</li><li><strong>GCash Express:</strong> Maaari ring mag-send sa GCash: 0912 345 6789.</li><li>Kopyahin ang Reference Number at i-screenshot ang resibo.</li><li>Pumunta sa <strong>User Dashboard &rarr; My Bookings &rarr; Pay</strong> at i-upload ang proof of payment.</li></ol>Mabilis itong iba-validate ng hotel management!",
-    "response_en": "We strictly accept <strong>PayMaya (Maya) and GCash ONLY</strong>!<br><ol style='margin:6px 0 0 18px;padding-left:0;'><li><strong>Maya / InstaPay QR:</strong> Scan our official Maya QR code under the name <strong>WILLY GAILO (@willygailojr)</strong> using the Maya app or GCash app (Scan QR / QR Ph).</li><li><strong>GCash Express:</strong> You can also send payment directly to GCash: 0912 345 6789.</li><li>Copy the Transaction Reference Number and take a screenshot of your receipt.</li><li>Go to your <strong>User Dashboard &rarr; My Bookings &rarr; click Pay</strong> and upload your proof of payment.</li></ol>Our frontdesk and administration will verify your receipt promptly!"
+    "id": "payment_methods",
+    "keywords": ["paano magbayad", "paano ang bayad", "how to pay", "mode of payment", "payment method", "payment methods", "gcash", "maya", "paymaya", "instapay", "qr code", "bayad", "upload receipt", "proof of payment", "resibo", "bank transfer", "cash"],
+    "routes": ["payment", "payment_history"],
+    "response_tl": "💳 Tumatanggap po kami ng <strong>PayMaya (Maya) at GCash ONLY</strong> (walang cash on arrival o bank transfer):<br><ol style='margin:6px 0 0 18px;padding-left:0;'><li><strong>Maya / InstaPay QR:</strong> I-scan ang opisyal na Maya QR code sa pangalang <strong>WILLY GAILO (@willygailojr)</strong> gamit ang Maya app o GCash app (Scan QR).</li><li><strong>GCash:</strong> Mag-send sa aming opisyal na GCash number (makikita sa Payment page).</li><li>Kopyahin ang Reference Number at i-screenshot ang resibo.</li><li>Pumunta sa <strong>My Bookings &rarr; Pay</strong> at i-upload ang proof of payment para ma-verify agad ng Frontdesk/Admin.</li></ol>",
+    "response_en": "💳 We strictly accept <strong>PayMaya (Maya) and GCash ONLY</strong> (no over-the-counter cash or bank transfers):<br><ol style='margin:6px 0 0 18px;padding-left:0;'><li><strong>Maya / InstaPay QR:</strong> Scan our official Maya QR code under <strong>WILLY GAILO (@willygailojr)</strong> using the Maya or GCash app (Scan QR).</li><li><strong>GCash:</strong> Send directly to our official GCash number shown on the Payment page.</li><li>Copy the Reference Number and screenshot your receipt.</li><li>Go to <strong>My Bookings &rarr; Pay</strong> and upload your proof of payment for prompt verification by our Frontdesk/Admin.</li></ol>"
   },
   {
-    "keywords": ["paano mag book", "booking", "reserve", "magpareserba", "how to book", "paano mag-book", "reservation steps", "how do i book"],
-    "response_tl": "Napakadali mag-book ng kwarto sa Marvelous Hotel!<br><ol style='margin:6px 0 0 18px;padding-left:0;'><li>Pumunta sa <strong>Browse Rooms</strong> o mag-login sa inyong <strong>User Account</strong>.</li><li>Piliin ang nais na kwarto o dormitory bed at itakda ang Check-in at Check-out dates.</li><li>I-click ang <strong>Book Now / Confirm Booking</strong>.</li><li>Magbayad gamit ang <strong>GCash o PayMaya</strong> at i-upload ang inyong resibo sa dashboard.</li></ol>",
-    "response_en": "Booking a room at Marvelous Hotel is very easy!<br><ol style='margin:6px 0 0 18px;padding-left:0;'><li>Navigate to <strong>Browse Rooms</strong> or log in to your <strong>User Account</strong>.</li><li>Select your preferred room type or dormitory bed and specify your Check-in and Check-out dates.</li><li>Click <strong>Book Now / Confirm Booking</strong>.</li><li>Pay via <strong>GCash or PayMaya</strong> and upload your screenshot receipt in the dashboard.</li></ol>"
+    "id": "how_to_book",
+    "keywords": ["paano mag book", "paano mag-book", "how to book", "how do i book", "reservation steps", "magpareserba", "gusto ko mag book", "book a room", "mag-book"],
+    "routes": ["rooms", "profile"],
+    "response_tl": "🛎️ <strong>Paano Mag-book sa Marvelous Hotel Website:</strong><br><ol style='margin:6px 0 0 18px;padding-left:0;'><li>Gumawa o mag-login sa iyong <strong>Guest Account</strong>.</li><li>Kumpletuhin ang <strong>KYC ID Verification</strong> sa <strong>Profile Settings</strong> (mag-upload ng malinaw na Valid Government o School ID at hintayin ang Admin approval).</li><li>Pumunta sa <strong>Browse Rooms</strong> o <strong>Book Room</strong>, piliin ang kwarto, Check-in/Check-out dates, at promo code kung meron.</li><li>Magbayad via <strong>GCash o Maya</strong> at i-upload ang screenshot ng resibo sa <strong>My Bookings</strong>.</li></ol>",
+    "response_en": "🛎️ <strong>How to Book on the Marvelous Hotel Website:</strong><br><ol style='margin:6px 0 0 18px;padding-left:0;'><li>Register or log in to your <strong>Guest Account</strong>.</li><li>Complete <strong>KYC ID Verification</strong> in <strong>Profile Settings</strong> (upload a clear Government or School ID and wait for Admin approval).</li><li>Open <strong>Browse Rooms</strong> or <strong>Book Room</strong>, pick your room, dates, and optional promo code.</li><li>Pay via <strong>GCash or Maya</strong> and upload your receipt screenshot under <strong>My Bookings</strong>.</li></ol>"
   },
   {
-    "keywords": ["dorm", "dormitory", "bed", "mura", "budget", "bedspace", "cheapest", "cheap"],
-    "response_tl": "Mayroon kaming budget-friendly dormitories! Available ang <strong>Female Wing (D01)</strong> at <strong>Male Wing (D02)</strong> simula lamang sa <strong>₱350/night</strong> na may kasamang aircon, personal lockers, at high-speed Wi-Fi.",
-    "response_en": "We offer budget-friendly dormitories! Available wings include the <strong>Female Wing (D01)</strong> and <strong>Male Wing (D02)</strong> starting at only <strong>₱350/night</strong>, equipped with air conditioning, personal lockers, and high-speed Wi-Fi."
+    "id": "kyc_verification",
+    "keywords": ["kyc", "valid id", "verify id", "id verification", "bakit hindi maka book", "bakit di maka-book", "cannot book", "unverified", "pending verification", "rejected id", "paano ma verify", "government id", "school id"],
+    "routes": ["profile"],
+    "response_tl": "🪪 <strong>KYC Identity Verification:</strong><br>Kinakailangan po ang verified account bago makapag-book ng kwarto para sa kaligtasan ng lahat ng bisita.<br><ol style='margin:6px 0 0 18px;padding-left:0;'><li>Pumunta sa <strong>Profile Settings</strong>.</li><li>Punan ang iyong legal name, contact number, address, ID Type, at ID Number.</li><li>Mag-upload ng malinaw na photo o PDF ng <strong>Valid Government ID o School ID</strong> at i-save.</li><li>Susuriin ito ng Admin. Kapag <strong>Rejected</strong>, makikita sa Profile ang dahilan upang makapag-upload muli ng malinaw na kopya.</li></ol>",
+    "response_en": "🪪 <strong>KYC Identity Verification:</strong><br>A verified account is required before booking a room for guest security.<br><ol style='margin:6px 0 0 18px;padding-left:0;'><li>Go to <strong>Profile Settings</strong>.</li><li>Fill in your legal name, phone, address, ID Type, and ID Number.</li><li>Upload a clear photo or PDF of a <strong>Valid Government or School ID</strong> and save.</li><li>Our Admin will review it promptly. If <strong>Rejected</strong>, check the reason shown in your Profile and re-upload a clearer copy.</li></ol>"
   },
   {
-    "keywords": ["wifi", "internet", "connection", "speed", "fiber", "free wifi"],
-    "response_tl": "Lahat ng kwarto at dormitoryo ay may libre at napakabilis na <strong>Fiber WiFi (hanggang 200 Mbps)</strong> para sa lahat ng bisita.",
-    "response_en": "All rooms and dormitories come with complimentary high-speed <strong>Fiber WiFi (up to 200 Mbps)</strong> for all guests."
+    "id": "cancellation_refund",
+    "keywords": ["cancel", "cancellation", "refund", "kanselahin", "paano mag cancel", "cancel booking", "cancel reservation", "rebook", "reschedule"],
+    "routes": ["my_bookings", "contact"],
+    "response_tl": "🔄 <strong>Cancellation &amp; Refund Policy:</strong><br>• <strong>Pending Bookings:</strong> Maaari mong i-cancel nang direkta sa <strong>My Bookings</strong> page.<br>• <strong>Confirmed Bookings:</strong> Hindi ito maaaring i-self-cancel online. Mangyaring makipag-ugnayan sa aming <strong>Frontdesk o Administration</strong> (sa Contact Us page) para sa tulong sa cancellation, rebooking, o refund (standard notice: 24 oras bago mag-check-in).",
+    "response_en": "🔄 <strong>Cancellation &amp; Refund Policy:</strong><br>• <strong>Pending Bookings:</strong> You can cancel directly online from your <strong>My Bookings</strong> page.<br>• <strong>Confirmed Bookings:</strong> Confirmed bookings cannot be self-cancelled online. Please contact our <strong>Frontdesk or Administration</strong> via the Contact Us page for cancellation, rebooking, or refund assistance (standard notice: 24 hours before check-in)."
   },
   {
-    "keywords": ["nakalimutan ang password", "forgot password", "reset password", "palit password", "change password", "recover account", "password recovery"],
-    "response_tl": "Kung nakalimutan ninyo ang inyong password, pumunta lamang sa <strong>Login page</strong> at i-click ang <strong>'Forgot Password?'</strong> link upang makatanggap ng password reset verification link sa inyong email. Maaari rin kayong lumapit sa aming Frontdesk kung kailangan ng karagdagang tulong.",
-    "response_en": "If you forgot your password, please go to the <strong>Login page</strong> and click the <strong>'Forgot Password?'</strong> link to securely receive a password reset link at your registered email address. You may also visit the Frontdesk for in-person account verification."
+    "id": "promos_discounts",
+    "keywords": ["promo", "promos", "promo code", "discount", "discounts", "coupon", "voucher code", "may discount", "may promo"],
+    "routes": ["rooms"],
+    "response_tl": "🏷️ <strong>Active Promos &amp; Discounts:</strong><br>Maaari kang gumamit ng valid promo code sa Booking page bago i-confirm ang reservation! Halimbawa ng mga promo: <strong>WELCOME10</strong> (10% off), <strong>LONGSTAY20</strong> (20% off para sa 5+ nights), at <strong>SUMMER500</strong> (₱500 off sa 2+ nights). I-check sa Booking form ang active promos na pasok sa iyong stay!",
+    "response_en": "🏷️ <strong>Active Promos &amp; Discounts:</strong><br>You can apply a valid promo code on the Booking page before confirming! Available promos include <strong>WELCOME10</strong> (10% off), <strong>LONGSTAY20</strong> (20% off for 5+ nights), and <strong>SUMMER500</strong> (₱500 off for 2+ nights), subject to minimum nights and validity dates."
   },
   {
-    "keywords": ["location", "saan", "address", "landmark", "lugar", "paano pumunta", "how to get there", "where are you", "direksyon", "directions"],
-    "response_tl": "📍 <strong>Lokasyon ng Marvelous Hotel:</strong><br>Matatagpuan kami sa gitna ng siyudad, malapit sa mga pangunahing sakayan, shopping malls, at commercial centers. Accessible kami via taxi, grab, tricycle, o jeepney. May 24/7 Frontdesk kami na handang mag-gabay sa inyong pagdating!",
-    "response_en": "📍 <strong>Marvelous Hotel Location:</strong><br>We are conveniently situated in the heart of the city, easily accessible via Grab, taxi, or public transport, and just minutes away from major terminals, malls, and restaurants. Our 24/7 Frontdesk is always ready to welcome and assist you upon arrival!"
+    "id": "password_reset",
+    "keywords": ["nakalimutan ang password", "forgot password", "reset password", "palit password", "change password", "recover account", "password recovery", "nakalimutan password"],
+    "routes": ["forgot_password", "profile"],
+    "response_tl": "🔑 <strong>Paano Mag-reset ng Password:</strong><br>1. Pumunta sa <strong>Forgot Password</strong> page at ilagay ang iyong registered email.<br>2. Panatilihing bukas ang page — kapag na-update na ng <strong>Hotel Admin</strong> ang iyong password (o nakagawa ng 1-time reset link), <strong>awtomatikong magpo-pop up</strong> sa iyong screen ang bagong temporary password o reset link!<br>3. Pagka-login, maaari mong palitan ito ng personal password sa <strong>Profile Settings &rarr; Security &amp; Password</strong>.",
+    "response_en": "🔑 <strong>How to Reset Your Password:</strong><br>1. Go to the <strong>Forgot Password</strong> page and submit your registered email address.<br>2. Keep the page open — as soon as the <strong>Hotel Admin</strong> updates your password (or generates a one-time reset link), a <strong>live popup</strong> will appear automatically on your screen with your temporary password or reset link!<br>3. After logging in, you can set your own personal password in <strong>Profile Settings &rarr; Security &amp; Password</strong>."
   },
   {
-    "keywords": ["parking", "park", "sasakyan", "kotse", "motor", "car park"],
-    "response_tl": "🚗 <strong>Parking Facilities:</strong><br>Mayroon po kaming secure at monitored parking spaces para sa mga bisitang may dalang kotse o motorsiklo sa first-come, first-served basis.",
-    "response_en": "🚗 <strong>Parking Facilities:</strong><br>We provide secure, CCTV-monitored parking spaces for checked-in guests with cars or motorcycles on a first-come, first-served basis."
+    "id": "account_register_login",
+    "keywords": ["register", "sign up", "gumawa ng account", "create account", "mag login", "log in", "login", "remember me", "paano mag register"],
+    "routes": ["register", "login"],
+    "response_tl": "👤 <strong>Guest Account (Register &amp; Login):</strong><br>• Pumunta sa <strong>Register</strong> page upang gumawa ng account gamit ang iyong buong pangalan, email, phone number, at password (minimum 8 characters).<br>• Sa <strong>Login</strong> page, may opsyon na <em>Keep me signed in (30 days)</em> para hindi mo na kailangang mag-login paulit-ulit.",
+    "response_en": "👤 <strong>Guest Account (Register &amp; Login):</strong><br>• Visit the <strong>Register</strong> page to create an account using your full name, email, phone number, and an 8+ character password.<br>• On the <strong>Login</strong> page, you can enable <em>Keep me signed in (30 days)</em> for seamless return visits."
   },
   {
-    "keywords": ["couple", "dalawa", "2 tao", "2 pax", "mag-asawa", "magkasintahan", "two persons", "2 guests"],
-    "response_tl": "💑 Para sa <strong>2 tao o mag-asawa</strong>, lubos naming inirerekomenda ang aming <strong>Deluxe Room (₱1,500 - ₱1,600/gabi)</strong> na may King-size bed, private bathroom na may hot shower, Smart TV, at magandang view. Kung mas budget-conscious, ang aming <strong>Standard Room (₱800/gabi)</strong> ay swak na swak din para sa dalawa!",
-    "response_en": "💑 For <strong>couples or 2 guests</strong>, we highly recommend our <strong>Deluxe Room (₱1,500 - ₱1,600/night)</strong> featuring a luxurious King-size bed, private hot shower, Smart TV, and panoramic view. For budget travelers, our <strong>Standard Room (₱800/night)</strong> is also a great comfortable choice for two!"
+    "id": "reviews_ratings",
+    "keywords": ["review", "reviews", "rating", "ratings", "feedback", "rate my stay", "mag-review", "mag rate"],
+    "routes": ["reviews", "my_bookings"],
+    "response_tl": "⭐ <strong>Guest Reviews &amp; Ratings:</strong><br>Kapag <strong>Confirmed</strong>, <strong>Checked-in</strong>, o <strong>Checked-out</strong> na ang iyong booking, maaari kang mag-iwan ng star rating at review sa <strong>My Reviews</strong> page (o i-click ang <em>Rate this Stay</em> sa <strong>My Bookings</strong>).",
+    "response_en": "⭐ <strong>Guest Reviews &amp; Ratings:</strong><br>Once your booking is <strong>Confirmed</strong>, <strong>Checked-in</strong>, or <strong>Checked-out</strong>, you can rate your stay and write a review on the <strong>My Reviews</strong> page (or click <em>Rate this Stay</em> in <strong>My Bookings</strong>)."
+  },
+  {
+    "id": "payment_history_vouchers",
+    "keywords": ["payment history", "booking voucher", "voucher", "invoice", "receipt history", "history ng bayad", "notification", "notifications"],
+    "routes": ["payment_history", "my_bookings", "notifications"],
+    "response_tl": "🧾 <strong>Payment History, Vouchers &amp; Notifications:</strong><br>• Makikita lahat ng iyong na-submit at verified na bayad sa <strong>Payment History</strong>.<br>• Ang printable <strong>Booking Voucher</strong> ay makikita sa <strong>My Bookings &rarr; View Details</strong>.<br>• Lahat ng updates sa KYC, booking, at payment ay lilitaw sa <strong>Notifications</strong> bell sa itaas.",
+    "response_en": "🧾 <strong>Payment History, Vouchers &amp; Notifications:</strong><br>• View all submitted and verified transactions in <strong>Payment History</strong>.<br>• Access your digital <strong>Booking Voucher</strong> via <strong>My Bookings &rarr; View Details</strong>.<br>• Real-time alerts for KYC, bookings, and payments appear under the <strong>Notifications</strong> bell."
+  },
+  {
+    "id": "dormitory",
+    "keywords": ["dorm", "dormitory", "bedspace", "female wing", "male wing", "d01", "d02", "pinakamura", "cheapest", "cheap room", "murang kwarto", "solo traveler", "backpacker"],
+    "routes": ["rooms"],
+    "response_tl": "🛏️ <strong>Budget-Friendly Dormitories (₱350/gabi):</strong><br>Mayroon po kaming <strong>Female Wing (D01)</strong> at <strong>Male Wing (D02)</strong> na tig-<strong>₱350/night</strong> (₱400 weekend rate), may aircon, privacy curtains, personal lockers, charging stations, shared bathroom, at libreng high-speed WiFi!",
+    "response_en": "🛏️ <strong>Budget-Friendly Dormitories (₱350/night):</strong><br>We offer both <strong>Female Wing (D01)</strong> and <strong>Male Wing (D02)</strong> at only <strong>₱350/night</strong> (₱400 weekend rate), complete with air conditioning, personal lockers, charging stations, shared bathroom, and free high-speed WiFi!"
+  },
+  {
+    "id": "couple_2pax",
+    "keywords": ["couple", "dalawa", "2 tao", "2 pax", "mag-asawa", "magkasintahan", "two persons", "2 guests", "deluxe", "standard room", "balcony"],
+    "routes": ["rooms"],
+    "response_tl": "💑 <strong>Mga Kwarto para sa 2 Tao / Mag-asawa:</strong><br>• <strong>Standard Room 101 / 102:</strong> ₱800/gabi (₱950 weekend) — cozy private room, Air Con, TV, Hot Shower, WiFi.<br>• <strong>Deluxe Room 201:</strong> ₱1,500/gabi (₱1,800 weekend) — premium bedding, Smart TV, Safe Box, Breakfast.<br>• <strong>Deluxe Room 202:</strong> ₱1,600/gabi (₱1,900 weekend) — King-size bed, private <strong>Balcony</strong>, Smart TV, Breakfast.",
+    "response_en": "💑 <strong>Great Rooms for Couples / 2 Guests:</strong><br>• <strong>Standard Room 101 / 102:</strong> ₱800/night (₱950 weekend) — cozy private room with Air Con, TV, Hot Shower, and WiFi.<br>• <strong>Deluxe Room 201:</strong> ₱1,500/night (₱1,800 weekend) — spacious with Smart TV, Safe Box, and Breakfast.<br>• <strong>Deluxe Room 202:</strong> ₱1,600/night (₱1,900 weekend) — King-size bed, private <strong>Balcony</strong>, Smart TV, and Breakfast."
+  },
+  {
+    "id": "family_suite",
+    "keywords": ["family", "pamilya", "4 pax", "4 tao", "apat", "barkada", "group", "suite", "executive suite", "hot tub", "luxury"],
+    "routes": ["rooms"],
+    "response_tl": "👨‍👩‍👧‍👦 <strong>Mga Kwarto para sa Pamilya o Grupo (Hanggang 4 Pax):</strong><br>• <strong>Family Room 401:</strong> ₱2,200/gabi (₱2,600 weekend) — dalawang double beds + sofa bed, TV, Ref, Hot Shower.<br>• <strong>Executive Suite 301:</strong> ₱3,500/gabi (₱4,000 weekend) — hiwalay na living lounge, panoramic view, Hot Tub, Mini Bar, Balcony, at Breakfast.",
+    "response_en": "👨‍👩‍👧‍👦 <strong>Rooms for Families or Groups (Up to 4 Pax):</strong><br>• <strong>Family Room 401:</strong> ₱2,200/night (₱2,600 weekend) — two double beds + sofa bed, TV, Ref, and Hot Shower.<br>• <strong>Executive Suite 301:</strong> ₱3,500/night (₱4,000 weekend) — separate living lounge, panoramic view, Hot Tub, Mini Bar, Balcony, and Breakfast."
+  },
+  {
+    "id": "studio_longstay",
+    "keywords": ["studio", "kitchenette", "workspace", "work from home", "long stay", "matagal", "s01", "may kusina"],
+    "routes": ["rooms"],
+    "response_tl": "💻 <strong>Studio Unit 01 (S01) — ₱1,800/gabi (₱2,100 weekend):</strong><br>Perpekto para sa long stay o work-from-hotel (hanggang 2 pax), may sariling <strong>Kitchenette</strong>, <strong>Workspace</strong>, Smart TV, Ref, Air Con, at 200 Mbps Fiber WiFi. Puwede ring gamitin ang <strong>LONGSTAY20</strong> promo para sa 5+ nights!",
+    "response_en": "💻 <strong>Studio Unit 01 (S01) — ₱1,800/night (₱2,100 weekend):</strong><br>Ideal for long stays or remote work (up to 2 pax), featuring a compact <strong>Kitchenette</strong>, dedicated <strong>Workspace</strong>, Smart TV, Ref, Air Con, and 200 Mbps Fiber WiFi. You can also apply <strong>LONGSTAY20</strong> for stays of 5+ nights!"
+  },
+  {
+    "id": "wifi_amenities",
+    "keywords": ["wifi", "wi-fi", "internet", "connection", "fiber", "free wifi", "amenities", "aircon", "hot shower", "breakfast"],
+    "routes": ["rooms"],
+    "response_tl": "📶 <strong>WiFi at Amenities:</strong><br>Lahat ng kwarto at dormitoryo ay may libreng <strong>High-Speed Fiber WiFi (hanggang 200 Mbps)</strong> at Air Con. Ang mga private room ay may TV at Hot Shower, habang ang Deluxe at Suite rooms ay may Smart TV, Safe Box, at Breakfast.",
+    "response_en": "📶 <strong>WiFi &amp; Amenities:</strong><br>All rooms and dormitories include free <strong>High-Speed Fiber WiFi (up to 200 Mbps)</strong> and Air Conditioning. Private rooms feature TV and Hot Shower, while Deluxe and Suite rooms include Smart TV, Safe Box, and Breakfast."
+  },
+  {
+    "id": "parking_security",
+    "keywords": ["parking", "park", "sasakyan", "kotse", "motor", "car park", "security", "cctv", "safe", "ligtas"],
+    "routes": ["about", "contact"],
+    "response_tl": "🚗 <strong>Parking at 24/7 Security:</strong><br>Mayroon po kaming secure at CCTV-monitored parking para sa kotse at motorsiklo (first-come, first-served), pati <strong>24/7 Frontdesk at Security</strong> para sa kapanatagan ng lahat ng bisita.",
+    "response_en": "🚗 <strong>Parking &amp; 24/7 Security:</strong><br>We provide secure, CCTV-monitored parking for cars and motorcycles (first-come, first-served), backed by our <strong>24/7 Frontdesk and Security</strong> team."
+  },
+  {
+    "id": "location_contact",
+    "keywords": ["location", "saan", "address", "landmark", "lugar", "paano pumunta", "how to get there", "where are you", "direksyon", "directions", "contact", "phone number", "email", "tawagan"],
+    "routes": ["contact"],
+    "response_tl": "📍 <strong>Lokasyon at Contact ng Marvelous Hotel:</strong><br>Accessible kami via taxi, Grab, tricycle, o jeepney at may 24/7 Frontdesk. Makikita ang eksaktong address, phone number, email, at inquiry form sa aming <strong>Contact Us</strong> page!",
+    "response_en": "📍 <strong>Marvelous Hotel Location &amp; Contact:</strong><br>We are easily accessible via Grab, taxi, or public transport with a 24/7 Frontdesk. You can view our exact address, phone number, email, and send a message directly on our <strong>Contact Us</strong> page!"
+  },
+  {
+    "id": "ai_matcher",
+    "keywords": ["room matcher", "ai recommend", "smart matcher", "hanap ng kwarto", "match room", "recommend a room"],
+    "routes": ["ai_recommend", "rooms"],
+    "response_tl": "✨ <strong>Smart AI Room Matcher:</strong><br>Maaari mo ring gamitin ang aming <strong>Smart AI Room Matcher</strong> page kung saan ilalagay mo lang ang iyong budget, bilang ng pax, dates, at preference para awtomatikong ipares ang pinakabagay na kwarto!",
+    "response_en": "✨ <strong>Smart AI Room Matcher:</strong><br>You can also try our <strong>Smart AI Room Matcher</strong> page — just enter your budget, guest count, optional dates, and preference to get instant room matches!"
   }
 ]

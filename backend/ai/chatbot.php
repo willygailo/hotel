@@ -375,10 +375,25 @@ function resolveAiActionsHtml(array $parsed, string $userMsg, string $replyText,
             'url' => SITE_URL . ($isLoggedIn ? '/user/my-bookings.php' : '/auth/login.php'),
             'icon' => 'fa-credit-card'
         ],
+        'payment_history' => [
+            'en' => 'View Payment History', 'tl' => 'Tingnan ang Payment History',
+            'url' => SITE_URL . ($isLoggedIn ? '/user/payment-history.php' : '/auth/login.php?redirect=' . urlencode('/user/payment-history.php')),
+            'icon' => 'fa-receipt'
+        ],
         'profile' => [
             'en' => 'Profile & KYC Verification', 'tl' => 'Profile at KYC Verification',
             'url' => SITE_URL . ($isLoggedIn ? '/user/profile.php' : '/auth/login.php'),
             'icon' => 'fa-id-card'
+        ],
+        'reviews' => [
+            'en' => 'My Reviews & Ratings', 'tl' => 'My Reviews at Ratings',
+            'url' => SITE_URL . ($isLoggedIn ? '/user/reviews.php' : '/auth/login.php?redirect=' . urlencode('/user/reviews.php')),
+            'icon' => 'fa-star'
+        ],
+        'notifications' => [
+            'en' => 'View Notifications', 'tl' => 'Tingnan ang Notifications',
+            'url' => SITE_URL . ($isLoggedIn ? '/user/notifications.php' : '/auth/login.php?redirect=' . urlencode('/user/notifications.php')),
+            'icon' => 'fa-bell'
         ],
         'ai_recommend' => [
             'en' => 'Open Smart Room Matcher', 'tl' => 'Buksan ang Smart Room Matcher',
@@ -450,6 +465,12 @@ function resolveAiActionsHtml(array $parsed, string $userMsg, string $replyText,
         $recentLower = mb_strtolower($userMsg . ' ' . $replyText . ' ' . implode(' ', array_column(array_slice($history, -2), 'content')), 'UTF-8');
         if (str_contains($recentLower, 'password') || str_contains($recentLower, 'reset')) {
             $r = $routeCatalog['forgot_password'];
+        } elseif (str_contains($recentLower, 'payment history') || str_contains($recentLower, 'history ng bayad')) {
+            $r = $routeCatalog['payment_history'];
+        } elseif (str_contains($recentLower, 'review') || str_contains($recentLower, 'rating')) {
+            $r = $routeCatalog['reviews'];
+        } elseif (str_contains($recentLower, 'notification')) {
+            $r = $routeCatalog['notifications'];
         } elseif (str_contains($recentLower, 'gcash') || str_contains($recentLower, 'maya') || str_contains($recentLower, 'bayad') || str_contains($recentLower, 'payment')) {
             $r = $routeCatalog['payment'];
         } elseif (str_contains($recentLower, 'booking') || str_contains($recentLower, 'reservation') || str_contains($recentLower, 'voucher')) {
@@ -538,6 +559,88 @@ if ($isFlagged) {
 }
 
 // ------------------------------------------------------------
+// 1b. Strict Website-Only Scope Gate (Politely decline off-topic queries)
+// ------------------------------------------------------------
+if (function_exists('isOffTopicForWebsite') && isOffTopicForWebsite($message, $history)) {
+    $refusalHtml = ($lang === 'en')
+        ? "I'm sorry, I can only assist with questions about the <strong>Marvelous Hotel &amp; Dormitory</strong> website — such as rooms, rates, promos, KYC verification, bookings, GCash/Maya payments, check-in/out schedules, and account help. How can I help with your stay today?"
+        : "Paumanhin po, tungkol lamang sa <strong>Marvelous Hotel &amp; Dormitory</strong> website ang masasagot ko — tulad ng mga kwarto, presyo, promo codes, KYC verification, booking, GCash/Maya payment, check-in/out, at account assistance. Paano po ako makakatulong sa inyong stay?";
+
+    $refusalActions = resolveAiActionsHtml(
+        ['clean_text' => $refusalHtml, 'room_ids' => [], 'routes' => ['rooms', 'contact'], 'room_queries' => []],
+        $message,
+        strip_tags($refusalHtml),
+        $history,
+        $lang,
+        $isLoggedIn,
+        null
+    );
+    $fullRefusalHtml = $refusalHtml . $refusalActions['buttons_html'];
+    $plainRefusal = aiPlainTextForSpeech($refusalHtml);
+
+    if (isDbAvailable()) {
+        try {
+            dbExec(
+                "INSERT INTO ai_logs (user_id, user_message, ai_response, intent, flagged) VALUES (?, ?, ?, 'off_topic_refused', 0)",
+                [$userId, $message, $fullRefusalHtml]
+            );
+        } catch (\Throwable $e) {}
+    }
+
+    if ($wantsStream) {
+        releaseSessionLock();
+        startSseStreamHeaders();
+        emitSseEvent('meta', ['lang' => $lang, 'stream' => true]);
+        emitSseEvent('done', [
+            'full_html'  => $fullRefusalHtml,
+            'plain_text' => $plainRefusal,
+            'source'     => 'off_topic_refused',
+            'lang'       => $lang,
+            'model'      => null,
+            'latency_ms' => 0,
+        ]);
+    } else {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'status'     => 'success',
+            'is_alert'   => false,
+            'response'   => $fullRefusalHtml,
+            'plain_text' => $plainRefusal,
+            'source'     => 'off_topic_refused',
+            'lang'       => $lang,
+        ]);
+    }
+    exit;
+}
+
+// ------------------------------------------------------------
+// HELPER: Weighted Bilingual FAQ Matcher (avoids false-positive substring hits)
+// ------------------------------------------------------------
+function matchBestFaqEntry(string $lowerMsg, array $faqs): ?array {
+    $bestFaq = null;
+    $bestScore = 0;
+
+    foreach ($faqs as $faq) {
+        $score = 0;
+        foreach ($faq['keywords'] ?? [] as $kw) {
+            $kwLower = mb_strtolower(trim((string)$kw), 'UTF-8');
+            if ($kwLower === '') continue;
+            $pattern = '/(?<![\p{L}\p{N}])' . preg_quote($kwLower, '/') . '(?![\p{L}\p{N}])/iu';
+            if (preg_match($pattern, $lowerMsg)) {
+                $wordCount = count(preg_split('/\s+/', $kwLower) ?: []);
+                $score += ($wordCount > 1 ? 4 + $wordCount : 2);
+            }
+        }
+        if ($score > $bestScore) {
+            $bestScore = $score;
+            $bestFaq = $faq;
+        }
+    }
+
+    return ($bestScore >= 2) ? $bestFaq : null;
+}
+
+// ------------------------------------------------------------
 // 2. Build Local Fallback Response Helper (only used if Live AI disabled or offline)
 // ------------------------------------------------------------
 function buildLocalFallbackReply(string $message, string $lowerMsg, string $lang, ?int $userId, array $history, ?float $detectedBudget): array {
@@ -587,6 +690,61 @@ function buildLocalFallbackReply(string $message, string $lowerMsg, string $lang
         ];
     }
 
+    // A2. Live Active Promos query
+    if (preg_match('/\b(promo|promos|promo\s*code|discount|discounts|coupon|voucher\s*code)\b/i', $lowerMsg) && isDbAvailable()) {
+        try {
+            $promos = dbRows("
+                SELECT code, description, discount_type, discount_value, min_nights, valid_until
+                FROM promos
+                WHERE status = 'active' AND (valid_until IS NULL OR valid_until >= CURDATE())
+                ORDER BY id ASC LIMIT 6
+            ");
+            if (!empty($promos)) {
+                $items = [];
+                foreach ($promos as $p) {
+                    $disc = ($p['discount_type'] === 'percent')
+                        ? rtrim(rtrim(number_format((float)$p['discount_value'], 2), '0'), '.') . '% OFF'
+                        : '₱' . number_format((float)$p['discount_value'], 0) . ' OFF';
+                    $minN = (int)($p['min_nights'] ?? 1);
+                    $items[] = "• <strong>" . htmlspecialchars($p['code']) . "</strong> — {$disc} (min {$minN} night" . ($minN > 1 ? 's' : '') . "): " . htmlspecialchars($p['description']);
+                }
+                $intro = ($lang === 'en')
+                    ? "🏷️ <strong>Currently Active Promo Codes:</strong><br><br>"
+                    : "🏷️ <strong>Mga Active Promo Codes Ngayon:</strong><br><br>";
+                $outro = ($lang === 'en')
+                    ? "<br><br>Apply any eligible code on the Booking page before confirming!"
+                    : "<br><br>Ilagay lamang ang code sa Booking page bago i-confirm ang reservation!";
+                return ['html' => $intro . implode('<br>', $items) . $outro, 'intent' => 'promos_live_local', 'routes' => ['rooms']];
+            }
+        } catch (\Throwable $e) {}
+    }
+
+    // A3. Logged-in Guest KYC Status query
+    if ($userId && preg_match('/\b(kyc|verified|verification|bakit\s+(di|hindi)\s+maka-?book|cannot\s+book|valid\s*id\s*status)\b/i', $lowerMsg) && isDbAvailable()) {
+        try {
+            $kyc = getUserKycStatus($userId);
+            if ($kyc['is_verified']) {
+                $html = ($lang === 'en')
+                    ? "✅ Your account's <strong>KYC Identity Verification is Verified</strong>! You can book any available room right away."
+                    : "✅ <strong>Verified na po ang iyong KYC Identity!</strong> Maaari ka nang mag-book ng kahit anong bakanteng kwarto ngayon.";
+                return ['html' => $html, 'intent' => 'kyc_status_local', 'routes' => ['rooms']];
+            }
+            if ($kyc['is_pending']) {
+                $html = ($lang === 'en')
+                    ? "⏳ Your valid ID is currently <strong>Pending Admin Review</strong>. You will be notified as soon as it is approved so you can book."
+                    : "⏳ Ang iyong na-upload na Valid ID ay kasalukuyang <strong>Pending Admin Review</strong>. Makakatanggap ka ng notification kapag na-approve na ito.";
+                return ['html' => $html, 'intent' => 'kyc_status_local', 'routes' => ['profile']];
+            }
+            $rejNote = ($kyc['is_rejected'] && !empty($kyc['rejection_reason']))
+                ? "<br><em>Reason:</em> " . htmlspecialchars($kyc['rejection_reason'])
+                : '';
+            $html = ($lang === 'en')
+                ? "🪪 Your account is not yet KYC-verified (<strong>" . strtoupper($kyc['status']) . "</strong>).{$rejNote}<br><br>Please open <strong>Profile Settings</strong> and upload a clear Government or School ID to unlock room booking."
+                : "🪪 Hindi pa verified ang iyong KYC (<strong>" . strtoupper($kyc['status']) . "</strong>).{$rejNote}<br><br>Pumunta lamang sa <strong>Profile Settings</strong> at mag-upload ng malinaw na Valid Government o School ID upang makapag-book.";
+            return ['html' => $html, 'intent' => 'kyc_status_local', 'routes' => ['profile']];
+        } catch (\Throwable $e) {}
+    }
+
     // B. Budget recommendation fallback
     $isRoomQuery = (bool)preg_match('/\b(room|kwarto|kuwarto|maganda|rekomenda|recommend|suggest|badyet|budget|pera|stay|tulugan)\b/i', $lowerMsg);
     if ($detectedBudget !== null && $isRoomQuery) {
@@ -624,26 +782,38 @@ function buildLocalFallbackReply(string $message, string $lowerMsg, string $lang
         }
     }
 
-    // D. Bilingual FAQ match
+    // D. Weighted Bilingual FAQ match
     $faqs = json_decode((string)file_get_contents(__DIR__ . '/training-data/faq.json'), true);
     if (is_array($faqs)) {
-        foreach ($faqs as $faq) {
-            foreach ($faq['keywords'] ?? [] as $kw) {
-                if (str_contains($lowerMsg, $kw)) {
-                    $ans = ($lang === 'en')
-                        ? ($faq['response_en'] ?? $faq['response_tl'] ?? '')
-                        : ($faq['response_tl'] ?? $faq['response_en'] ?? '');
-                    return ['html' => $ans, 'intent' => 'faq_match'];
-                }
-            }
+        $matchedFaq = matchBestFaqEntry($lowerMsg, $faqs);
+        if ($matchedFaq) {
+            $ans = ($lang === 'en')
+                ? ($matchedFaq['response_en'] ?? $matchedFaq['response_tl'] ?? '')
+                : ($matchedFaq['response_tl'] ?? $matchedFaq['response_en'] ?? '');
+            return [
+                'html'   => $ans,
+                'intent' => 'faq_match_' . ($matchedFaq['id'] ?? 'general'),
+                'routes' => $matchedFaq['routes'] ?? [],
+            ];
         }
     }
 
-    // E. Default friendly prompt
+    // D2. Specific Room mention fallback (e.g., "Room 101", "Suite 301", "Deluxe 202")
+    $mentionedRoom = findRoomByContextText($message);
+    if ($mentionedRoom) {
+        $rName = htmlspecialchars($mentionedRoom['name']);
+        $rPrice = number_format((float)$mentionedRoom['price_per_night'], 2);
+        $html = ($lang === 'en')
+            ? "Here are the details for <strong>{$rName}</strong> (<strong>₱{$rPrice}/night</strong>, up to " . (int)$mentionedRoom['capacity'] . " pax). Click below to view full details or book!"
+            : "Ito po ang detalye ng <strong>{$rName}</strong> (<strong>₱{$rPrice}/gabi</strong>, hanggang " . (int)$mentionedRoom['capacity'] . " pax). Pindutin ang button sa ibaba upang tingnan o i-book!";
+        return ['html' => $html, 'intent' => 'room_lookup_local', 'room_ids' => [(int)$mentionedRoom['id']]];
+    }
+
+    // E. Default friendly website-scoped prompt
     $defaultHtml = ($lang === 'en')
-        ? "Hello! I am Marvi, your AI concierge at Marvelous Hotel. Feel free to ask me about room recommendations for your budget (e.g., '1k budget room'), how to pay via GCash/Maya, or check-in and check-out policies!"
-        : "Kumusta po! Ako si Marvi, ang AI concierge ng Marvelous Hotel. Maaari mo akong tanungin tungkol sa kwarto para sa iyong badyet (hal. <em>'1k ano maganda room'</em>), paano magbayad via GCash/Maya, o oras ng check-in/check-out!";
-    return ['html' => $defaultHtml, 'intent' => 'fallback'];
+        ? "Hello! I'm <strong>Marvi</strong>, the official AI concierge for the Marvelous Hotel &amp; Dormitory website. Ask me about our <strong>rooms &amp; rates</strong>, <strong>active promos</strong>, <strong>KYC verification</strong>, <strong>GCash/Maya payments</strong>, <strong>cancellations</strong>, or <strong>check-in/out times</strong>!"
+        : "Kumusta po! Ako si <strong>Marvi</strong>, ang opisyal na AI concierge ng Marvelous Hotel &amp; Dormitory website. Maaari mo akong tanungin tungkol sa <strong>mga kwarto at presyo</strong>, <strong>active promos</strong>, <strong>KYC verification</strong>, <strong>GCash/Maya payment</strong>, <strong>cancellation</strong>, o <strong>check-in/out</strong>!";
+    return ['html' => $defaultHtml, 'intent' => 'fallback', 'routes' => ['rooms']];
 }
 
 $aiEnabled = getSetting('ai_enabled', '1') === '1';
@@ -653,8 +823,8 @@ $aiOptions = [
     'lang'        => $lang,
     'user_id'     => $userId,
     'history'     => $history,
-    'max_tokens'  => 520,
-    'temperature' => 0.55,
+    'max_tokens'  => 600,
+    'temperature' => 0.35,
 ];
 
 // ============================================================

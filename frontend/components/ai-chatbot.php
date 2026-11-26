@@ -71,11 +71,11 @@ $aiJsVer  = @filemtime(__DIR__ . '/../assets/js/ai-chat.js') ?: '1';
         <div class="ai-msg-icon"><i class="fa-solid fa-robot"></i></div>
         <div class="ai-msg-bubble">
           <?php if ($isUserLoggedIn && !empty($activeUserName)): ?>
-            Kumusta, <strong><?= h($activeUserName) ?></strong>! 👋 Ako si <strong>Marvi</strong>, your real-time AI concierge at <?= h($hotelName) ?>.<br><br>
-            Pwede mo akong kausapin sa <strong>Tagalog</strong> o <strong>English</strong> (type o mic 🎤) — matutulungan kita sa paghahanap ng kwarto, booking status, pagbabayad, o diretsong pagpunta sa kahit anong page!
+            Kumusta, <strong><?= h($activeUserName) ?></strong>! 👋 Ako si <strong>Marvi</strong>, ang opisyal na AI concierge ng <strong><?= h($hotelName) ?></strong> website.<br><br>
+            Tanungin mo ako tungkol sa <strong>rooms, rates, promos, KYC verification, booking, GCash/Maya payment, o password reset</strong> (Tagalog o English, type o mic 🎤)!
           <?php else: ?>
-            Kumusta! Hello! 👋 Ako si <strong>Marvi</strong>, your real-time AI concierge at <?= h($hotelName) ?>.<br><br>
-            Pwede mo akong kausapin nang natural sa <strong>Tagalog</strong> o <strong>English</strong> (mag-type o gamitin ang mic 🎤). Sabihin lang ang hanap mo at pwede kitang dalhin agad sa tamang kwarto!
+            Kumusta! Hello! 👋 Ako si <strong>Marvi</strong>, ang opisyal na AI concierge ng <strong><?= h($hotelName) ?></strong> website.<br><br>
+            Matutulungan kita sa lahat ng tungkol sa aming hotel website — <strong>rooms, rates, promos, paano mag-book, GCash/Maya payment, at lokasyon</strong> (Tagalog o English, type o mic 🎤)!
           <?php endif; ?>
 
           <div class="ai-chips-container">
@@ -89,14 +89,14 @@ $aiJsVer  = @filemtime(__DIR__ . '/../assets/js/ai-chat.js') ?: '1';
               <button type="button" class="ai-chip" onclick="sendQuickPrompt('1k ano maganda room')">
                 <i class="fa-solid fa-coins" style="color:var(--gold);"></i> 🇵🇭 1k Badyet: Anong magandang room?
               </button>
-              <button type="button" class="ai-chip" onclick="sendQuickPrompt('May available bang kwarto para sa mag-asawa o 2 tao?')">
-                <i class="fa-solid fa-user-group" style="color:#60a5fa;"></i> 🇵🇭 Pang 2 Tao / Mag-asawa
+              <button type="button" class="ai-chip" onclick="sendQuickPrompt('May promo code o discount ba ngayon?')">
+                <i class="fa-solid fa-tag" style="color:#f472b6;"></i> 🇵🇭 Active Promos &amp; Discounts
+              </button>
+              <button type="button" class="ai-chip" onclick="sendQuickPrompt('Paano mag-verify ng KYC ID at mag-book ng room?')">
+                <i class="fa-solid fa-id-card" style="color:#a78bfa;"></i> 🇵🇭 KYC &amp; Paano Mag-book
               </button>
               <button type="button" class="ai-chip" onclick="sendQuickPrompt('Magkano ang pinakamurang dormitory bed?')">
                 <i class="fa-solid fa-bed" style="color:#4ade80;"></i> 🇵🇭 Murang Dormitory Bed
-              </button>
-              <button type="button" class="ai-chip" onclick="sendQuickPrompt('Saan ang location ninyo at paano pumunta?')">
-                <i class="fa-solid fa-location-dot" style="color:#f87171;"></i> 🇵🇭 Location &amp; Directions
               </button>
               <button type="button" class="ai-chip" onclick="sendQuickPrompt('Paano magbayad gamit ang GCash o Maya?')">
                 <i class="fa-solid fa-credit-card" style="color:#38bdf8;"></i> 🇵🇭 Paano magbayad?

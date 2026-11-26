@@ -1253,8 +1253,8 @@ function normalizeAiChatHistory(array $history, int $maxMessages = 10, int $maxC
  */
 function parseAiActionMarkers(string $rawText): array {
     $allowedRoutes = [
-        'rooms', 'my_bookings', 'payment', 'profile', 'ai_recommend',
-        'contact', 'about', 'forgot_password', 'login', 'register', 'dashboard'
+        'rooms', 'my_bookings', 'payment', 'payment_history', 'profile', 'ai_recommend',
+        'reviews', 'notifications', 'contact', 'about', 'forgot_password', 'login', 'register', 'dashboard'
     ];
 
     $roomIds = [];

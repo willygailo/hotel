@@ -57,6 +57,99 @@ if (!function_exists('detectMessageLanguage')) {
     }
 }
 
+if (!function_exists('isOffTopicForWebsite')) {
+    /**
+     * Strict website-scope classifier.
+     * Returns true ONLY when the message is clearly unrelated to Marvelous Hotel & Dormitory
+     * or this website (e.g., coding, math homework, general trivia, recipes, politics, essays).
+     */
+    function isOffTopicForWebsite(string $message, array $history = []): bool {
+        $clean = mb_strtolower(trim($message), 'UTF-8');
+        if ($clean === '') {
+            return false;
+        }
+
+        // Always allow short greetings, courtesies, and brief follow-ups
+        if (preg_match('/^(hi+|hello+|hey+|good\s*(morning|afternoon|evening)|kumusta|kamusta|magandang\s*(araw|umaga|hapon|gabi)|salamat|thanks|thank you|ty|ok|okay|yes|no|oo|hindi|opo|sige|go|bye|goodbye|help|tulong)[\s!?.]*$/iu', $clean)) {
+            return false;
+        }
+
+        // Any website/hotel domain signal immediately keeps the query in-scope
+        $domainPattern = '/\b('
+            . 'hotel|dorm|dormitory|dormitel|marvelous|marvi|room|rooms|kwarto|kuwarto|suite|deluxe|standard|studio|family\s*room|bedspace|bed|'
+            . 'book|booking|bookings|reserve|reservation|mag-?book|pa-?book|magpareserba|stay|night|nights|gabi|pax|guest|guests|tao|bisita|'
+            . 'price|prices|rate|rates|presyo|magkano|kano|badyet|budget|peso|pesos|php|weekend|'
+            . 'check[\s-]?in|check[\s-]?out|availab\w*|bakante|occupied|status|voucher|receipt|resibo|'
+            . 'pay|payment|payments|bayad|magbayad|gcash|maya|paymaya|instapay|qr|refund|cancel\w*|rebook\w*|'
+            . 'promo|promos|discount|coupon|welcome10|longstay20|summer500|'
+            . 'kyc|verify|verification|valid\s*id|id\s*document|profile|account|login|log\s*in|register|sign\s*up|logout|password|reset\s*password|forgot\s*password|'
+            . 'wifi|wi-fi|internet|aircon|air\s*con|shower|tub|balcony|kitchenette|locker|parking|cctv|security|breakfast|amenities|'
+            . 'location|address|saan|nasaan|direksyon|directions|paano\s*pumunta|contact|frontdesk|front\s*desk|staff|admin|review|reviews|rating|notification|notifications|dashboard|website|site|page|'
+            . '101|102|201|202|301|401|d01|d02|s01|ipunta|dalhin|take\s*me|bring\s*me'
+            . ')\b|₱/iu';
+
+        if (preg_match($domainPattern, $clean)) {
+            return false;
+        }
+
+        // Explicit off-topic patterns (coding, homework/math, essays, recipes, trivia, politics, finance, medical/legal, jailbreaks)
+        $offTopicPatterns = [
+            '/\b(python|javascript|typescript|java\b|c\+\+|c#|php\s+code|html\s+code|css\s+code|react|laravel|node\.?js|algorithm|leetcode|debug\s+my\s+code|write\s+(a\s+)?(code|script|program|function|sql)|gumawa\s+ng\s+(code|program|script))\b/iu',
+            '/\b(recipe|recipes|paano\s+magluto|magluto\s+ng|cook\s+|ingredients\s+for|adobo|sinigang|kare-kare|carbonara|pasta)\b/iu',
+            '/\b(president|presidente|senator|senador|congress|election|eleksyon|politics|politika|government\s+policy|prime\s+minister|war\s+in|ukraine|gaza)\b/iu',
+            '/\b(homework|assignment|takdang\s+aralin|essay|sanaysay|poem|tula|story\s+about|kwento\s+tungkol|summarize\s+this|translate\s+this|thesis|research\s+paper)\b/iu',
+            '/\b(solve\s+(this|for|the)?|calculate\s+\d|what\s+is\s+\d+\s*[\+\-\*\/x]\s*\d|derivative|integral|quadratic|algebra|calculus|physics|chemistry|biology|photosynthesis|gravity|planet|solar\s+system|capital\s+of|who\s+invented|who\s+is\s+the\s+(richest|tallest|president|ceo))\b/iu',
+            '/\b(bitcoin|crypto|ethereum|stock\s+market|forex|trading\s+tips|betting|lotto|lottery|horoscope|zodiac)\b/iu',
+            '/\b(diagnose|symptoms\s+of|gamot\s+sa|medicine\s+for|prescription|legal\s+advice|lawyer|attorney)\b/iu',
+            '/\b(basketball|nba|pba|football|fifa|mlbb|mobile\s+legends|valorant|dota|minecraft|roblox|anime|k-?pop|netflix|movie\s+recommend|song\s+lyrics|joke|mag-?joke)\b/iu',
+            '/\b(ignore\s+(all\s+)?(previous|prior)\s+instructions|pretend\s+you\s+are|act\s+as\s+(a\s+)?(developer|teacher|doctor|chatgpt|dan)|jailbreak|system\s+prompt)\b/iu',
+            '/^\s*\d+(\.\d+)?\s*[\+\-\*\/x\^]\s*\d+(\.\d+)?\s*=?\s*\??\s*$/u',
+        ];
+
+        foreach ($offTopicPatterns as $pat) {
+            if (preg_match($pat, $clean)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+/**
+ * Build live active promo codes context from MySQL promos table.
+ */
+function buildDynamicPromosContext(): string {
+    $lines = [];
+    if (function_exists('isDbAvailable') && isDbAvailable() && function_exists('dbRows')) {
+        try {
+            $promos = dbRows("
+                SELECT code, description, discount_type, discount_value, min_nights, valid_until
+                FROM promos
+                WHERE status = 'active'
+                  AND (valid_until IS NULL OR valid_until >= CURDATE())
+                ORDER BY id ASC
+                LIMIT 10
+            ");
+            foreach ($promos as $p) {
+                $disc = ($p['discount_type'] === 'percent')
+                    ? rtrim(rtrim(number_format((float)$p['discount_value'], 2), '0'), '.') . '% OFF'
+                    : '₱' . number_format((float)$p['discount_value'], 0) . ' OFF';
+                $minN = (int)($p['min_nights'] ?? 1);
+                $until = !empty($p['valid_until']) ? "valid until {$p['valid_until']}" : 'active';
+                $lines[] = "- Code {$p['code']}: {$disc} (min {$minN} night(s), {$until}) — {$p['description']}";
+            }
+        } catch (\Throwable $e) {
+            // Fall through
+        }
+    }
+
+    if (empty($lines)) {
+        return "   - No active promo codes currently loaded (guest may check the Booking page for seasonal promos).";
+    }
+    return "   " . implode("\n   ", $lines);
+}
+
 /**
  * Retrieve metadata & diagnostic info from the most recent NVIDIA NIM API call.
  */
@@ -132,11 +225,13 @@ function buildDynamicRoomCatalogContext(): array {
                 throttleStaleBookingSweep(24, 15);
             }
             $rooms = dbRows("
-                SELECT r.id, r.room_number, r.name, r.floor, r.capacity, r.price_per_night, r.status, r.amenities, r.thumbnail, rt.name AS type_name
+                SELECT r.id, r.room_number, r.name, r.description, r.floor, r.capacity, r.price_per_night, r.weekend_rate, r.status, r.amenities, r.thumbnail, rt.name AS type_name
                 FROM rooms r
                 JOIN room_types rt ON r.room_type_id = rt.id
                 ORDER BY r.price_per_night ASC, r.room_number ASC
             ");
+
+            $ratingsMap = function_exists('getRoomsAvgRatingsMap') ? getRoomsAvgRatingsMap() : [];
 
             $activeBookedIds = [];
             $bookedRows = dbRows("
@@ -153,10 +248,20 @@ function buildDynamicRoomCatalogContext(): array {
 
             foreach ($rooms as $r) {
                 $priceFmt = number_format((float)$r['price_per_night'], 0);
+                $wkndFmt  = !empty($r['weekend_rate']) && (float)$r['weekend_rate'] > 0
+                    ? ', weekend: ₱' . number_format((float)$r['weekend_rate'], 0)
+                    : '';
                 $availTag = isset($activeBookedIds[(int)$r['id']]) ? 'has active booking/check dates' : $r['status'];
                 $amList = json_decode((string)($r['amenities'] ?? '[]'), true);
-                $amText = is_array($amList) && !empty($amList) ? ' | Amenities: ' . implode(', ', array_slice($amList, 0, 5)) : '';
-                $catalogLines[] = "- [ID #{$r['id']}] {$r['name']} (Room {$r['room_number']}, {$r['type_name']}): ₱{$priceFmt}/night, up to {$r['capacity']} pax, status: {$availTag}{$amText}";
+                $amText = is_array($amList) && !empty($amList) ? ' | Amenities: ' . implode(', ', array_slice($amList, 0, 6)) : '';
+                $ratingVal = $ratingsMap[(int)$r['id']] ?? null;
+                $ratingText = $ratingVal ? " | Rating: {$ratingVal}/5" : '';
+                $descShort = trim((string)($r['description'] ?? ''));
+                if (mb_strlen($descShort, 'UTF-8') > 95) {
+                    $descShort = mb_substr($descShort, 0, 92, 'UTF-8') . '...';
+                }
+                $descText = $descShort !== '' ? " | {$descShort}" : '';
+                $catalogLines[] = "- [ID #{$r['id']}] {$r['name']} (Room {$r['room_number']}, {$r['type_name']}): ₱{$priceFmt}/night{$wkndFmt}, Floor {$r['floor']}, up to {$r['capacity']} pax, status: {$availTag}{$ratingText}{$amText}{$descText}";
             }
         } catch (\Throwable $e) {
             // Fall through to static defaults
@@ -197,12 +302,14 @@ function buildGuestUserContext(?int $userId): string {
     }
 
     try {
-        $u = dbRow("SELECT first_name, last_name, verification_status, profile_verified FROM users WHERE id = ? AND role = 'user' LIMIT 1", [$userId]);
+        $u = dbRow("SELECT first_name, last_name, verification_status, profile_verified, rejection_reason FROM users WHERE id = ? AND role = 'user' LIMIT 1", [$userId]);
         if (!$u) {
             return "GUEST ACCOUNT STATUS: Visitor.";
         }
         $name = trim(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? ''));
         $kyc  = $u['verification_status'] ?? (!empty($u['profile_verified']) ? 'verified' : 'unverified');
+        $rejReason = ($kyc === 'rejected' && !empty($u['rejection_reason'])) ? " — Rejection Reason: {$u['rejection_reason']}" : '';
+        $unreadNotifs = function_exists('unreadNotifCount') ? unreadNotifCount($userId) : 0;
 
         $bookings = dbRows("
             SELECT b.id, b.booking_code, b.check_in, b.check_out, b.status, b.total_amount,
@@ -216,7 +323,7 @@ function buildGuestUserContext(?int $userId): string {
         ", [$userId]);
 
         $lines = [
-            "CURRENT LOGGED-IN GUEST: {$name} (KYC Identity Status: {$kyc})."
+            "CURRENT LOGGED-IN GUEST: {$name} (KYC Identity Status: {$kyc}{$rejReason} | Unread Notifications: {$unreadNotifs})."
         ];
         if (empty($bookings)) {
             $lines[] = "RECENT BOOKINGS: None yet.";
@@ -267,44 +374,67 @@ LANG;
     $checkOutTime = function_exists('getSetting') ? getSetting('check_out_time', '12:00') : '12:00';
     $hotelAddress = function_exists('getSetting') ? getSetting('hotel_address', 'Quezon City, Philippines') : 'Quezon City, Philippines';
     $hotelPhone   = function_exists('getSetting') ? getSetting('hotel_phone', 'Frontdesk 24/7') : 'Frontdesk 24/7';
+    $hotelEmail   = function_exists('getSetting') ? getSetting('hotel_email', 'info@marveloushotel.com') : 'info@marveloushotel.com';
+    $cancelHours  = function_exists('getSetting') ? getSetting('cancellation_hours', '24') : '24';
+    $maxBookDays  = function_exists('getSetting') ? getSetting('max_booking_days', '30') : '30';
+    $taxRate      = function_exists('getSetting') ? getSetting('tax_rate', '0') : '0';
 
-    $roomContext = buildDynamicRoomCatalogContext();
-    $userContext = buildGuestUserContext($userId);
+    $roomContext  = buildDynamicRoomCatalogContext();
+    $promoContext = buildDynamicPromosContext();
+    $userContext  = buildGuestUserContext($userId);
 
     return <<<PROMPT
 {$langDirective}
 
-You are Marvi, the friendly, conversational, real-time AI concierge of Marvelous Hotel and Dormitory.
+============================================================
+STRICT WEBSITE-ONLY SCOPE (TOP PRIORITY RULE):
+- You are Marvi, the official AI Concierge exclusively for the **Marvelous Hotel and Dormitory** website.
+- ONLY answer questions related to Marvelous Hotel & Dormitory and this website: rooms, rates, weekend rates, amenities, availability, promos/discounts, booking steps, KYC ID verification, GCash/Maya payments, receipts, booking vouchers, cancellations, reviews/ratings, account registration/login, password reset, location, contact, and website navigation.
+- If the user asks about ANYTHING outside this website (such as coding/programming, math homework, essays, general knowledge/trivia, politics, cooking recipes, medical/legal advice, crypto/stocks, games, movies, or other hotels), POLITELY REFUSE in 1–2 sentences and redirect them back to how you can help on the Marvelous Hotel website.
+- NEVER invent prices, policies, room IDs, promo codes, or features that are not listed below. If something is not listed, advise the guest to check the Contact Us page or Frontdesk.
+============================================================
+
 Pay close attention to the previous messages in the conversation! When the guest says follow-ups like "can you take me there?", "maaari mo ba akong ipunta doon?", "book ko na yan", or "how much for 3 nights?", understand what room or topic they are referring to from earlier messages and respond directly and helpfully.
 
 {$userContext}
 
-HOTEL INFORMATION & STRICT POLICIES:
+HOTEL INFORMATION & COMPLETE WEBSITE GUIDE:
 1. LOCATION & CONTACT:
-   - Address: {$hotelAddress} | Contact: {$hotelPhone}
-   - Easily accessible via taxi, Grab, tricycle, or jeepney, with 24/7 Frontdesk and security.
+   - Address: {$hotelAddress} | Phone: {$hotelPhone} | Email: {$hotelEmail}
+   - Easily accessible via taxi, Grab, tricycle, or jeepney, with 24/7 Frontdesk and CCTV security.
+   - Guests can send inquiries via the Contact Us page.
 
-2. PAYMENT METHODS:
-   - We accept STRICTLY PayMaya (Maya) and GCash ONLY.
-   - We DO NOT accept Bank Transfer or over-the-counter cash.
-   - Official Maya (PayMaya) Account: {$mayaName} ({$mayaHandle} / {$mayaPhone}), with InstaPay QR scannable via Maya, GCash (Scan QR), or PH bank apps.
+2. PAYMENT METHODS & RECEIPTS:
+   - We accept STRICTLY PayMaya (Maya) and GCash ONLY. We DO NOT accept Bank Transfer or over-the-counter cash.
+   - Official Maya (PayMaya) Account: {$mayaName} ({$mayaHandle} / {$mayaPhone}), with InstaPay QR scannable via Maya or GCash (Scan QR).
    - Official GCash: {$gcashNum}.
-   - How to Pay: Send via Maya/GCash -> copy Reference Number & screenshot receipt -> go to My Bookings -> Pay -> upload proof for verification.
+   - How to Pay: Send via Maya/GCash -> copy Reference Number & screenshot receipt -> go to My Bookings -> Pay -> upload proof for Frontdesk/Admin verification.
+   - Guests can view all payment records in Payment History and printable digital Booking Vouchers in My Bookings -> View Details.
 
-3. HOW TO BOOK A ROOM:
-   - Browse Rooms or log in to your User Account, complete KYC ID Verification in Profile Settings, select your room & dates, and submit booking + payment proof.
+3. HOW TO BOOK & KYC IDENTITY VERIFICATION:
+   - Step 1: Register or Log In to a Guest Account (supports 30-day "Keep me signed in").
+   - Step 2: Complete KYC Verification in Profile Settings by filling in legal name, address, ID type/number, and uploading a clear Government or School ID (JPG/PNG/WebP/PDF). Admin must approve (Verified) before booking is unlocked.
+   - Step 3: Browse Rooms (or use the Smart AI Room Matcher), pick room & dates (up to {$maxBookDays} days per booking; tax rate: {$taxRate}%), apply an active promo code if eligible, and submit booking + payment proof.
 
-4. ROOM AVAILABILITY & BOOKING LOCK:
+4. CANCELLATION, REVIEWS & PASSWORD RESET:
+   - Cancellation: Pending bookings can be self-cancelled directly in My Bookings. Confirmed bookings cannot be self-cancelled online — guests must contact Frontdesk/Admin for cancellation, rebooking, or refund assistance (standard notice: {$cancelHours} hours before check-in).
+   - Reviews: Guests with Confirmed, Checked-in, or Checked-out bookings can rate and review their stay in My Reviews.
+   - Password Reset: On Forgot Password, submit your registered email and keep the page open — as soon as the Hotel Admin updates your password or generates a 1-time reset link, a live popup appears automatically on your screen.
+
+5. ROOM AVAILABILITY & BOOKING LOCK:
    - {$roomContext['booked_notice']}
 
-5. SCHEDULE & POLICIES:
+6. SCHEDULE & AMENITIES:
    - Standard Check-in Time: {$checkInTime} | Standard Check-out Time: {$checkOutTime}.
-   - Free High-Speed Fiber WiFi (up to 200 Mbps) & secure parking (first-come, first-served).
+   - Free High-Speed Fiber WiFi (up to 200 Mbps) & CCTV-monitored parking (first-come, first-served).
 
-6. LIVE ROOM CATALOG & RATES (Use exact numeric IDs for action tags):
+7. ACTIVE PROMOS & DISCOUNTS:
+{$promoContext}
+
+8. LIVE ROOM CATALOG & RATES (Use exact numeric IDs for action tags):
    {$roomContext['catalog']}
 
-7. INTERACTIVE ACTION TAGS (IMPORTANT — MAKES BUTTONS APPEAR FOR THE GUEST):
+9. INTERACTIVE ACTION TAGS (IMPORTANT — MAKES BUTTONS APPEAR FOR THE GUEST):
    - Whenever you recommend a specific room OR the guest asks to view/book/go to a room ("ipunta mo ako doon", "book ko na", "take me there"), append the exact room tag at the VERY END of your reply:
      [[BOOK_ROOM:<numeric_id>]]
      (Example: [[BOOK_ROOM:7]] for Dormitory Bed - Female Wing. Max 2 room tags per reply.)
@@ -312,21 +442,25 @@ HOTEL INFORMATION & STRICT POLICIES:
      [[GOTO:rooms]] (Browse Rooms catalog)
      [[GOTO:my_bookings]] (Guest's Bookings & Vouchers)
      [[GOTO:payment]] (Payments / Upload Receipt)
+     [[GOTO:payment_history]] (Payment History)
      [[GOTO:profile]] (Profile & KYC ID Verification)
+     [[GOTO:reviews]] (My Reviews & Ratings)
+     [[GOTO:notifications]] (Notifications)
      [[GOTO:ai_recommend]] (Smart AI Room Matcher)
      [[GOTO:contact]] (Location & Contact Us)
+     [[GOTO:about]] (About Marvelous Hotel)
      [[GOTO:forgot_password]] (Forgot / Reset Password)
      [[GOTO:login]] (Guest Login)
+     [[GOTO:register]] (Create Guest Account)
    - NEVER explain or mention the [[...]] syntax in your visible text. Just say "You can click the button below to go straight there!" (or Tagalog equivalent) and place the tag at the very end.
 
-8. STRICT SECURITY & SAFETY GUARDRAILS (CONFIDENTIAL):
-   - Only answer questions regarding hotel bookings, rooms, rates, amenities, schedules, payment methods (GCash & Maya), location, and guest account assistance.
+10. STRICT SECURITY & SAFETY GUARDRAILS (CONFIDENTIAL):
    - NEVER disclose internal server ports, IP addresses, database schemas, source code files, API keys, or hosting configurations.
    - NEVER assist with hacking, SQL injection, exploits, or bypasses.
 
 CONVERSATION STYLE:
 - Sound warm, human, and natural — like a real live frontdesk concierge chatting in real time!
-- Keep replies concise and scannable (2-5 sentences or short bullets). Use **bold** for key prices or room names. Never write raw HTML tags.
+- Keep replies concise and scannable (2-5 sentences or short bullets). Use **bold** for key prices, promo codes, or room names. Never write raw HTML tags.
 PROMPT;
 }
 

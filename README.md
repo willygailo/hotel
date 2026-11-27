@@ -1,6 +1,46 @@
 # 🏨 Marvelous Hotel and Dormitory Booking and Reservation Management System with AI-Based Room Recommendation
 
-A comprehensive **3-Tier Hotel & Dormitory Web Application** structured cleanly into **`frontend/`** (**Tailwind CSS + Alpine.js 3**, HTML5, CSS3, ES6+ JavaScript), **`backend/`** (**Slim 4 PHP 8 REST API Framework**, PSR-4 Services/Controllers/Middleware, Real-Time NVIDIA NIM SSE AI), and **`database/`** (**MySQL / MariaDB SQL** via PDO with 18 versioned migrations), designed to run natively on **XAMPP**.
+A comprehensive **3-Tier Hotel & Dormitory Web Application** structured cleanly into **`frontend/`** (**Tailwind CSS + Alpine.js 3**, HTML5, CSS3, ES6+ JavaScript), **`backend/`** (**Slim 4 PHP 8 REST API Framework**, PSR-4 Services/Controllers/Middleware, Real-Time NVIDIA NIM SSE AI), and **`database/`** (**MySQL / MariaDB SQL** via PDO with 20 versioned migrations), designed to run natively on **XAMPP**.
+
+---
+
+## 🎨 System Design Layouts & Architecture Diagrams
+
+### 1. System Architecture
+High-level multi-tier blueprint connecting **Admin**, **Frontdesk Staff**, **Guest / Customer**, and **Mobile Visitor** clients over the web into the 7 core system modules, **MySQL Database**, and **NVIDIA NIM AI API**.
+
+<p align="center">
+  <img src="docs/diagrams/system_architecture_marvelous_hotel.png" alt="System Architecture — Marvelous Hotel & Dormitory Booking and Reservation System" width="100%">
+</p>
+
+### 2. Level 0 Data Flow Diagram (Context Diagram)
+Top-level context view illustrating bidirectional data flows between the **Marvelous Hotel & Dormitory Booking and Reservation Management System** and all four external entities (**Admin**, **Guest / Customer**, **Frontdesk Staff**, and **NVIDIA NIM AI Service**).
+
+<p align="center">
+  <img src="docs/diagrams/level_0_dfd_marvelous_hotel.png" alt="Level 0 Data Flow Diagram — Marvelous Hotel & Dormitory System" width="92%">
+</p>
+
+### 3. Level 1 Data Flow Diagram
+Detailed decomposition into **6 balanced processes (`1.0`–`6.0`)** and **5 database stores (`D1`–`D5`)** covering Accounts & KYC, Rooms & Settings, Bookings & Check-in/Out, Maya/GCash Payment Verification, Marvi AI Assistance, and Executive Analytics & Reporting.
+
+<p align="center">
+  <img src="docs/diagrams/level_1_dfd_marvelous_hotel.png" alt="Level 1 Data Flow Diagram — Marvelous Hotel & Dormitory System" width="100%">
+</p>
+
+### 4. Accommodation Catalog Design Layout (3 Overnight Hotel Rooms + 3 Dormitory Rooms)
+Every room in the 6-room catalog features a unique photorealistic interior image managed with automatic `?v=<filemtime>` cache-busting and Admin Hotel vs. Dormitory CRUD controls (`frontend/admin/rooms.php`).
+
+#### 🌙 Hotel Rooms (Overnight / Pang-gabi)
+| Room #101 — Standard Hotel Room | Room #201 — Deluxe Hotel Room | Room #301 — Executive Suite |
+| :---: | :---: | :---: |
+| <img src="frontend/assets/images/rooms/room-101.jpg" alt="Room 101 Standard Hotel Room" width="260"> | <img src="frontend/assets/images/rooms/room-201.jpg" alt="Room 201 Deluxe Hotel Room" width="260"> | <img src="frontend/assets/images/rooms/suite-301.jpg" alt="Room 301 Executive Suite" width="260"> |
+| **Overnight · Max 2 Pax** · ₱1,500/night | **Overnight · Max 2 Pax** · ₱2,500/night | **Overnight · Max 4 Pax** · ₱4,200/night |
+
+#### 🛏️ Dormitory Rooms (Per Bed / Night)
+| Room #D01 — Female Dormitory | Room #D02 — Male Dormitory | Room #D03 — Mixed Barkada Dormitory |
+| :---: | :---: | :---: |
+| <img src="frontend/assets/images/rooms/dorm-f01.jpg" alt="Room D01 Female Dormitory" width="260"> | <img src="frontend/assets/images/rooms/dorm-m02.jpg" alt="Room D02 Male Dormitory" width="260"> | <img src="frontend/assets/images/rooms/dorm-03.jpg" alt="Room D03 Mixed Barkada Dormitory" width="260"> |
+| **Dormitory · 6 Beds** · ₱450/bed | **Dormitory · 6 Beds** · ₱450/bed | **Dormitory · 8 Beds** · ₱400/bed |
 
 ---
 
@@ -232,9 +272,10 @@ hotel/
 ├── database/
 │   ├── marvelous_hotel.sql     <- Initial database schema & seed data
 │   ├── migrate.php             <- Versioned SQL migration runner (schema_migrations ledger)
-│   ├── migrations/             <- 18 versioned SQL migrations
+│   ├── migrations/             <- 20 versioned SQL migrations (0001–0020)
 │   └── ERD.md                  <- 14-table Entity-Relationship Diagram & Data Dictionary
 │
+├── docs/diagrams/              <- High-res System Architecture, Level 0 DFD & Level 1 DFD (PNG + SVG)
 ├── config/apache/              <- Multi-port Apache VirtualHost templates (vhosts-linux.conf, vhosts-windows.conf)
 ├── scripts/                    <- Utility & PDF documentation generators (generate_roles_architecture_pdf.py, share-capstone.sh, etc.)
 ├── storage/                    <- Runtime logs, PHP sessions, and short-TTL AI/sweep caches (git-ignored)
@@ -270,6 +311,14 @@ hotel/
 ---
 
 ## 📋 Changelog
+
+### v1.1.9 (6-Room Catalog, Admin Hotel/Dorm CRUD, Marvi AI Upgrade, Portal Audit & Design Layouts — 2026-11-27)
+- ✅ **System Design Layouts & Architecture Diagrams (`docs/diagrams/`)** — Added high-resolution print-ready **System Architecture**, **Level 0 DFD (Context Diagram)**, and **Level 1 DFD** diagrams (PNG + editable SVG) embedded directly in `README.md`.
+- ✅ **6-Room Catalog & Unique Room Photography (`0020_six_rooms_hotel_and_dormitory.sql`)** — Streamlined inventory into **3 Overnight Hotel Rooms** (`#101`, `#201`, `#301`) and **3 Dormitory Rooms** (`#D01`, `#D02`, `#D03`), each with a distinct photorealistic image and automatic `?v=<filemtime>` cache-busting via `roomThumbUrl()`.
+- ✅ **Admin Hotel Room vs. Dormitory Room CRUD (`frontend/admin/rooms.php`)** — Added explicit **Hotel Room (Overnight)** vs. **Dormitory Room** category toggles in both Add & Edit modals, full `is_dorm`/`weekend_rate`/`amenities`/`tags` persistence, built-in photo preset previews + custom uploads, and live category filters.
+- ✅ **Marvi AI Website-Only Grounding Upgrade (`backend/ai/chatbot.php`, `nvidia-client.php`, `faq.json`)** — Added pre-LLM off-topic gate (`isOffTopicForWebsite()`), weighted bilingual FAQ scorer (18 entries), live promos/weekend rates/ratings/KYC context, and additional action routes (`reviews`, `payment_history`, `notifications`).
+- ✅ **Password Reset Live Dispatch Fix (`0019_fix_password_reset_status_enum.sql`)** — Added idempotent `ensurePasswordResetSchema()` and `appNowSql()` timezone alignment fixing `password_reset_requests.status` ENUM and live user reset popup delivery.
+- ✅ **Full Staff & Admin Portal Audit Fixes** — Synced Staff KPI counters with live `checked_in` stays, hardened Admin `bookings.php` (removed leading whitespace before `<?php`, added maintenance/in-house check-in guards and guest notifications), replaced unsafe `addslashes(h(...))` JS quoting with `json_encode` HEX flags, unified `assetUrl()` avatar fallbacks, normalized `audit-logs.php` role aliases, and hardened AI fetch error handling.
 
 ### v1.1.8 (Auto-Release Expired Bookings, Settings Cleanup & Role Architecture Guide — 2026-11-25)
 - ✅ **Automatic Stay Expiration & Room Release (`autoReleaseExpiredStays()`, `isBookingStayExpired()`)** — Bookings (`checked_in`, `confirmed`, `pending`) whose `check_out` date and configured `settings.check_out_time` (default `12:00` PM Asia/Manila) have elapsed are automatically transitioned (`checked_out` or `cancelled`), releasing idle rooms back to `available` (`releaseRoomOccupancyIfIdle()`), notifying guests, and recording `audit_logs`.
@@ -377,4 +426,4 @@ MIT License — Feel free to use, modify, and distribute.
 
 ---
 
-*Last Updated: 2026-11-25 | Marvelous Hotel & Dormitory Booking System v1.1.8*
+*Last Updated: 2026-11-27 | Marvelous Hotel & Dormitory Booking System v1.1.9*

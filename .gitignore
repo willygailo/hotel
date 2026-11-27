@@ -22,9 +22,8 @@ storage/*.key
 .DS_Store
 Thumbs.db
 
-# Generated Documentation & Thesis Diagrams
+# Generated Documentation PDFs (keep docs/diagrams/ tracked for README layouts)
 docs/*.pdf
-docs/diagrams/
 
 # IDE & Editor Settings
 .vscode/

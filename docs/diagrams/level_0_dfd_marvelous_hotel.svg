@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="860" viewBox="0 0 1200 860">
+  <defs>
+    <!-- Crisp triangular arrowhead matching the reference DFD -->
+    <marker id="arrow" viewBox="0 0 12 12" refX="10.5" refY="6"
+            markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 1 1.5 L 11 6 L 1 10.5 L 3.2 6 Z" fill="#1F2937"/>
+    </marker>
+
+    <!-- Clip path for center process box rounded corners -->
+    <clipPath id="processClip">
+      <rect x="465" y="328" width="270" height="204" rx="18" ry="18"/>
+    </clipPath>
+
+    <style>
+      .entity-box {
+        fill: #C6F6C6;
+        stroke: #64D67A;
+        stroke-width: 2;
+      }
+      .entity-text {
+        font-family: 'Inter', 'DejaVu Sans', Arial, sans-serif;
+        font-size: 18px;
+        font-weight: 500;
+        fill: #1A202C;
+        text-anchor: middle;
+      }
+      .process-bg {
+        fill: #FFFFFF;
+        stroke: #56D178;
+        stroke-width: 1.5;
+      }
+      .process-band {
+        fill: #56D178;
+      }
+      .process-text {
+        font-family: 'Inter', 'DejaVu Sans', Arial, sans-serif;
+        font-size: 17px;
+        font-weight: 600;
+        fill: #1A202C;
+        text-anchor: middle;
+      }
+      .flow-line {
+        stroke: #1F2937;
+        stroke-width: 1.85;
+        fill: none;
+        marker-end: url(#arrow);
+      }
+      .flow-label {
+        font-family: 'Inter', 'DejaVu Sans', Arial, sans-serif;
+        font-size: 14.5px;
+        font-weight: 500;
+        fill: #1F2937;
+        text-anchor: middle;
+      }
+    </style>
+  </defs>
+
+  <!-- Pure White Background -->
+  <rect x="0" y="0" width="1200" height="860" fill="#FFFFFF"/>
+
+  <!-- ================= EXTERNAL ENTITIES ================= -->
+
+  <!-- TOP: Admin -->
+  <g id="entity-admin">
+    <rect class="entity-box" x="515" y="38" width="170" height="108" rx="18" ry="18"/>
+    <text class="entity-text" x="600" y="98">Admin</text>
+  </g>
+
+  <!-- LEFT: Guest / Customer -->
+  <g id="entity-guest">
+    <rect class="entity-box" x="38" y="376" width="178" height="108" rx="18" ry="18"/>
+    <text class="entity-text" x="127" y="424">Guest /</text>
+    <text class="entity-text" x="127" y="447">Customer</text>
+  </g>
+
+  <!-- RIGHT: Frontdesk Staff -->
+  <g id="entity-staff">
+    <rect class="entity-box" x="984" y="376" width="178" height="108" rx="18" ry="18"/>
+    <text class="entity-text" x="1073" y="424">Frontdesk</text>
+    <text class="entity-text" x="1073" y="447">Staff</text>
+  </g>
+
+  <!-- BOTTOM: NVIDIA NIM AI Service -->
+  <g id="entity-ai">
+    <rect class="entity-box" x="502" y="714" width="196" height="108" rx="18" ry="18"/>
+    <text class="entity-text" x="600" y="762">NVIDIA NIM</text>
+    <text class="entity-text" x="600" y="785">AI Service</text>
+  </g>
+
+  <!-- ================= CENTER PROCESS (LEVEL 0) ================= -->
+  <g id="process-center">
+    <g clip-path="url(#processClip)">
+      <rect x="465" y="328" width="270" height="204" fill="#FFFFFF"/>
+      <!-- Top & Bottom green bands matching reference -->
+      <rect class="process-band" x="465" y="328" width="270" height="26"/>
+      <rect class="process-band" x="465" y="506" width="270" height="26"/>
+      <!-- Subtle vertical divider on top band (standard DFD process marker) -->
+      <line x1="504" y1="328" x2="504" y2="354" stroke="#FFFFFF" stroke-width="1.6" stroke-opacity="0.9"/>
+    </g>
+    <!-- Crisp subtle border around center process box -->
+    <rect x="465" y="328" width="270" height="204" rx="18" ry="18"
+          fill="none" stroke="#D1FAE5" stroke-width="1.2"/>
+
+    <!-- Center Process Label -->
+    <text class="process-text" x="600" y="396">Marvelous Hotel &amp;</text>
+    <text class="process-text" x="600" y="419">Dormitory Booking</text>
+    <text class="process-text" x="600" y="442">and Reservation</text>
+    <text class="process-text" x="600" y="465">Management System</text>
+  </g>
+
+  <!-- ================= DATA FLOW ARROWS & LABELS ================= -->
+
+  <!-- TOP FLOWS: Admin <-> System (y=146 to y=328, gap=182px) -->
+  <!-- Left arrow: Admin -> System (Down) -->
+  <line class="flow-line" x1="560" y1="146" x2="560" y2="325"/>
+  <g transform="translate(534, 237) rotate(-90)">
+    <text class="flow-label" x="0" y="-12">Room, Account &amp;</text>
+    <text class="flow-label" x="0" y="7">System Management</text>
+  </g>
+
+  <!-- Right arrow: System -> Admin (Up) -->
+  <line class="flow-line" x1="640" y1="328" x2="640" y2="149"/>
+  <g transform="translate(666, 237) rotate(90)">
+    <text class="flow-label" x="0" y="-12">Analytics, Audit Logs</text>
+    <text class="flow-label" x="0" y="7">&amp; Reset Requests</text>
+  </g>
+
+  <!-- LEFT FLOWS: Guest / Customer <-> System (x=216 to x=465, gap=249px) -->
+  <!-- Top arrow: Guest -> System (Right) -->
+  <line class="flow-line" x1="216" y1="402" x2="462" y2="402"/>
+  <text class="flow-label" x="340" y="375">Registration, Booking,</text>
+  <text class="flow-label" x="340" y="393">KYC &amp; Payment Proof</text>
+
+  <!-- Bottom arrow: System -> Guest (Left) -->
+  <line class="flow-line" x1="465" y1="458" x2="219" y2="458"/>
+  <text class="flow-label" x="340" y="479">Room Availability, Status</text>
+  <text class="flow-label" x="340" y="497">&amp; AI Recommendations</text>
+
+  <!-- RIGHT FLOWS: Frontdesk Staff <-> System (x=735 to x=984, gap=249px) -->
+  <!-- Top arrow: Staff -> System (Left) -->
+  <line class="flow-line" x1="984" y1="402" x2="738" y2="402"/>
+  <text class="flow-label" x="860" y="375">Check-in/Out, Approvals</text>
+  <text class="flow-label" x="860" y="393">&amp; Room Status Updates</text>
+
+  <!-- Bottom arrow: System -> Staff (Right) -->
+  <line class="flow-line" x1="735" y1="458" x2="981" y2="458"/>
+  <text class="flow-label" x="860" y="479">Pending Queues, Arrivals</text>
+  <text class="flow-label" x="860" y="497">&amp; AI Shift Briefings</text>
+
+  <!-- BOTTOM FLOWS: NVIDIA NIM AI Service <-> System (y=532 to y=714, gap=182px) -->
+  <!-- Left arrow: NVIDIA NIM -> System (Up) -->
+  <line class="flow-line" x1="560" y1="714" x2="560" y2="535"/>
+  <g transform="translate(534, 623) rotate(-90)">
+    <text class="flow-label" x="0" y="-12">AI Recommendations</text>
+    <text class="flow-label" x="0" y="7">&amp; Operational Insights</text>
+  </g>
+
+  <!-- Right arrow: System -> NVIDIA NIM (Down) -->
+  <line class="flow-line" x1="640" y1="532" x2="640" y2="711"/>
+  <g transform="translate(666, 623) rotate(90)">
+    <text class="flow-label" x="0" y="-12">Guest Prompts &amp;</text>
+    <text class="flow-label" x="0" y="7">Live Hotel Metrics</text>
+  </g>
+</svg>

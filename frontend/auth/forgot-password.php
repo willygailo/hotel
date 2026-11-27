@@ -1,7 +1,7 @@
 <?php
 // ============================================================
-// MARVELOUS HOTEL — Forgot Password
-// auth/forgot-password.php
+// MARVELOUS HOTEL — Forgot Password (Request Reset Code)
+// frontend/auth/forgot-password.php
 // ============================================================
 
 require_once __DIR__ . '/../../backend/core/config.php';
@@ -22,7 +22,6 @@ applyAuthRateLimit('forgot');
 ensurePasswordResetSchema();
 
 $error = '';
-$successHtml = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = strtolower(trim($_POST['email'] ?? ''));
@@ -32,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($token)) {
         $error = 'Invalid security session token. Please try again.';
     } elseif (empty($email) && empty($phone)) {
-        $error = 'Please enter your registered email address or phone number.';
+        $error = 'Please enter your registered email address.';
     } elseif (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Invalid email format.';
     } else {
@@ -48,10 +47,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $targetPhone = $user['phone'] ?? $phone;
             $userId = (int)$user['id'];
 
-            // 1. Create or refresh active pending row in password_reset_requests with session-bound token
+            // 1. Create or refresh active pending row in password_reset_requests (NO code issued until Admin sends one)
             $rawWatchToken = bin2hex(random_bytes(32));
             $tokenHash = hashResetRequestToken($rawWatchToken);
             $nowSql = appNowSql();
+
+            // Clear any legacy reset link token so resets are strictly gated by Admin Reset Code
+            dbExec("UPDATE users SET reset_token = NULL, reset_expires = NULL WHERE id = ?", [$userId]);
 
             $existingPending = dbRows(
                 "SELECT id FROM password_reset_requests WHERE user_id = ? AND status = 'pending' ORDER BY id DESC",
@@ -60,7 +62,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($existingPending)) {
                 $requestId = (int)$existingPending[0]['id'];
                 dbExec(
-                    "UPDATE password_reset_requests SET email = ?, phone = ?, request_token = ?, requested_at = ?, user_notified_at = NULL WHERE id = ?",
+                    "UPDATE password_reset_requests
+                     SET email = ?, phone = ?, request_token = ?, dispatch_type = NULL,
+                         new_password_assigned = NULL, reset_code = NULL, reset_code_hash = NULL,
+                         reset_code_expires = NULL, reset_code_attempts = 0,
+                         requested_at = ?, resolved_at = NULL, user_notified_at = NULL, code_used_at = NULL
+                     WHERE id = ?",
                     [$targetEmail, $targetPhone, $tokenHash, $nowSql, $requestId]
                 );
                 if (count($existingPending) > 1) {
@@ -75,61 +82,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } else {
                 $requestId = dbInsert(
-                    "INSERT INTO password_reset_requests (user_id, email, phone, request_token, status, requested_at) VALUES (?, ?, ?, ?, 'pending', ?)",
+                    "INSERT INTO password_reset_requests (user_id, email, phone, request_token, status, requested_at)
+                     VALUES (?, ?, ?, ?, 'pending', ?)",
                     [$userId, $targetEmail, $targetPhone, $tokenHash, $nowSql]
                 );
             }
 
-            // 2. Insert into notifications table for Admin
+            // 2. Notify Admin to send a one-time Reset Code
             $adminUser = dbRow("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
             if ($adminUser) {
                 createNotification(
                     (int)$adminUser['id'],
-                    'Password Reset Request',
-                    "Guest {$user['first_name']} {$user['last_name']} ({$targetEmail}) requested a password reset.",
+                    'Password Reset Code Request',
+                    "Guest {$user['first_name']} {$user['last_name']} ({$targetEmail}) requested a password reset code.",
                     'alert',
                     SITE_URL . '/admin/users.php?tab=resets',
                     'fa-key'
                 );
             }
 
-            auditLog('Password Reset Requested', 'User Auth', "Reset request submitted to Admin for {$targetEmail}");
+            auditLog('Password Reset Requested', 'User Auth', "Reset code request submitted to Admin for {$targetEmail}");
 
-            // 3. Send real email via SMTP only when SMTP is configured
-            $emailSent = false;
-            $resetToken = bin2hex(random_bytes(32));
-            $resetExpires = date('Y-m-d H:i:s', strtotime('+1 hour'));
-            dbExec("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [$resetToken, $resetExpires, $userId]);
-            if (isSmtpConfigured()) {
-                $resetLink = SITE_URL . '/auth/reset-password.php?token=' . $resetToken;
-                $userName = formatFullName($user);
-                $htmlBody = emailTemplateResetPassword($resetLink, $userName, 1);
-                $textBody = "Password Reset Request\n\nHello {$userName},\n\nClick the link below to reset your password:\n{$resetLink}\n\nThis link will expire in 1 hour.\n\n" . SITE_NAME;
-                $sendErr = null;
-                $emailSent = sendEmail($targetEmail, 'Password Reset Link — ' . SITE_NAME, $htmlBody, $textBody, $sendErr);
-            }
-
-            // 4. Bind live status watcher strictly to this browser's isolated user session
+            // 3. Bind live status watcher strictly to this browser's isolated user session
             $_SESSION['password_reset_watch'] = [
                 'request_id' => $requestId,
                 'token'      => $rawWatchToken,
                 'email'      => $targetEmail,
-                'email_sent' => $emailSent,
                 'created_at' => time(),
             ];
+            $redirectEmail = $targetEmail;
         } else {
             // Reassuring dummy watch even if email wasn't found to prevent account enumeration
+            $redirectEmail = $email ?: $phone;
             $_SESSION['password_reset_watch'] = [
                 'request_id' => 0,
                 'token'      => bin2hex(random_bytes(32)),
-                'email'      => $email ?: $phone,
-                'email_sent' => false,
+                'email'      => $redirectEmail,
                 'created_at' => time(),
             ];
         }
 
-        // PRG pattern: prevents form resubmission prompts on reload while resuming live polling
-        header('Location: forgot-password.php' . ($fromProfile ? '?from=profile' : ''));
+        // Redirect directly to the dedicated Reset Password page where Admin's code pops up live
+        $qs = ['email' => $redirectEmail];
+        if ($fromProfile) {
+            $qs['from'] = 'profile';
+        }
+        header('Location: reset-password.php?' . http_build_query($qs));
         exit;
     }
 }
@@ -141,14 +139,16 @@ if (is_array($activeWatch) && !empty($activeWatch['token'])) {
     if ($watchReqId > 0) {
         try {
             $wRow = dbRow(
-                "SELECT status, request_token, user_notified_at FROM password_reset_requests WHERE id = ? LIMIT 1",
+                "SELECT status, dispatch_type, request_token, user_notified_at, code_used_at FROM password_reset_requests WHERE id = ? LIMIT 1",
                 [$watchReqId]
             );
+            $isLegacyConsumed = (($wRow['dispatch_type'] ?? '') !== 'code' && !empty($wRow['user_notified_at']));
             if (
                 !$wRow
                 || !verifyResetRequestToken($wRow['request_token'] ?? null, (string)$activeWatch['token'])
                 || $wRow['status'] === 'dismissed'
-                || !empty($wRow['user_notified_at'])
+                || !empty($wRow['code_used_at'])
+                || $isLegacyConsumed
             ) {
                 unset($_SESSION['password_reset_watch']);
                 $activeWatch = null;
@@ -159,10 +159,6 @@ if (is_array($activeWatch) && !empty($activeWatch['token'])) {
     }
 } else {
     $activeWatch = null;
-}
-
-if ($activeWatch && !empty($activeWatch['email_sent'])) {
-    $successHtml = "A password reset link has been dispatched to <strong>" . h($activeWatch['email']) . "</strong>! Please check your Inbox and Spam/Junk folder, or stay on this page if the Admin updates your password directly.";
 }
 
 $prefillEmail = $_POST['email'] ?? ($_GET['email'] ?? ($activeWatch['email'] ?? ''));
@@ -260,7 +256,7 @@ $prefillEmail = $_POST['email'] ?? ($_GET['email'] ?? ($activeWatch['email'] ?? 
         </div>
       </a>
       <h2 style="font-family:var(--font-serif);font-size:1.5rem;color:#fff;">Forgot Password?</h2>
-      <p style="font-size:0.85rem;color:var(--text-muted);margin-top:4px;">Enter your email to request a password reset</p>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-top:4px;">Request a Reset Code from the Hotel Admin, then set your own new password</p>
     </div>
 
     <?php if (!empty($error)): ?>
@@ -278,19 +274,15 @@ $prefillEmail = $_POST['email'] ?? ($_GET['email'] ?? ($activeWatch['email'] ?? 
           </div>
           <div style="flex:1;">
             <div style="font-weight:700;color:#4ade80;font-size:0.9rem;">
-              <span class="reset-live-dot"></span>Waiting for Hotel Admin...
+              <span class="reset-live-dot"></span>Active Reset Code Request
             </div>
             <div style="font-size:0.82rem;color:#cbd5e1;margin-top:4px;line-height:1.5;">
-              <?php if ($successHtml !== ''): ?>
-                <?= $successHtml ?>
-              <?php else: ?>
-                Password reset request sent for <strong><?= h($activeWatch['email']) ?></strong>! Keep this page open — a popup will appear automatically as soon as the Admin updates your password.
-              <?php endif; ?>
+              Waiting for the Hotel Admin to send a reset code for <strong><?= h($activeWatch['email']) ?></strong>.
             </div>
             <div class="reset-watch-actions">
-              <button type="button" id="prManualCheckBtn" class="btn btn-ghost btn-sm" style="padding:6px 12px;font-size:0.78rem;border:1px solid rgba(74,222,128,0.35);color:#bbf7d0;" onclick="window.MarvelousResetWatcher && window.MarvelousResetWatcher.checkNow()">
-                <i class="fa-solid fa-rotate"></i> Check Now
-              </button>
+              <a href="reset-password.php?email=<?= urlencode((string)$activeWatch['email']) ?><?= $fromProfile ? '&from=profile' : '' ?>" class="btn btn-gold btn-sm" style="padding:6px 12px;font-size:0.78rem;">
+                <i class="fa-solid fa-key"></i> Go to Reset Password &rarr;
+              </a>
               <button type="button" class="reset-watch-link-btn" onclick="window.MarvelousResetWatcher && window.MarvelousResetWatcher.cancelWatch()">
                 Use a different email
               </button>
@@ -315,11 +307,15 @@ $prefillEmail = $_POST['email'] ?? ($_GET['email'] ?? ($activeWatch['email'] ?? 
       </div>
 
       <button type="submit" class="btn btn-gold btn-block" style="margin-top:10px;">
-        <i class="fa-solid fa-paper-plane"></i> <?= $activeWatch ? 'Resend Reset Request' : 'Send Reset Link' ?>
+        <i class="fa-solid fa-key"></i> <?= $activeWatch ? 'Resend Reset Request' : 'Request Reset Password' ?>
       </button>
     </form>
 
-    <div style="margin-top:24px;text-align:center;font-size:0.88rem;color:var(--text-muted);border-top:1px solid var(--border-subtle);padding-top:20px;">
+    <div style="margin-top:18px;text-align:center;font-size:0.84rem;color:var(--text-muted);">
+      Already have a code from Admin? <a href="reset-password.php<?= !empty($prefillEmail) ? '?email=' . urlencode($prefillEmail) : '' ?>" style="color:var(--gold);font-weight:700;">Enter Code &amp; Reset &rarr;</a>
+    </div>
+
+    <div style="margin-top:18px;text-align:center;font-size:0.88rem;color:var(--text-muted);border-top:1px solid var(--border-subtle);padding-top:18px;">
       Remembered your password? <a href="login.php<?= !empty($prefillEmail) ? '?email=' . urlencode($prefillEmail) : '' ?>" style="color:var(--gold);font-weight:700;">Log In &rarr;</a>
     </div>
   </div>
@@ -331,6 +327,7 @@ if ($activeWatch) {
     renderPasswordResetStatusModal([
         'poll_interval_ms' => 3000,
         'inline_status_id' => 'resetWatchCard',
+        'on_reset_page'    => false,
         'auto_start'       => true,
     ]);
 }

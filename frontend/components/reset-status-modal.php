@@ -1,7 +1,7 @@
 <?php
 // ============================================================
 // MARVELOUS HOTEL — Live Password Reset Status Popup Component
-// includes/components/reset-status-modal.php
+// frontend/components/reset-status-modal.php
 // ============================================================
 
 if (!function_exists('renderPasswordResetStatusModal')) {
@@ -16,11 +16,13 @@ if (!function_exists('renderPasswordResetStatusModal')) {
 
         $pollIntervalMs = max(2000, (int)($options['poll_interval_ms'] ?? 3000));
         $inlineStatusId = (string)($options['inline_status_id'] ?? '');
+        $onResetPage = !empty($options['on_reset_page']);
         $csrfToken = function_exists('generateCsrfToken') ? generateCsrfToken() : '';
         $watchEmail = (string)($watch['email'] ?? '');
         $authBase = defined('SITE_URL') ? rtrim((string)SITE_URL, '/') . '/auth/' : '';
         $pollUrl = $authBase . 'check-reset-status.php';
         $forgotUrl = $authBase . 'forgot-password.php';
+        $resetFallbackUrl = $authBase . 'reset-password.php' . ($watchEmail !== '' ? '?email=' . urlencode($watchEmail) : '');
         $loginFallbackUrl = $authBase . 'login.php';
         ?>
 <style>
@@ -130,6 +132,17 @@ if (!function_exists('renderPasswordResetStatusModal')) {
     user-select: all;
     padding: 4px 0;
   }
+  .pr-code-value {
+    flex: 1;
+    min-width: 140px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 1.85rem;
+    font-weight: 800;
+    letter-spacing: 6px;
+    color: #facc15;
+    user-select: all;
+    padding: 4px 0;
+  }
   .pr-cred-btn {
     background: rgba(255,255,255,0.07);
     border: 1px solid rgba(255,255,255,0.14);
@@ -195,6 +208,10 @@ if (!function_exists('renderPasswordResetStatusModal')) {
     .pr-cred-value {
       font-size: 1rem;
     }
+    .pr-code-value {
+      font-size: 1.5rem;
+      letter-spacing: 4px;
+    }
   }
 </style>
 
@@ -204,13 +221,13 @@ if (!function_exists('renderPasswordResetStatusModal')) {
 
     <div style="text-align:center;">
       <div class="pr-modal-icon" id="prModalIconWrap">
-        <i class="fa-solid fa-circle-check" id="prModalIcon"></i>
+        <i class="fa-solid fa-key" id="prModalIcon"></i>
       </div>
       <h3 id="prModalTitle" style="font-family:var(--font-serif);font-size:1.4rem;color:#fff;margin:0 0 6px;">
-        Password Updated by Admin!
+        Reset Code Sent by Admin!
       </h3>
       <p id="prModalSubtitle" style="font-size:0.86rem;color:#cbd5e1;margin:0;line-height:1.5;">
-        The Hotel Admin has updated the password for your account.
+        Enter the verification code below on the Reset Password page to create your own new password.
       </p>
       <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:6px;">
         <span class="pr-meta-pill"><i class="fa-solid fa-envelope" style="color:var(--gold);"></i> <span id="prModalEmail"><?= h($watchEmail) ?></span></span>
@@ -218,7 +235,37 @@ if (!function_exists('renderPasswordResetStatusModal')) {
       </div>
     </div>
 
-    <!-- Section A: Direct Assigned Temporary Password -->
+    <!-- Section C (Primary): Admin-Dispatched One-Time Reset Code -->
+    <div id="prCodeSection" style="display:none;">
+      <div class="pr-cred-box">
+        <div class="pr-cred-label">
+          <span><i class="fa-solid fa-shield-halved" style="color:var(--gold);margin-right:4px;"></i> Admin Reset Code</span>
+          <span id="prCodeExpiryBadge" style="color:#4ade80;font-weight:600;">Single-Use</span>
+        </div>
+        <div class="pr-cred-row">
+          <div class="pr-code-value" id="prCodeDisplay">------</div>
+          <button type="button" class="pr-cred-btn" id="prCopyCodeBtn">
+            <i class="fa-regular fa-copy"></i> <span>Copy Code</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="pr-tip-box" style="background:rgba(34,197,94,0.09);border-color:rgba(34,197,94,0.3);color:#bbf7d0;">
+        <i class="fa-solid fa-circle-info" style="margin-top:2px;flex-shrink:0;"></i>
+        <span>Put this code into the <strong>Admin Reset Code</strong> box, choose your own new password, and click <strong>Done</strong> to return to the Login page.</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button type="button" class="btn btn-gold btn-block" id="prUseCodeBtn">
+          <i class="fa-solid fa-key"></i> <?= $onResetPage ? 'Enter Code &amp; Set Password &rarr;' : 'Go to Reset Password &rarr;' ?>
+        </button>
+        <button type="button" class="btn btn-ghost btn-block" id="prCloseCodeBtn" style="font-size:0.84rem;">
+          Close Popup
+        </button>
+      </div>
+    </div>
+
+    <!-- Section A (Legacy): Direct Assigned Temporary Password -->
     <div id="prPasswordSection" style="display:none;">
       <div class="pr-cred-box">
         <div class="pr-cred-label">
@@ -238,7 +285,7 @@ if (!function_exists('renderPasswordResetStatusModal')) {
 
       <div class="pr-tip-box">
         <i class="fa-solid fa-shield-halved" style="margin-top:2px;flex-shrink:0;"></i>
-        <span>Copy your temporary password before leaving. For your security, this popup will not reappear once dismissed — change your password in <strong>Profile Settings</strong> after logging in.</span>
+        <span>Copy your temporary password before leaving. Change your password in <strong>Profile Settings</strong> after logging in.</span>
       </div>
 
       <div style="display:flex;flex-direction:column;gap:10px;">
@@ -251,7 +298,7 @@ if (!function_exists('renderPasswordResetStatusModal')) {
       </div>
     </div>
 
-    <!-- Section B: Admin-Generated One-Time Reset Link -->
+    <!-- Section B (Legacy): Admin-Generated One-Time Reset Link -->
     <div id="prLinkSection" style="display:none;margin-top:18px;">
       <div class="pr-tip-box" style="background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3);color:#bbf7d0;">
         <i class="fa-solid fa-link" style="margin-top:2px;flex-shrink:0;"></i>
@@ -273,7 +320,9 @@ if (!function_exists('renderPasswordResetStatusModal')) {
 (function() {
   const POLL_URL = <?= json_encode($pollUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
   const FORGOT_URL = <?= json_encode($forgotUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+  const RESET_FALLBACK_URL = <?= json_encode($resetFallbackUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
   const LOGIN_FALLBACK_URL = <?= json_encode($loginFallbackUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+  const ON_RESET_PAGE = <?= $onResetPage ? 'true' : 'false' ?>;
   const POLL_INTERVAL = <?= (int)$pollIntervalMs ?>;
   const CSRF_TOKEN = <?= json_encode($csrfToken, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
   const INLINE_CARD_ID = <?= json_encode($inlineStatusId, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
@@ -284,6 +333,7 @@ if (!function_exists('renderPasswordResetStatusModal')) {
   let latestCompletedPayload = null;
   let passwordVisible = false;
   let hasNotified = false;
+  let hasAutoOpenedForCode = false;
 
   const modal = document.getElementById('passwordResetReadyModal');
   const closeBtn = document.getElementById('prModalCloseBtn');
@@ -294,6 +344,13 @@ if (!function_exists('renderPasswordResetStatusModal')) {
   const emailEl = document.getElementById('prModalEmail');
   const timeWrap = document.getElementById('prModalTimeWrap');
   const timeEl = document.getElementById('prModalTime');
+
+  const codeSection = document.getElementById('prCodeSection');
+  const codeDisplay = document.getElementById('prCodeDisplay');
+  const codeExpiryBadge = document.getElementById('prCodeExpiryBadge');
+  const copyCodeBtn = document.getElementById('prCopyCodeBtn');
+  const useCodeBtn = document.getElementById('prUseCodeBtn');
+  const closeCodeBtn = document.getElementById('prCloseCodeBtn');
 
   const passSection = document.getElementById('prPasswordSection');
   const passDisplay = document.getElementById('prPasswordDisplay');
@@ -337,6 +394,24 @@ if (!function_exists('renderPasswordResetStatusModal')) {
     }
   }
 
+  function copyTextHelper(text, btnEl, defaultHtml) {
+    if (!text) return;
+    const onCopied = () => {
+      if (!btnEl) return;
+      btnEl.classList.add('copied');
+      btnEl.innerHTML = '<i class="fa-solid fa-check"></i> <span>Copied!</span>';
+      setTimeout(() => {
+        btnEl.classList.remove('copied');
+        btnEl.innerHTML = defaultHtml;
+      }, 2200);
+    };
+    if (typeof copyToClipboard === 'function') {
+      copyToClipboard(text, onCopied);
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(onCopied).catch(() => {});
+    }
+  }
+
   const safeHtml = (v) => (typeof escapeHtml === 'function')
     ? escapeHtml(v)
     : String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
@@ -347,35 +422,63 @@ if (!function_exists('renderPasswordResetStatusModal')) {
     if (!card) return;
 
     if (state === 'completed') {
+      const isCode = payload && payload.dispatch_type === 'code';
       const isLink = payload && payload.dispatch_type === 'link';
       card.className = 'reset-watch-card is-ready';
-      card.innerHTML = `
-        <div style="display:flex;align-items:flex-start;gap:12px;">
-          <div class="reset-watch-icon is-ready"><i class="fa-solid fa-circle-check"></i></div>
-          <div style="flex:1;">
-            <div style="font-weight:700;color:#4ade80;font-size:0.95rem;">
-              ${isLink ? 'Password Reset Link Ready!' : 'Your Password Has Been Updated!'}
-            </div>
-            <div style="font-size:0.82rem;color:#cbd5e1;margin-top:3px;line-height:1.45;">
-              The Hotel Admin has processed your request for <strong>${safeHtml(payload.email || '')}</strong>.
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-              <button type="button" class="btn btn-gold btn-sm" onclick="window.MarvelousResetWatcher.openModal()">
-                <i class="fa-solid fa-key"></i> ${isLink ? 'Open Reset Popup' : 'View New Password'}
-              </button>
+
+      if (isCode) {
+        const expText = payload.expires_at ? ` · Valid until ${safeHtml(payload.expires_at)}` : '';
+        card.innerHTML = `
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div class="reset-watch-icon is-ready"><i class="fa-solid fa-key"></i></div>
+            <div style="flex:1;">
+              <div style="font-weight:700;color:#4ade80;font-size:0.94rem;">
+                Admin Reset Code Ready!
+              </div>
+              <div style="font-size:0.8rem;color:#cbd5e1;margin-top:3px;line-height:1.45;">
+                Code for <strong>${safeHtml(payload.email || '')}</strong>${expText}:
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:1.15rem;font-weight:800;letter-spacing:3px;color:#facc15;background:#070b22;border:1px solid rgba(201,168,76,0.45);border-radius:8px;padding:4px 12px;user-select:all;">${safeHtml(payload.reset_code || '')}</span>
+                <button type="button" class="btn btn-ghost btn-sm" style="padding:5px 10px;font-size:0.76rem;border:1px solid rgba(201,168,76,0.4);color:#facc15;" onclick="window.MarvelousResetWatcher.copyCode(this)">
+                  <i class="fa-regular fa-copy"></i> <span>Copy</span>
+                </button>
+                <button type="button" class="btn btn-gold btn-sm" style="padding:5px 10px;font-size:0.76rem;" onclick="window.MarvelousResetWatcher.openModal()">
+                  <i class="fa-solid fa-up-right-from-square"></i> Popup
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      `;
+        `;
+      } else {
+        card.innerHTML = `
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div class="reset-watch-icon is-ready"><i class="fa-solid fa-circle-check"></i></div>
+            <div style="flex:1;">
+              <div style="font-weight:700;color:#4ade80;font-size:0.95rem;">
+                ${isLink ? 'Password Reset Link Ready!' : 'Your Password Has Been Updated!'}
+              </div>
+              <div style="font-size:0.82rem;color:#cbd5e1;margin-top:3px;line-height:1.45;">
+                The Hotel Admin has processed your request for <strong>${safeHtml(payload.email || '')}</strong>.
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                <button type="button" class="btn btn-gold btn-sm" onclick="window.MarvelousResetWatcher.openModal()">
+                  <i class="fa-solid fa-key"></i> ${isLink ? 'Open Reset Popup' : 'View New Password'}
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
     } else if (state === 'expired') {
       card.className = 'reset-watch-card is-expired';
       card.innerHTML = `
         <div style="display:flex;align-items:flex-start;gap:12px;">
           <div class="reset-watch-icon is-expired"><i class="fa-solid fa-clock"></i></div>
           <div style="flex:1;">
-            <div style="font-weight:700;color:#fbbf24;font-size:0.92rem;">Reset Notification Expired</div>
+            <div style="font-weight:700;color:#fbbf24;font-size:0.92rem;">Reset Code Expired</div>
             <div style="font-size:0.82rem;color:#cbd5e1;margin-top:3px;line-height:1.45;">
-              For your security, the one-time password view has expired. Please submit a new request below or ask the frontdesk for assistance.
+              For your security, your Admin reset code has expired. Please <a href="${safeHtml(FORGOT_URL)}" style="color:var(--gold);text-decoration:underline;font-weight:600;">request a new reset code</a>.
             </div>
           </div>
         </div>
@@ -401,14 +504,29 @@ if (!function_exists('renderPasswordResetStatusModal')) {
       }
     }
 
-    if (payload.dispatch_type === 'link') {
+    codeSection.style.display = 'none';
+    passSection.style.display = 'none';
+    linkSection.style.display = 'none';
+
+    if (payload.dispatch_type === 'code') {
+      titleEl.textContent = 'Reset Code Sent by Admin!';
+      subEl.textContent = 'Copy or enter this code on the Reset Password page to set your own new password.';
+      iconWrap.style.background = 'rgba(201,168,76,0.16)';
+      iconWrap.style.borderColor = 'rgba(201,168,76,0.5)';
+      iconWrap.style.color = '#facc15';
+      iconEl.className = 'fa-solid fa-key';
+      codeDisplay.textContent = payload.reset_code || '------';
+      if (codeExpiryBadge) {
+        codeExpiryBadge.textContent = payload.expires_at ? ('Expires ' + payload.expires_at) : 'Single-Use';
+      }
+      codeSection.style.display = 'block';
+    } else if (payload.dispatch_type === 'link') {
       titleEl.textContent = 'Password Reset Link Ready!';
       subEl.textContent = 'The Hotel Admin has approved your request and prepared a one-time reset link.';
       iconWrap.style.background = 'rgba(201,168,76,0.16)';
       iconWrap.style.borderColor = 'rgba(201,168,76,0.45)';
       iconWrap.style.color = '#facc15';
       iconEl.className = 'fa-solid fa-link';
-      passSection.style.display = 'none';
       linkSection.style.display = 'block';
     } else {
       titleEl.textContent = 'Password Updated by Admin!';
@@ -417,13 +535,12 @@ if (!function_exists('renderPasswordResetStatusModal')) {
       iconWrap.style.borderColor = 'rgba(34,197,94,0.45)';
       iconWrap.style.color = '#4ade80';
       iconEl.className = 'fa-solid fa-circle-check';
-      linkSection.style.display = 'none';
       passSection.style.display = 'block';
       renderPasswordMask();
     }
 
     modal.classList.add('open');
-    document.title = '(Updated!) ' + ORIGINAL_TITLE;
+    document.title = '(Code Ready!) ' + ORIGINAL_TITLE;
 
     if (!hasNotified) {
       hasNotified = true;
@@ -484,9 +601,22 @@ if (!function_exists('renderPasswordResetStatusModal')) {
       const data = await res.json();
 
       if (data.status === 'completed') {
+        latestCompletedPayload = data;
         stopPolling();
         updateInlineCard('completed', data);
-        openModalWithPayload(data);
+
+        // For code flow: auto-open popup on first delivery (or always on manual check)
+        if (data.dispatch_type === 'code') {
+          if (!data.viewed || isManual || !ON_RESET_PAGE) {
+            if (!hasAutoOpenedForCode || isManual) {
+              hasAutoOpenedForCode = true;
+              openModalWithPayload(data);
+              postAction('mark_viewed');
+            }
+          }
+        } else {
+          openModalWithPayload(data);
+        }
       } else if (data.status === 'expired') {
         stopPolling();
         updateInlineCard('expired', data);
@@ -495,7 +625,6 @@ if (!function_exists('renderPasswordResetStatusModal')) {
         updateInlineCard(data.status, data);
       }
     } catch (e) {
-      // Transient network error — keep polling quietly, show brief retry cue on manual click
       if (isManual && manualBtn) {
         manualBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Retry Check';
         setTimeout(() => {
@@ -527,6 +656,45 @@ if (!function_exists('renderPasswordResetStatusModal')) {
   if (closeBtn) {
     closeBtn.addEventListener('click', () => {
       modal.classList.remove('open');
+      document.title = ORIGINAL_TITLE;
+    });
+  }
+
+  if (copyCodeBtn) {
+    copyCodeBtn.addEventListener('click', () => {
+      if (!latestCompletedPayload || !latestCompletedPayload.reset_code) return;
+      copyTextHelper(
+        latestCompletedPayload.reset_code,
+        copyCodeBtn,
+        '<i class="fa-regular fa-copy"></i> <span>Copy Code</span>'
+      );
+    });
+  }
+
+  if (useCodeBtn) {
+    useCodeBtn.addEventListener('click', async () => {
+      await postAction('mark_viewed');
+      document.title = ORIGINAL_TITLE;
+      if (ON_RESET_PAGE) {
+        modal.classList.remove('open');
+        const codeInput = document.getElementById('resetCodeInput');
+        if (codeInput) {
+          codeInput.focus();
+          codeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      } else {
+        const target = (latestCompletedPayload && latestCompletedPayload.reset_url)
+          ? latestCompletedPayload.reset_url
+          : RESET_FALLBACK_URL;
+        window.location.href = target;
+      }
+    });
+  }
+
+  if (closeCodeBtn) {
+    closeCodeBtn.addEventListener('click', () => {
+      modal.classList.remove('open');
+      document.title = ORIGINAL_TITLE;
     });
   }
 
@@ -540,19 +708,11 @@ if (!function_exists('renderPasswordResetStatusModal')) {
   if (copyPassBtn) {
     copyPassBtn.addEventListener('click', () => {
       if (!latestCompletedPayload || !latestCompletedPayload.new_password) return;
-      const onCopied = () => {
-        copyPassBtn.classList.add('copied');
-        copyPassBtn.innerHTML = '<i class="fa-solid fa-check"></i> <span>Copied!</span>';
-        setTimeout(() => {
-          copyPassBtn.classList.remove('copied');
-          copyPassBtn.innerHTML = '<i class="fa-regular fa-copy"></i> <span>Copy</span>';
-        }, 2200);
-      };
-      if (typeof copyToClipboard === 'function') {
-        copyToClipboard(latestCompletedPayload.new_password, onCopied);
-      } else if (navigator.clipboard) {
-        navigator.clipboard.writeText(latestCompletedPayload.new_password).then(onCopied).catch(() => {});
-      }
+      copyTextHelper(
+        latestCompletedPayload.new_password,
+        copyPassBtn,
+        '<i class="fa-regular fa-copy"></i> <span>Copy</span>'
+      );
     });
   }
 
@@ -606,6 +766,14 @@ if (!function_exists('renderPasswordResetStatusModal')) {
       if (latestCompletedPayload) {
         openModalWithPayload(latestCompletedPayload);
       }
+    },
+    copyCode: (btnEl) => {
+      if (!latestCompletedPayload || !latestCompletedPayload.reset_code) return;
+      copyTextHelper(
+        latestCompletedPayload.reset_code,
+        btnEl,
+        '<i class="fa-regular fa-copy"></i> <span>Copy</span>'
+      );
     },
     cancelWatch: async () => {
       stopPolling();

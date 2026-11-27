@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="1580" viewBox="0 0 1040 1580">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M 0 1.2 L 9.5 5 L 0 8.8 L 2.2 5 Z" fill="#111111"/>
+    </marker>
+    <style>
+      .boundary { fill: #FFFFFF; stroke: #111111; stroke-width: 1.6; }
+      .sys-title { font-family: 'DejaVu Sans', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 700; fill: #111111; text-anchor: middle; }
+      .uc-text { font-family: 'DejaVu Sans', Arial, Helvetica, sans-serif; font-size: 13.5px; font-weight: 700; fill: #111111; text-anchor: middle; dominant-baseline: central; }
+      .actor-label { font-family: 'DejaVu Sans', Arial, Helvetica, sans-serif; font-size: 14.5px; font-weight: 700; fill: #111111; text-anchor: middle; }
+      .conn { fill: none; stroke: #111111; stroke-width: 1.3; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <!-- Pure White Background -->
+  <rect x="0" y="0" width="1040" height="1580" fill="#FFFFFF"/>
+
+  <!-- System Boundary -->
+  <rect class="boundary" x="295" y="24" width="450" height="1530"/>
+  <text class="sys-title" x="520" y="54">Marvelous Hotel &amp; Dormitory Management System</text>
+  <line x1="315" y1="68" x2="725" y2="68" stroke="#E2E8F0" stroke-width="1.2"/>
+
+  <!-- Use Case Ovals -->
+  <g id="use-cases">
+    <ellipse cx="520" cy="106.0" rx="175" ry="23.5" fill="#F1F5F9" stroke="#64748B" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="106.0">Portal Login</text>
+    <ellipse cx="520" cy="159.5" rx="175" ry="23.5" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="159.5">Register &amp; Verify Account</text>
+    <ellipse cx="520" cy="213.0" rx="175" ry="23.5" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="213.0">Manage Profile &amp; KYC ID</text>
+    <ellipse cx="520" cy="266.5" rx="175" ry="23.5" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="266.5">Browse Rooms &amp; Dorms</text>
+    <ellipse cx="520" cy="320.0" rx="175" ry="23.5" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="320.0">AI Room Recommendation</text>
+    <ellipse cx="520" cy="373.5" rx="175" ry="23.5" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="373.5">Book Room / Dormitory</text>
+    <ellipse cx="520" cy="427.0" rx="175" ry="23.5" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="427.0">Upload GCash / Maya Proof</text>
+    <ellipse cx="520" cy="480.5" rx="175" ry="23.5" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="480.5">View / Cancel Booking &amp; Alerts</text>
+    <ellipse cx="520" cy="534.0" rx="175" ry="23.5" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="534.0">Chat with Marvi AI</text>
+    <ellipse cx="520" cy="587.5" rx="175" ry="23.5" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="587.5">Submit Stay Review</text>
+    <ellipse cx="520" cy="641.0" rx="175" ry="23.5" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="641.0">View Bookings &amp; Shift AI Brief</text>
+    <ellipse cx="520" cy="694.5" rx="175" ry="23.5" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="694.5">Verify GCash / Maya Payment</text>
+    <ellipse cx="520" cy="748.0" rx="175" ry="23.5" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="748.0">Approve / Reject Booking</text>
+    <ellipse cx="520" cy="801.5" rx="175" ry="23.5" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="801.5">Check-In Guest</text>
+    <ellipse cx="520" cy="855.0" rx="175" ry="23.5" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="855.0">Check-Out Guest</text>
+    <ellipse cx="520" cy="908.5" rx="175" ry="23.5" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="908.5">Update Room Status</text>
+    <ellipse cx="520" cy="962.0" rx="175" ry="23.5" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="962.0">View Arrival &amp; In-House List</text>
+    <ellipse cx="520" cy="1015.5" rx="175" ry="23.5" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1015.5">Change Own Password</text>
+    <ellipse cx="520" cy="1069.0" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1069.0">Manage Users, KYC &amp; Resets</text>
+    <ellipse cx="520" cy="1122.5" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1122.5">Manage Staff Accounts</text>
+    <ellipse cx="520" cy="1176.0" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1176.0">Manage Rooms, Dorms &amp; Rates</text>
+    <ellipse cx="520" cy="1229.5" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1229.5">Manage All Bookings</text>
+    <ellipse cx="520" cy="1283.0" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1283.0">Manage Payments &amp; CSV Export</text>
+    <ellipse cx="520" cy="1336.5" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1336.5">Manage System Settings</text>
+    <ellipse cx="520" cy="1390.0" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1390.0">View Analytics &amp; AI Insights</text>
+    <ellipse cx="520" cy="1443.5" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1443.5">Configure Marvi AI &amp; Threats</text>
+    <ellipse cx="520" cy="1497.0" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
+    <text class="uc-text" x="520" y="1497.0">View Audit &amp; Activity Logs</text>
+  </g>
+
+  <!-- Actors (UML Stick Figures) -->
+  <g id="actors">
+    <g id="actor-guest">
+      <line x1="98" y1="287" x2="98" y2="356" stroke="#6C8EBF" stroke-width="1.8"/>
+      <line x1="42" y1="310" x2="154" y2="310" stroke="#6C8EBF" stroke-width="1.8"/>
+      <line x1="98" y1="356" x2="42" y2="412" stroke="#6C8EBF" stroke-width="1.8"/>
+      <line x1="98" y1="356" x2="154" y2="412" stroke="#6C8EBF" stroke-width="1.8"/>
+      <ellipse cx="98" cy="268" rx="34" ry="19" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.6"/>
+      <text class="actor-label" x="98" y="440">Guest / Customer</text>
+    </g>
+    <g id="actor-staff">
+      <line x1="98" y1="794" x2="98" y2="863" stroke="#82B366" stroke-width="1.8"/>
+      <line x1="42" y1="817" x2="154" y2="817" stroke="#82B366" stroke-width="1.8"/>
+      <line x1="98" y1="863" x2="42" y2="919" stroke="#82B366" stroke-width="1.8"/>
+      <line x1="98" y1="863" x2="154" y2="919" stroke="#82B366" stroke-width="1.8"/>
+      <ellipse cx="98" cy="775" rx="34" ry="19" fill="#D5E8D4" stroke="#82B366" stroke-width="1.6"/>
+      <text class="actor-label" x="98" y="947">Frontdesk Staff</text>
+    </g>
+    <g id="actor-admin">
+      <line x1="944" y1="984" x2="944" y2="1053" stroke="#B85450" stroke-width="1.8"/>
+      <line x1="888" y1="1007" x2="1000" y2="1007" stroke="#B85450" stroke-width="1.8"/>
+      <line x1="944" y1="1053" x2="888" y2="1109" stroke="#B85450" stroke-width="1.8"/>
+      <line x1="944" y1="1053" x2="1000" y2="1109" stroke="#B85450" stroke-width="1.8"/>
+      <ellipse cx="944" cy="965" rx="34" ry="19" fill="#F8CECC" stroke="#B85450" stroke-width="1.6"/>
+      <text class="actor-label" x="944" y="1137">Super Admin</text>
+    </g>
+  </g>
+
+  <!-- Actor-to-Use-Case Association Arrows (Clean Left/Right Tip Termination) -->
+  <g id="connectors">
+    <line class="conn" x1="132.5" y1="268.0" x2="342.0" y2="106.0"/>
+    <line class="conn" x1="132.5" y1="775.0" x2="342.0" y2="106.0"/>
+    <line class="conn" x1="909.5" y1="965.0" x2="698.0" y2="106.0"/>
+    <line class="conn" x1="132.5" y1="268.0" x2="342.0" y2="159.5"/>
+    <line class="conn" x1="132.5" y1="268.0" x2="342.0" y2="213.0"/>
+    <line class="conn" x1="132.5" y1="268.0" x2="342.0" y2="266.5"/>
+    <line class="conn" x1="154.0" y1="310.0" x2="342.0" y2="320.0"/>
+    <line class="conn" x1="154.0" y1="310.0" x2="342.0" y2="373.5"/>
+    <line class="conn" x1="154.0" y1="310.0" x2="342.0" y2="427.0"/>
+    <line class="conn" x1="154.0" y1="310.0" x2="342.0" y2="480.5"/>
+    <line class="conn" x1="131.6" y1="389.6" x2="342.0" y2="534.0"/>
+    <line class="conn" x1="131.6" y1="389.6" x2="342.0" y2="587.5"/>
+    <line class="conn" x1="132.5" y1="775.0" x2="342.0" y2="641.0"/>
+    <line class="conn" x1="909.5" y1="965.0" x2="698.0" y2="641.0"/>
+    <line class="conn" x1="132.5" y1="775.0" x2="342.0" y2="694.5"/>
+    <line class="conn" x1="909.5" y1="965.0" x2="698.0" y2="694.5"/>
+    <line class="conn" x1="132.5" y1="775.0" x2="342.0" y2="748.0"/>
+    <line class="conn" x1="909.5" y1="965.0" x2="698.0" y2="748.0"/>
+    <line class="conn" x1="154.0" y1="817.0" x2="342.0" y2="801.5"/>
+    <line class="conn" x1="909.5" y1="965.0" x2="698.0" y2="801.5"/>
+    <line class="conn" x1="154.0" y1="817.0" x2="342.0" y2="855.0"/>
+    <line class="conn" x1="909.5" y1="965.0" x2="698.0" y2="855.0"/>
+    <line class="conn" x1="154.0" y1="817.0" x2="342.0" y2="908.5"/>
+    <line class="conn" x1="909.5" y1="965.0" x2="698.0" y2="908.5"/>
+    <line class="conn" x1="154.0" y1="817.0" x2="342.0" y2="962.0"/>
+    <line class="conn" x1="909.5" y1="965.0" x2="698.0" y2="962.0"/>
+    <line class="conn" x1="131.6" y1="896.6" x2="342.0" y2="1015.5"/>
+    <line class="conn" x1="888.0" y1="1007.0" x2="698.0" y2="1069.0"/>
+    <line class="conn" x1="888.0" y1="1007.0" x2="698.0" y2="1122.5"/>
+    <line class="conn" x1="888.0" y1="1007.0" x2="698.0" y2="1176.0"/>
+    <line class="conn" x1="888.0" y1="1007.0" x2="698.0" y2="1229.5"/>
+    <line class="conn" x1="896.4" y1="1100.6" x2="698.0" y2="1283.0"/>
+    <line class="conn" x1="896.4" y1="1100.6" x2="698.0" y2="1336.5"/>
+    <line class="conn" x1="896.4" y1="1100.6" x2="698.0" y2="1390.0"/>
+    <line class="conn" x1="896.4" y1="1100.6" x2="698.0" y2="1443.5"/>
+    <line class="conn" x1="896.4" y1="1100.6" x2="698.0" y2="1497.0"/>
+  </g>
+</svg>

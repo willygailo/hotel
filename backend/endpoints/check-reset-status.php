@@ -15,9 +15,15 @@ header('Pragma: no-cache');
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-// POST: Acknowledge one-time popup view or cancel current watch (CSRF enforced globally by session.php)
+// POST: Mark popup viewed, acknowledge one-time popup view, or cancel current watch (CSRF enforced globally by session.php)
 if ($method === 'POST') {
     $action = trim((string)($_POST['action'] ?? ''));
+
+    if ($action === 'mark_viewed') {
+        markPasswordResetWatchViewed();
+        echo json_encode(['ok' => true, 'status' => 'viewed']);
+        exit;
+    }
 
     if ($action === 'acknowledge') {
         consumePasswordResetWatch();
@@ -55,7 +61,9 @@ try {
     ensurePasswordResetSchema();
     $row = dbRow(
         "SELECT pr.id, pr.user_id, pr.email, pr.status, pr.dispatch_type,
-                pr.new_password_assigned, pr.requested_at, pr.resolved_at,
+                pr.new_password_assigned, pr.reset_code, pr.reset_code_hash,
+                pr.reset_code_expires, pr.code_used_at,
+                pr.requested_at, pr.resolved_at,
                 pr.user_notified_at, pr.request_token,
                 u.reset_token, u.reset_expires
          FROM password_reset_requests pr

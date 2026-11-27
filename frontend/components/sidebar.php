@@ -189,11 +189,11 @@ if (!function_exists('renderSidebar')) {
       <div style="flex:1;">
         <div style="font-weight:700;color:#fff;font-size:0.92rem;">Password Reset Request</div>
         <div style="font-size:0.8rem;color:#cbd5e1;margin-top:2px;">
-          <strong><?= h(trim(($latestReset['first_name'] ?? '') . ' ' . ($latestReset['last_name'] ?? '')) ?: 'Guest') ?></strong> (<?= h($latestReset['email']) ?>) needs a new password.
+          <strong><?= h(trim(($latestReset['first_name'] ?? '') . ' ' . ($latestReset['last_name'] ?? '')) ?: 'Guest') ?></strong> (<?= h($latestReset['email']) ?>) requested a password reset code.
         </div>
       </div>
       <a href="users.php?tab=resets" style="background:#f97316;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;font-weight:700;font-size:0.8rem;white-space:nowrap;">
-        Dispatch
+        Send Code
       </a>
       <button type="button" onclick="(function(b){ try{ sessionStorage.setItem('mh_dismiss_reset_cnt', b.dataset.resetCount || '0'); }catch(e){} b.remove(); })(this.parentElement)" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;">&times;</button>
     </div>

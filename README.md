@@ -27,7 +27,14 @@ Detailed decomposition into **6 balanced processes (`1.0`–`6.0`)** and **5 dat
   <img src="docs/diagrams/level_1_dfd_marvelous_hotel.png" alt="Level 1 Data Flow Diagram — Marvelous Hotel & Dormitory System" width="100%">
 </p>
 
-### 4. Accommodation Catalog Design Layout (3 Overnight Hotel Rooms + 3 Dormitory Rooms)
+### 4. UML Use Case Diagram
+Role-isolated actor and capability map for **Guest / Customer**, **Frontdesk Staff**, and **Super Admin**, reflecting Guest-only self-registration, KYC verification, Hotel & Dormitory booking, GCash/Maya payment proof verification, Marvi AI services, and Super Admin controls.
+
+<p align="center">
+  <img src="docs/diagrams/use_case_diagram_marvelous_hotel.png" alt="UML Use Case Diagram — Marvelous Hotel & Dormitory Management System" width="68%">
+</p>
+
+### 5. Accommodation Catalog Design Layout (3 Overnight Hotel Rooms + 3 Dormitory Rooms)
 Every room in the 6-room catalog features a unique photorealistic interior image managed with automatic `?v=<filemtime>` cache-busting and Admin Hotel vs. Dormitory CRUD controls (`frontend/admin/rooms.php`).
 
 #### 🌙 Hotel Rooms (Overnight / Pang-gabi)
@@ -275,7 +282,7 @@ hotel/
 │   ├── migrations/             <- 20 versioned SQL migrations (0001–0020)
 │   └── ERD.md                  <- 14-table Entity-Relationship Diagram & Data Dictionary
 │
-├── docs/diagrams/              <- High-res System Architecture, Level 0 DFD & Level 1 DFD (PNG + SVG)
+├── docs/diagrams/              <- High-res System Architecture, Level 0/1 DFD & Use Case Diagram (PNG + SVG)
 ├── config/apache/              <- Multi-port Apache VirtualHost templates (vhosts-linux.conf, vhosts-windows.conf)
 ├── scripts/                    <- Utility & PDF documentation generators (generate_roles_architecture_pdf.py, share-capstone.sh, etc.)
 ├── storage/                    <- Runtime logs, PHP sessions, and short-TTL AI/sweep caches (git-ignored)

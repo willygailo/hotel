@@ -169,12 +169,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// Handle master password reset by admin
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['reset_password', 'generate_link'], true)) {
+// Handle password reset code dispatch by admin (User enters code & sets their own password)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'send_reset_code') {
     $token = $_POST[CSRF_TOKEN_NAME] ?? '';
     $uId = (int)($_POST['user_id'] ?? 0);
     $reqId = (int)($_POST['request_id'] ?? 0);
-    $action = $_POST['action'];
 
     if (!verifyCsrfToken($token)) {
         setFlash('error', 'Invalid security token.');
@@ -182,93 +181,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
         $target = dbRow("SELECT * FROM users WHERE id = ? AND role = 'user'", [$uId]);
         if (!$target) {
             setFlash('error', 'User account not found.');
-        } elseif ($action === 'generate_link') {
-            $resetToken = bin2hex(random_bytes(32));
-            $resetExpires = date('Y-m-d H:i:s', strtotime('+2 hours'));
-            $nowSql = appNowSql();
-            dbExec("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [$resetToken, $resetExpires, $uId]);
-
-            if ($reqId > 0) {
-                dbExec(
-                    "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'link', new_password_assigned = NULL, resolved_at = ?, user_notified_at = NULL WHERE id = ?",
-                    [$nowSql, $reqId]
-                );
-            }
-            $updatedPending = dbExec(
-                "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'link', new_password_assigned = NULL, resolved_at = ?, user_notified_at = NULL WHERE (user_id = ? OR email = ?) AND status = 'pending'",
-                [$nowSql, $uId, $target['email']]
-            );
-            if ($reqId <= 0 && $updatedPending === 0) {
-                dbInsert(
-                    "INSERT INTO password_reset_requests (user_id, email, phone, status, dispatch_type, new_password_assigned, requested_at, resolved_at)
-                     VALUES (?, ?, ?, 'completed', 'link', NULL, ?, ?)",
-                    [$uId, $target['email'], $target['phone'] ?? null, $nowSql, $nowSql]
-                );
-            }
-
-            $oneTimeLink = SITE_URL . '/auth/reset-password.php?token=' . $resetToken;
-            $emailNote = '';
-            if (isSmtpConfigured()) {
-                $sendErr = null;
-                $sent = sendEmail(
-                    $target['email'],
-                    'Password Reset Link — ' . SITE_NAME,
-                    emailTemplateResetPassword($oneTimeLink, formatFullName($target), 2),
-                    "Hello " . formatFullName($target) . ",\n\nUse this one-time link to reset your password (valid for 2 hours):\n{$oneTimeLink}",
-                    $sendErr
-                );
-                if ($sent) {
-                    $emailNote = ' Email notification also sent.';
-                }
-            }
-            auditLog('Admin Generated Reset Link', 'Admin Module', "Admin generated 1-time reset link for Guest #$uId ({$target['email']})");
-            setFlash('success', "One-time secure reset link generated for " . h(formatFullName($target)) . " (" . h($target['email']) . "): {$oneTimeLink}{$emailNote}");
         } else {
-            $newPass = $_POST['new_password'] ?? '';
-            if (strlen($newPass) < 8) {
-                setFlash('error', 'New password must be at least 8 characters long.');
+            $rawCode = normalizeResetCode((string)($_POST['reset_code'] ?? ''));
+            if ($rawCode === '') {
+                $rawCode = generatePasswordResetCode(6);
+            }
+
+            if (!preg_match('/^[A-Z0-9]{6,8}$/', $rawCode)) {
+                setFlash('error', 'Reset code must be 6 to 8 letters or numbers (e.g. 482915).');
             } else {
-                $hashed = password_hash($newPass, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
+                $codeHash = hashPasswordResetCode($rawCode);
                 $nowSql = appNowSql();
-                dbExec("UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL, status = 'active' WHERE id = ?", [$hashed, $uId]);
-                setAdminAssignedTempPassword($uId, $newPass);
+                $codeExpires = date('Y-m-d H:i:s', strtotime('+15 minutes'));
 
-                if ($reqId > 0) {
-                    dbExec(
-                        "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'password', new_password_assigned = ?, resolved_at = ?, user_notified_at = NULL WHERE id = ?",
-                        [$newPass, $nowSql, $reqId]
-                    );
-                }
-                $updatedPending = dbExec(
-                    "UPDATE password_reset_requests SET status = 'completed', dispatch_type = 'password', new_password_assigned = ?, resolved_at = ?, user_notified_at = NULL WHERE (user_id = ? OR email = ?) AND status = 'pending'",
-                    [$newPass, $nowSql, $uId, $target['email']]
+                // Clear any legacy reset link token; NEVER overwrite the user's password here
+                dbExec("UPDATE users SET reset_token = NULL, reset_expires = NULL WHERE id = ?", [$uId]);
+
+                // Invalidate any previously issued unused codes for this user so only the latest code works
+                dbExec(
+                    "UPDATE password_reset_requests
+                     SET reset_code = NULL, reset_code_hash = NULL,
+                         status = CASE WHEN status = 'pending' THEN 'dismissed' ELSE status END
+                     WHERE (user_id = ? OR email = ?) AND code_used_at IS NULL AND id != ?",
+                    [$uId, $target['email'], $reqId]
                 );
-                // Always record admin-initiated reset in password_reset_requests even if user did not submit Forgot Password form
-                if ($reqId <= 0 && $updatedPending === 0) {
-                    dbInsert(
-                        "INSERT INTO password_reset_requests (user_id, email, phone, status, dispatch_type, new_password_assigned, requested_at, resolved_at)
-                         VALUES (?, ?, ?, 'completed', 'password', ?, ?, ?)",
-                        [$uId, $target['email'], $target['phone'] ?? null, $newPass, $nowSql, $nowSql]
+
+                $updated = 0;
+                if ($reqId > 0) {
+                    $updated = dbExec(
+                        "UPDATE password_reset_requests
+                         SET user_id = ?, email = ?, status = 'completed', dispatch_type = 'code',
+                             new_password_assigned = NULL, reset_code = ?, reset_code_hash = ?,
+                             reset_code_expires = ?, reset_code_attempts = 0,
+                             resolved_at = ?, user_notified_at = NULL, code_used_at = NULL
+                         WHERE id = ?",
+                        [$uId, $target['email'], $rawCode, $codeHash, $codeExpires, $nowSql, $reqId]
                     );
                 }
 
-                createNotification($uId, 'Password Updated', 'Your account password was updated by the Administrator. If you did not request this, please contact frontdesk assistance.', 'alert');
+                if ($updated === 0) {
+                    $latestPending = dbRow(
+                        "SELECT id FROM password_reset_requests WHERE (user_id = ? OR email = ?) AND status = 'pending' ORDER BY id DESC LIMIT 1",
+                        [$uId, $target['email']]
+                    );
+                    if ($latestPending) {
+                        $updated = dbExec(
+                            "UPDATE password_reset_requests
+                             SET user_id = ?, email = ?, status = 'completed', dispatch_type = 'code',
+                                 new_password_assigned = NULL, reset_code = ?, reset_code_hash = ?,
+                                 reset_code_expires = ?, reset_code_attempts = 0,
+                                 resolved_at = ?, user_notified_at = NULL, code_used_at = NULL
+                             WHERE id = ?",
+                            [$uId, $target['email'], $rawCode, $codeHash, $codeExpires, $nowSql, (int)$latestPending['id']]
+                        );
+                    }
+                }
+
+                if ($updated === 0) {
+                    dbInsert(
+                        "INSERT INTO password_reset_requests
+                         (user_id, email, phone, status, dispatch_type, new_password_assigned, reset_code, reset_code_hash, reset_code_expires, reset_code_attempts, requested_at, resolved_at, user_notified_at, code_used_at)
+                         VALUES (?, ?, ?, 'completed', 'code', NULL, ?, ?, ?, 0, ?, ?, NULL, NULL)",
+                        [$uId, $target['email'], $target['phone'] ?? null, $rawCode, $codeHash, $codeExpires, $nowSql, $nowSql]
+                    );
+                }
+
+                createNotification(
+                    $uId,
+                    'Password Reset Code Ready',
+                    'The Hotel Administrator has sent a one-time password reset code for your account. Enter it on the Reset Password page within 15 minutes to set your new password.',
+                    'alert'
+                );
 
                 $emailNote = '';
                 if (isSmtpConfigured()) {
                     $sendErr = null;
-                    $loginLink = SITE_URL . '/auth/login.php?email=' . urlencode($target['email']);
+                    $resetPageUrl = SITE_URL . '/auth/reset-password.php?email=' . urlencode($target['email']);
                     $sent = sendEmail(
                         $target['email'],
-                        'Your Password Has Been Updated — ' . SITE_NAME,
+                        'Your Password Reset Code — ' . SITE_NAME,
                         emailTemplateNotification(
-                            'Password Updated by Admin',
-                            'Your account password has been updated by the Hotel Administrator. Please check your Forgot Password page popup for your temporary password or contact the frontdesk for assistance.',
+                            'Password Reset Code Ready',
+                            "Your one-time password reset code is: <strong style=\"font-size:1.3rem;letter-spacing:3px;\">" . h($rawCode) . "</strong> (valid for 15 minutes). Open the Reset Password page, enter this code, and set your own new password.",
                             formatFullName($target),
-                            $loginLink,
-                            'Go to Login'
+                            $resetPageUrl,
+                            'Go to Reset Password'
                         ),
-                        "Hello " . formatFullName($target) . ",\n\nYour password has been updated by the Hotel Administrator. Visit {$loginLink} to log in.",
+                        "Hello " . formatFullName($target) . ",\n\nYour one-time password reset code is: {$rawCode} (valid for 15 minutes).\nVisit {$resetPageUrl} to enter this code and set your new password.",
                         $sendErr
                     );
                     if ($sent) {
@@ -276,8 +275,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     }
                 }
 
-                auditLog('Admin Reset User Password', 'Admin Module', "Admin reset password for Guest #$uId ({$target['email']}) to newly dispatched temporary password.");
-                setFlash('success', "Temporary password updated for <strong>" . h(formatFullName($target)) . "</strong> (" . h($target['email']) . ") and saved in Credentials.{$emailNote}");
+                auditLog('Admin Sent Reset Code', 'Admin Module', "Admin dispatched 1-time reset code for Guest #$uId ({$target['email']}) valid until {$codeExpires}.");
+                setFlash('success', "Reset code <strong style=\"letter-spacing:2px;font-family:monospace;\">" . h($rawCode) . "</strong> sent to <strong>" . h(formatFullName($target)) . "</strong> (" . h($target['email']) . "). Valid for 15 minutes (single-use).{$emailNote}");
             }
         }
     }
@@ -497,7 +496,7 @@ if ($tab === 'resets') {
       <div class="page-header" style="margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;">
         <div>
           <h1 class="page-header-title">User Accounts &amp; Identity Verification</h1>
-          <div class="page-header-sub">Review government-issued IDs, manage walk-in guests, and dispatch temporary passwords.</div>
+          <div class="page-header-sub">Review government-issued IDs, manage walk-in guests, and send one-time password reset codes.</div>
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <form action="users.php" method="GET" style="display:flex;gap:6px;align-items:center;">
@@ -551,7 +550,7 @@ if ($tab === 'resets') {
                   <th>Contact Email &amp; Phone</th>
                   <th>Requested Time</th>
                   <th>Status</th>
-                  <th>Assigned Password</th>
+                  <th>Reset Code</th>
                   <th style="text-align:right;">Action</th>
                 </tr>
               </thead>
@@ -564,7 +563,12 @@ if ($tab === 'resets') {
                     </td>
                   </tr>
                 <?php else: ?>
-                  <?php foreach ($resetRequests as $req): ?>
+                  <?php foreach ($resetRequests as $req):
+                    $isCodeDispatch = (($req['dispatch_type'] ?? '') === 'code');
+                    $codeUsed = !empty($req['code_used_at']);
+                    $codeExpiresTs = !empty($req['reset_code_expires']) ? strtotime((string)$req['reset_code_expires']) : false;
+                    $codeExpired = $isCodeDispatch && !$codeUsed && (empty($req['reset_code']) || ($codeExpiresTs !== false && $codeExpiresTs <= time()));
+                  ?>
                     <tr>
                       <td>#<?= $req['id'] ?></td>
                       <td>
@@ -585,8 +589,15 @@ if ($tab === 'resets') {
                           <span class="badge" style="background:#eab308;color:#000;font-weight:700;"><i class="fa-solid fa-clock"></i> Pending</span>
                         <?php elseif ($req['status'] === 'dismissed'): ?>
                           <span class="badge" style="background:#475569;color:#e2e8f0;"><i class="fa-solid fa-ban"></i> Superseded</span>
+                        <?php elseif ($isCodeDispatch && $codeUsed): ?>
+                          <span class="badge" style="background:#16a34a;color:#fff;"><i class="fa-solid fa-circle-check"></i> Reset Completed</span>
+                          <div style="font-size:0.72rem;color:#4ade80;margin-top:4px;">
+                            Done <?= h(formatDate($req['code_used_at'], 'M d, h:i A')) ?>
+                          </div>
+                        <?php elseif ($codeExpired): ?>
+                          <span class="badge" style="background:#b45309;color:#fff;"><i class="fa-solid fa-hourglass-end"></i> Code Expired</span>
                         <?php else: ?>
-                          <span class="badge" style="background:#22c55e;color:#fff;"><i class="fa-solid fa-check"></i> Dispatched</span>
+                          <span class="badge" style="background:#2563eb;color:#fff;"><i class="fa-solid fa-paper-plane"></i> <?= $isCodeDispatch ? 'Code Sent' : 'Dispatched' ?></span>
                           <?php if (!empty($req['user_notified_at'])): ?>
                             <div style="font-size:0.72rem;color:#4ade80;margin-top:4px;" title="Viewed on <?= h(formatDate($req['user_notified_at'], 'M d, Y h:i A')) ?>">
                               <i class="fa-solid fa-eye"></i> Viewed by user
@@ -599,14 +610,23 @@ if ($tab === 'resets') {
                         <?php endif; ?>
                       </td>
                       <td>
-                        <?php if (!empty($req['new_password_assigned'])): ?>
+                        <?php if ($isCodeDispatch && !$codeUsed && !$codeExpired && !empty($req['reset_code'])): ?>
+                          <?= renderAdminResetCodeBadge((string)$req['reset_code']) ?>
+                          <?php if ($codeExpiresTs !== false): ?>
+                            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px;">Expires <?= h(date('h:i A', $codeExpiresTs)) ?></div>
+                          <?php endif; ?>
+                        <?php elseif ($isCodeDispatch && $codeUsed): ?>
+                          <span class="badge badge-secondary" style="font-size:0.7rem;"><i class="fa-solid fa-lock"></i> Used / Cleared</span>
+                        <?php elseif ($codeExpired): ?>
+                          <span class="badge badge-secondary" style="font-size:0.7rem;color:#fbbf24;"><i class="fa-solid fa-clock"></i> Expired</span>
+                        <?php elseif (!empty($req['new_password_assigned'])): ?>
                           <?= renderAdminCredentialBadge($req['new_password_assigned']) ?>
                         <?php elseif (($req['dispatch_type'] ?? '') === 'link'): ?>
                           <span style="color:var(--gold);font-size:0.8rem;"><i class="fa-solid fa-link"></i> One-time reset link</span>
                         <?php elseif (($req['dispatch_type'] ?? '') === 'password' && $req['status'] === 'completed'): ?>
                           <span class="badge badge-secondary" style="font-size:0.7rem;"><i class="fa-solid fa-lock"></i> Cleared / User Changed</span>
                         <?php else: ?>
-                          <span style="color:var(--text-muted);font-size:0.8rem;">None yet</span>
+                          <span style="color:var(--text-muted);font-size:0.8rem;">Not sent yet</span>
                         <?php endif; ?>
                       </td>
                       <td style="text-align:right;">
@@ -617,7 +637,7 @@ if ($tab === 'resets') {
                             $reqBtnEmailJson = json_encode((string)$req['email'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
                           ?>
                           <button type="button" class="btn btn-gold btn-sm" onclick='openResetModal(<?= (int)$req['user_id'] ?>, <?= $reqBtnNameJson ?>, <?= $reqBtnEmailJson ?>, <?= (int)$req['id'] ?>)'>
-                            <i class="fa-solid fa-key"></i> <?= $req['status'] === 'pending' ? 'Dispatch Password' : 'Change Again' ?>
+                            <i class="fa-solid fa-paper-plane"></i> <?= $req['status'] === 'pending' ? 'Send Reset Code' : 'Send New Code' ?>
                           </button>
                         <?php else: ?>
                           <span style="font-size:0.8rem;color:var(--text-muted);">Account not registered</span>
@@ -764,7 +784,7 @@ if ($tab === 'resets') {
                           $uResetNameJson = json_encode(formatFullName($u), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
                           $uResetEmailJson = json_encode((string)$u['email'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
                         ?>
-                        <button type="button" class="btn btn-ghost btn-sm" onclick='openResetModal(<?= (int)$u['id'] ?>, <?= $uResetNameJson ?>, <?= $uResetEmailJson ?>)' title="Set / Reset Temporary Password">
+                        <button type="button" class="btn btn-ghost btn-sm" onclick='openResetModal(<?= (int)$u['id'] ?>, <?= $uResetNameJson ?>, <?= $uResetEmailJson ?>)' title="Send Password Reset Code">
                           <i class="fa-solid fa-key"></i>
                         </button>
 
@@ -970,40 +990,39 @@ if ($tab === 'resets') {
   </div>
 </div>
 
-<!-- Master Reset Password Modal -->
+<!-- Send Password Reset Code Modal -->
 <div id="resetPasswordModal" class="admin-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;padding:16px;">
   <div class="glass-card" style="max-width:440px;width:100%;padding:28px;background:var(--navy-light);border:1px solid var(--border-gold);border-radius:14px;box-shadow:0 20px 40px rgba(0,0,0,0.5);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h3 style="font-family:var(--font-serif);color:var(--gold);font-size:1.25rem;margin:0;"><i class="fa-solid fa-key"></i> Master Password Reset</h3>
+      <h3 style="font-family:var(--font-serif);color:var(--gold);font-size:1.25rem;margin:0;"><i class="fa-solid fa-key"></i> Send Password Reset Code</h3>
       <button type="button" onclick="closeResetModal()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;">&times;</button>
     </div>
     <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">
-      Directly set a temporary password for <strong id="modalUserName" style="color:#fff;"></strong> (<span id="modalUserEmail"></span>).
+      Send a one-time 6-digit reset code to <strong id="modalUserName" style="color:#fff;"></strong> (<span id="modalUserEmail"></span>).
     </p>
     <form action="<?= h($buildUsersRedirect()) ?>" method="POST" id="resetPassForm">
       <?= csrfField() ?>
       <input type="hidden" name="user_id" id="modalUserId">
       <input type="hidden" name="request_id" id="modalRequestId" value="0">
+      <input type="hidden" name="action" value="send_reset_code">
 
       <div class="form-group" style="margin-bottom:16px;">
-        <label class="form-label">New Temporary Password (Min. 8 chars) <span class="required">*</span></label>
+        <label class="form-label">6-Digit Reset Code <span class="required">*</span></label>
         <div style="display:flex;gap:8px;">
-          <input type="text" name="new_password" id="modalNewPassword" class="form-control" minlength="8" placeholder="Enter temporary password">
-          <button type="button" class="btn btn-ghost btn-sm" onclick="generateRandomPass()" style="white-space:nowrap;" title="Generate random secure password"><i class="fa-solid fa-dice"></i> Gen</button>
+          <input type="text" name="reset_code" id="modalResetCode" class="form-control" maxlength="8" required pattern="[A-Za-z0-9]{6,8}" placeholder="e.g. 482915" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:1.15rem;font-weight:700;letter-spacing:4px;text-align:center;color:#facc15;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="generateRandomResetCode()" style="white-space:nowrap;" title="Generate new 6-digit code"><i class="fa-solid fa-dice"></i> Gen</button>
         </div>
-        <small style="color:var(--text-muted);font-size:0.75rem;margin-top:4px;display:block;">Required when manually updating password. Not required when generating a reset link.</small>
-        <div id="modalResetPassError" style="display:none;margin-top:6px;padding:7px 10px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.38);border-radius:8px;font-size:0.76rem;color:#fca5a5;">
-          <i class="fa-solid fa-circle-exclamation"></i> Please enter at least 8 characters (or click <strong>Gen</strong>) before clicking Update Password.
+        <div id="modalResetCodeError" style="display:none;margin-top:6px;padding:7px 10px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.38);border-radius:8px;font-size:0.76rem;color:#fca5a5;">
+          <i class="fa-solid fa-circle-exclamation"></i> Reset code must be 6 to 8 letters or numbers (or click <strong>Gen</strong>).
         </div>
-        <div style="margin-top:10px;padding:8px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.28);border-radius:8px;font-size:0.76rem;color:#bbf7d0;">
-          <i class="fa-solid fa-bolt" style="color:#4ade80;margin-right:4px;"></i> Assigned temporary passwords appear cleanly under the <strong>Credentials</strong> column until the guest sets a personal password.
+        <div style="margin-top:10px;padding:9px 11px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.28);border-radius:8px;font-size:0.76rem;color:#bbf7d0;line-height:1.45;">
+          <i class="fa-solid fa-bolt" style="color:#4ade80;margin-right:4px;"></i> The code pops up live on the user's Reset Password page (valid <strong>15 mins</strong>, single-use). The user enters this code and sets their own new password.
         </div>
       </div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
         <button type="button" class="btn btn-ghost" onclick="closeResetModal()">Cancel</button>
-        <button type="submit" name="action" value="generate_link" formnovalidate class="btn btn-ghost" style="border:1px solid var(--gold);color:var(--gold);"><i class="fa-solid fa-link"></i> Get Reset Link</button>
-        <button type="submit" name="action" value="reset_password" class="btn btn-gold"><i class="fa-solid fa-floppy-disk"></i> Update Password</button>
+        <button type="submit" class="btn btn-gold"><i class="fa-solid fa-paper-plane"></i> Send Reset Code</button>
       </div>
     </form>
   </div>
@@ -1198,43 +1217,50 @@ function closeEditUserModal() {
   document.getElementById('editUserModal').style.display = 'none';
 }
 
+function generateSixDigitCode() {
+  if (window.crypto && window.crypto.getRandomValues) {
+    const arr = new Uint32Array(1);
+    window.crypto.getRandomValues(arr);
+    return String(arr[0] % 1000000).padStart(6, '0');
+  }
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
 function openResetModal(id, name, email, reqId = 0) {
   document.getElementById('modalUserId').value = id;
   document.getElementById('modalUserName').textContent = name;
   document.getElementById('modalUserEmail').textContent = email;
   document.getElementById('modalRequestId').value = reqId;
-  document.getElementById('modalNewPassword').value = '';
-  const errEl = document.getElementById('modalResetPassError');
+  document.getElementById('modalResetCode').value = generateSixDigitCode();
+  const errEl = document.getElementById('modalResetCodeError');
   if (errEl) errEl.style.display = 'none';
   document.getElementById('resetPasswordModal').style.display = 'flex';
 }
 function closeResetModal() {
   document.getElementById('resetPasswordModal').style.display = 'none';
 }
-function generateRandomPass() {
-  document.getElementById('modalNewPassword').value = generateSecureTempString();
-  const errEl = document.getElementById('modalResetPassError');
+function generateRandomResetCode() {
+  document.getElementById('modalResetCode').value = generateSixDigitCode();
+  const errEl = document.getElementById('modalResetCodeError');
   if (errEl) errEl.style.display = 'none';
 }
 
 (function() {
   const resetForm = document.getElementById('resetPassForm');
-  const passInput = document.getElementById('modalNewPassword');
-  const errEl = document.getElementById('modalResetPassError');
-  if (!resetForm || !passInput) return;
-  passInput.addEventListener('input', () => {
-    if (errEl && passInput.value.length >= 8) errEl.style.display = 'none';
+  const codeInput = document.getElementById('modalResetCode');
+  const errEl = document.getElementById('modalResetCodeError');
+  if (!resetForm || !codeInput) return;
+  codeInput.addEventListener('input', () => {
+    const clean = codeInput.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (errEl && clean.length >= 6 && clean.length <= 8) errEl.style.display = 'none';
   });
   resetForm.addEventListener('submit', (e) => {
-    const submitter = e.submitter;
-    if (submitter && submitter.value === 'generate_link') {
-      if (errEl) errEl.style.display = 'none';
-      return;
-    }
-    if (passInput.value.length < 8) {
+    const clean = codeInput.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    codeInput.value = clean;
+    if (clean.length < 6 || clean.length > 8) {
       e.preventDefault();
       if (errEl) errEl.style.display = 'block';
-      passInput.focus();
+      codeInput.focus();
     }
   });
 })();

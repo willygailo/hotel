@@ -14,12 +14,17 @@ storage/*.key
 .phpunit.result.cache
 *.cache
 *.tmp
+*.bak
+*.swp
+*.swo
+*~
 *.zip
 .DS_Store
 Thumbs.db
 
-# Generated Documentation PDFs
+# Generated Documentation & Thesis Diagrams
 docs/*.pdf
+docs/diagrams/
 
 # IDE & Editor Settings
 .vscode/
@@ -37,18 +42,21 @@ storage/cache/*
 !storage/sessions/.gitkeep
 !storage/cache/.gitkeep
 
-# User Uploads (keep directory structure and default images)
+# User & Admin Uploads (keep directory structure and default images)
 uploads/avatars/*
 uploads/proofs/*
 uploads/ids/*
 uploads/documents/*
+uploads/rooms/*
 !uploads/avatars/default-avatar.png
 !uploads/avatars/.gitkeep
 !uploads/proofs/.gitkeep
 !uploads/ids/.gitkeep
 !uploads/documents/.gitkeep
+!uploads/rooms/.gitkeep
 
-# Composer & Vendor
+# Composer & Node Dependencies
 /vendor/
+node_modules/
 frontend/node_modules/
 

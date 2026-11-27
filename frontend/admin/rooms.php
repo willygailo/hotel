@@ -276,7 +276,14 @@ $roomTypes = dbRows("SELECT * FROM room_types");
                         </div>
                       </td>
                       <td><?= h($r['name']) ?></td>
-                      <td class="col-nowrap"><span class="badge badge-gold"><?= h($r['type_name']) ?></span></td>
+                      <td class="col-nowrap">
+                        <?php $isAdminDorm = strcasecmp((string)($r['type_name'] ?? ''), 'Dormitory') === 0; ?>
+                        <?php if ($isAdminDorm): ?>
+                          <span class="badge" style="background:rgba(59,130,246,0.18);color:#93c5fd;border:1px solid rgba(59,130,246,0.38);"><i class="fa-solid fa-building"></i> Dormitory</span>
+                        <?php else: ?>
+                          <span class="badge badge-gold"><i class="fa-solid fa-moon"></i> <?= h($r['type_name']) ?> · Overnight</span>
+                        <?php endif; ?>
+                      </td>
                       <td class="col-nowrap">Floor <?= (int)$r['floor'] ?></td>
                       <td class="col-nowrap"><?= (int)$r['capacity'] ?> pax</td>
                       <td class="col-amount" style="color:var(--gold);font-weight:700;"><?= formatCurrency($r['price_per_night']) ?></td>

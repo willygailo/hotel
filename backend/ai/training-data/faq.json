@@ -71,31 +71,31 @@
   },
   {
     "id": "dormitory",
-    "keywords": ["dorm", "dormitory", "bedspace", "female wing", "male wing", "d01", "d02", "pinakamura", "cheapest", "cheap room", "murang kwarto", "solo traveler", "backpacker"],
+    "keywords": ["dorm", "dormitory", "bedspace", "female wing", "male wing", "co-ed", "d01", "d02", "d03", "pinakamura", "cheapest", "cheap room", "murang kwarto", "solo traveler", "backpacker"],
     "routes": ["rooms"],
-    "response_tl": "🛏️ <strong>Budget-Friendly Dormitories (₱350/gabi):</strong><br>Mayroon po kaming <strong>Female Wing (D01)</strong> at <strong>Male Wing (D02)</strong> na tig-<strong>₱350/night</strong> (₱400 weekend rate), may aircon, privacy curtains, personal lockers, charging stations, shared bathroom, at libreng high-speed WiFi!",
-    "response_en": "🛏️ <strong>Budget-Friendly Dormitories (₱350/night):</strong><br>We offer both <strong>Female Wing (D01)</strong> and <strong>Male Wing (D02)</strong> at only <strong>₱350/night</strong> (₱400 weekend rate), complete with air conditioning, personal lockers, charging stations, shared bathroom, and free high-speed WiFi!"
+    "response_tl": "🛏️ <strong>3 Dormitory Rooms ng Marvelous Hotel:</strong><br>• <strong>Female Wing (D01):</strong> ₱350/bed·night (₱400 weekend) — light-wood capsule bunks, privacy curtains, lockers.<br>• <strong>Male Wing (D02):</strong> ₱350/bed·night (₱400 weekend) — dark-wood &amp; steel pods, charging shelves, lockers.<br>• <strong>Co-ed Deluxe Wing (D03):</strong> ₱450/bed·night (₱500 weekend) — timber pods + study desk nook.<br>Lahat ay may Air Con at libreng 200 Mbps Fiber WiFi!",
+    "response_en": "🛏️ <strong>Our 3 Dormitory Rooms:</strong><br>• <strong>Female Wing (D01):</strong> ₱350/bed·night (₱400 weekend) — light-wood capsule bunks, privacy curtains, lockers.<br>• <strong>Male Wing (D02):</strong> ₱350/bed·night (₱400 weekend) — dark-wood &amp; steel pods, charging shelves, lockers.<br>• <strong>Co-ed Deluxe Wing (D03):</strong> ₱450/bed·night (₱500 weekend) — timber pods + dedicated study desk nook.<br>All include Air Con and free 200 Mbps Fiber WiFi!"
   },
   {
     "id": "couple_2pax",
-    "keywords": ["couple", "dalawa", "2 tao", "2 pax", "mag-asawa", "magkasintahan", "two persons", "2 guests", "deluxe", "standard room", "balcony"],
+    "keywords": ["couple", "dalawa", "2 tao", "2 pax", "mag-asawa", "magkasintahan", "two persons", "2 guests", "deluxe", "standard room", "hotel room", "overnight", "pang-gabi", "pang gabi"],
     "routes": ["rooms"],
-    "response_tl": "💑 <strong>Mga Kwarto para sa 2 Tao / Mag-asawa:</strong><br>• <strong>Standard Room 101 / 102:</strong> ₱800/gabi (₱950 weekend) — cozy private room, Air Con, TV, Hot Shower, WiFi.<br>• <strong>Deluxe Room 201:</strong> ₱1,500/gabi (₱1,800 weekend) — premium bedding, Smart TV, Safe Box, Breakfast.<br>• <strong>Deluxe Room 202:</strong> ₱1,600/gabi (₱1,900 weekend) — King-size bed, private <strong>Balcony</strong>, Smart TV, Breakfast.",
-    "response_en": "💑 <strong>Great Rooms for Couples / 2 Guests:</strong><br>• <strong>Standard Room 101 / 102:</strong> ₱800/night (₱950 weekend) — cozy private room with Air Con, TV, Hot Shower, and WiFi.<br>• <strong>Deluxe Room 201:</strong> ₱1,500/night (₱1,800 weekend) — spacious with Smart TV, Safe Box, and Breakfast.<br>• <strong>Deluxe Room 202:</strong> ₱1,600/night (₱1,900 weekend) — King-size bed, private <strong>Balcony</strong>, Smart TV, and Breakfast."
+    "response_tl": "🌙 <strong>3 Overnight Hotel Rooms (Pang-gabi):</strong><br>• <strong>Standard Hotel Room 101:</strong> ₱800/night (₱950 weekend, 2 pax) — garden view, Air Con, TV, Hot Shower, Ref.<br>• <strong>Deluxe Hotel Room 201:</strong> ₱1,500/night (₱1,800 weekend, 2 pax) — King bed, Smart TV, Safe Box, Breakfast, city view.<br>• <strong>Executive Suite 301:</strong> ₱2,500/night (₱3,000 weekend, 4 pax) — separate lounge, Hot Tub, Mini Bar, Balcony, Breakfast.",
+    "response_en": "🌙 <strong>Our 3 Overnight Hotel Rooms:</strong><br>• <strong>Standard Hotel Room 101:</strong> ₱800/night (₱950 weekend, 2 pax) — garden view, Air Con, TV, Hot Shower, Ref.<br>• <strong>Deluxe Hotel Room 201:</strong> ₱1,500/night (₱1,800 weekend, 2 pax) — King bed, Smart TV, Safe Box, Breakfast, city view.<br>• <strong>Executive Suite 301:</strong> ₱2,500/night (₱3,000 weekend, 4 pax) — separate lounge, Hot Tub, Mini Bar, Balcony, Breakfast."
   },
   {
     "id": "family_suite",
     "keywords": ["family", "pamilya", "4 pax", "4 tao", "apat", "barkada", "group", "suite", "executive suite", "hot tub", "luxury"],
     "routes": ["rooms"],
-    "response_tl": "👨‍👩‍👧‍👦 <strong>Mga Kwarto para sa Pamilya o Grupo (Hanggang 4 Pax):</strong><br>• <strong>Family Room 401:</strong> ₱2,200/gabi (₱2,600 weekend) — dalawang double beds + sofa bed, TV, Ref, Hot Shower.<br>• <strong>Executive Suite 301:</strong> ₱3,500/gabi (₱4,000 weekend) — hiwalay na living lounge, panoramic view, Hot Tub, Mini Bar, Balcony, at Breakfast.",
-    "response_en": "👨‍👩‍👧‍👦 <strong>Rooms for Families or Groups (Up to 4 Pax):</strong><br>• <strong>Family Room 401:</strong> ₱2,200/night (₱2,600 weekend) — two double beds + sofa bed, TV, Ref, and Hot Shower.<br>• <strong>Executive Suite 301:</strong> ₱3,500/night (₱4,000 weekend) — separate living lounge, panoramic view, Hot Tub, Mini Bar, Balcony, and Breakfast."
+    "response_tl": "👨‍👩‍👧‍👦 <strong>Para sa Pamilya o Grupo (Hanggang 4 Pax):</strong><br>Inirerekomenda namin ang aming <strong>Executive Suite 301 (Overnight Hotel Room)</strong> sa halagang <strong>₱2,500/gabi</strong> (₱3,000 weekend) — may hiwalay na living lounge, panoramic city view, Hot Tub, Mini Bar, Balcony, Smart TV, at Breakfast!",
+    "response_en": "👨‍👩‍👧‍👦 <strong>For Families or Groups (Up to 4 Pax):</strong><br>We recommend our <strong>Executive Suite 301 (Overnight Hotel Room)</strong> at <strong>₱2,500/night</strong> (₱3,000 weekend) — featuring a separate living lounge, panoramic city view, Hot Tub, Mini Bar, Balcony, Smart TV, and Breakfast!"
   },
   {
     "id": "studio_longstay",
-    "keywords": ["studio", "kitchenette", "workspace", "work from home", "long stay", "matagal", "s01", "may kusina"],
+    "keywords": ["study", "workspace", "work from home", "long stay", "matagal", "co-ed", "d03", "student"],
     "routes": ["rooms"],
-    "response_tl": "💻 <strong>Studio Unit 01 (S01) — ₱1,800/gabi (₱2,100 weekend):</strong><br>Perpekto para sa long stay o work-from-hotel (hanggang 2 pax), may sariling <strong>Kitchenette</strong>, <strong>Workspace</strong>, Smart TV, Ref, Air Con, at 200 Mbps Fiber WiFi. Puwede ring gamitin ang <strong>LONGSTAY20</strong> promo para sa 5+ nights!",
-    "response_en": "💻 <strong>Studio Unit 01 (S01) — ₱1,800/night (₱2,100 weekend):</strong><br>Ideal for long stays or remote work (up to 2 pax), featuring a compact <strong>Kitchenette</strong>, dedicated <strong>Workspace</strong>, Smart TV, Ref, Air Con, and 200 Mbps Fiber WiFi. You can also apply <strong>LONGSTAY20</strong> for stays of 5+ nights!"
+    "response_tl": "💻 <strong>Para sa Students / Study-Friendly &amp; Long Stays:</strong><br>• <strong>Dormitory Room - Co-ed Deluxe Wing (D03)</strong> — ₱450/bed·night na may study desk nook at 200 Mbps Fiber WiFi.<br>• Pwede ring gamitin ang <strong>LONGSTAY20</strong> promo para sa 20% off kapag 5+ nights ang stay!",
+    "response_en": "💻 <strong>For Students / Study-Friendly &amp; Long Stays:</strong><br>• <strong>Dormitory Room - Co-ed Deluxe Wing (D03)</strong> — ₱450/bed·night with a dedicated study desk nook and 200 Mbps Fiber WiFi.<br>• You can also apply <strong>LONGSTAY20</strong> for 20% off on stays of 5+ nights!"
   },
   {
     "id": "wifi_amenities",

@@ -18,11 +18,26 @@ throttleStaleBookingSweep(24, 15);
 $hotelName = getSetting('hotel_name', 'Marvelous Hotel');
 
 // Filter inputs
+$categoryFilter = strtolower(trim($_GET['category'] ?? ''));
 $typeFilter = $_GET['type'] ?? '';
 $searchQuery = trim($_GET['q'] ?? '');
 
+if ($typeFilter === 'hotel') {
+    $categoryFilter = 'hotel';
+    $typeFilter = '';
+} elseif ($typeFilter === 'dormitory') {
+    $categoryFilter = 'dormitory';
+    $typeFilter = '';
+}
+
 $sql = "SELECT r.*, rt.name as type_name FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id WHERE r.status != 'maintenance'";
 $params = [];
+
+if ($categoryFilter === 'hotel') {
+    $sql .= " AND rt.name != 'Dormitory'";
+} elseif ($categoryFilter === 'dormitory') {
+    $sql .= " AND rt.name = 'Dormitory'";
+}
 
 if (!empty($typeFilter)) {
     $sql .= " AND rt.name = ?";
@@ -35,8 +50,12 @@ if (!empty($searchQuery)) {
     $params[] = "%$searchQuery%";
 }
 
-$sql .= " ORDER BY r.price_per_night ASC";
+$sql .= " ORDER BY CASE WHEN rt.name = 'Dormitory' THEN 1 ELSE 0 END ASC, r.price_per_night ASC, r.room_number ASC";
 $rooms = dbRows($sql, $params);
+$allActiveCounts = dbRow("SELECT COUNT(*) AS total, SUM(CASE WHEN rt.name = 'Dormitory' THEN 1 ELSE 0 END) AS dorms, SUM(CASE WHEN rt.name != 'Dormitory' THEN 1 ELSE 0 END) AS hotels FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id WHERE r.status != 'maintenance'");
+$totalActiveRoomsCount = (int)($allActiveCounts['total'] ?? count($rooms));
+$totalHotelRoomsCount  = (int)($allActiveCounts['hotels'] ?? 0);
+$totalDormRoomsCount   = (int)($allActiveCounts['dorms'] ?? 0);
 $roomTypes = dbRows("SELECT * FROM room_types");
 $allBookingsMap = getAllRoomsActiveBookingsMap();
 $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
@@ -114,6 +133,19 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
           </span>
         </div>
       <?php endif; ?>
+    </div>
+
+    <!-- Category Quick Pills (Hotel Rooms Overnight vs Dormitory) -->
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:18px;">
+      <a href="rooms.php" class="btn btn-sm <?= ($categoryFilter === '' && $typeFilter === '') ? 'btn-gold' : 'btn-ghost' ?>" style="border:1px solid rgba(255,255,255,0.16);">
+        <i class="fa-solid fa-layer-group"></i> All Rooms (<?= $totalActiveRoomsCount ?>)
+      </a>
+      <a href="rooms.php?category=hotel" class="btn btn-sm <?= $categoryFilter === 'hotel' ? 'btn-gold' : 'btn-ghost' ?>" style="border:1px solid rgba(201,168,76,0.35);">
+        <i class="fa-solid fa-moon" style="color:var(--gold);"></i> Hotel Rooms — Overnight (<?= $totalHotelRoomsCount ?>)
+      </a>
+      <a href="rooms.php?category=dormitory" class="btn btn-sm <?= $categoryFilter === 'dormitory' ? 'btn-gold' : 'btn-ghost' ?>" style="border:1px solid rgba(96,165,250,0.35);">
+        <i class="fa-solid fa-building" style="color:#60a5fa;"></i> Dormitory Rooms (<?= $totalDormRoomsCount ?>)
+      </a>
     </div>
 
     <!-- Filter Form -->
@@ -220,6 +252,7 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
         <?php foreach ($rooms as $r): 
           $amenities = safeJson($r['amenities']);
           $occ = getRoomOccupancyStatus((int)$r['id'], $r['status'], $allBookingsMap[(int)$r['id']] ?? []);
+          $isDorm = strcasecmp((string)($r['type_name'] ?? ''), 'Dormitory') === 0;
         ?>
           <div class="room-card">
             <div class="room-card-img">
@@ -229,9 +262,13 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
               </div>
             </div>
             <div class="room-card-body">
-              <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px;">
+              <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:6px;">
                 <h3 class="room-card-name"><?= h($r['name']) ?></h3>
-                <span class="badge badge-gold"><?= h($r['type_name']) ?></span>
+                <?php if ($isDorm): ?>
+                  <span class="badge" style="background:rgba(59,130,246,0.18);color:#93c5fd;border:1px solid rgba(59,130,246,0.38);white-space:nowrap;"><i class="fa-solid fa-building"></i> Dormitory</span>
+                <?php else: ?>
+                  <span class="badge badge-gold" style="white-space:nowrap;"><i class="fa-solid fa-moon"></i> Hotel · Overnight</span>
+                <?php endif; ?>
               </div>
               <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;">Floor <?= $r['floor'] ?> · Up to <?= $r['capacity'] ?> Pax</p>
               
@@ -254,7 +291,7 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
               <div class="room-card-footer">
                 <div>
                   <div class="room-price-main"><?= formatCurrency($r['price_per_night']) ?></div>
-                  <div class="room-price-sub">per night</div>
+                  <div class="room-price-sub"><?= $isDorm ? 'per bed / night' : 'per night (overnight)' ?></div>
                 </div>
                 <?php if (isLoggedIn() && empty($currentKyc['is_verified'])): ?>
                   <a href="user/profile.php" class="btn btn-sm" style="background:rgba(234,179,8,0.15);color:#fde047;border:1px solid rgba(234,179,8,0.35);" title="You must verify your ID before booking">

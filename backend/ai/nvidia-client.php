@@ -228,7 +228,8 @@ function buildDynamicRoomCatalogContext(): array {
                 SELECT r.id, r.room_number, r.name, r.description, r.floor, r.capacity, r.price_per_night, r.weekend_rate, r.status, r.amenities, r.thumbnail, rt.name AS type_name
                 FROM rooms r
                 JOIN room_types rt ON r.room_type_id = rt.id
-                ORDER BY r.price_per_night ASC, r.room_number ASC
+                WHERE r.status != 'maintenance'
+                ORDER BY CASE WHEN rt.name = 'Dormitory' THEN 1 ELSE 0 END ASC, r.price_per_night ASC, r.room_number ASC
             ");
 
             $ratingsMap = function_exists('getRoomsAvgRatingsMap') ? getRoomsAvgRatingsMap() : [];
@@ -261,7 +262,8 @@ function buildDynamicRoomCatalogContext(): array {
                     $descShort = mb_substr($descShort, 0, 92, 'UTF-8') . '...';
                 }
                 $descText = $descShort !== '' ? " | {$descShort}" : '';
-                $catalogLines[] = "- [ID #{$r['id']}] {$r['name']} (Room {$r['room_number']}, {$r['type_name']}): ₱{$priceFmt}/night{$wkndFmt}, Floor {$r['floor']}, up to {$r['capacity']} pax, status: {$availTag}{$ratingText}{$amText}{$descText}";
+                $catLabel = (strcasecmp((string)($r['type_name'] ?? ''), 'Dormitory') === 0) ? 'Dormitory' : 'Hotel Room · Overnight / Pang-gabi';
+                $catalogLines[] = "- [ID #{$r['id']}] {$r['name']} (Room {$r['room_number']}, {$catLabel} / {$r['type_name']}): ₱{$priceFmt}/night{$wkndFmt}, Floor {$r['floor']}, up to {$r['capacity']} pax, status: {$availTag}{$ratingText}{$amText}{$descText}";
             }
         } catch (\Throwable $e) {
             // Fall through to static defaults
@@ -270,15 +272,12 @@ function buildDynamicRoomCatalogContext(): array {
 
     if (empty($catalogLines)) {
         $catalogLines = [
-            '- [ID #7] Dormitory Bed - Female Wing (Room D01, Dormitory): ₱350/night, up to 1 pax (Air Con, lockers, WiFi, shared bathroom).',
-            '- [ID #8] Dormitory Bed - Male Wing (Room D02, Dormitory): ₱350/night, up to 1 pax (Air Con, lockers, WiFi, shared bathroom).',
-            '- [ID #1] Standard Room 101 (Room 101, Standard Room): ₱800/night, up to 2 pax (Private room, Air Con, TV, WiFi, Hot Shower, Ref).',
-            '- [ID #2] Standard Room 102 (Room 102, Standard Room): ₱800/night, up to 2 pax.',
-            '- [ID #3] Deluxe Room 201 (Room 201, Deluxe Room): ₱1,500/night, up to 2 pax (King bed, Smart TV, Safe box, Breakfast).',
-            '- [ID #4] Deluxe Room 202 (Room 202, Deluxe Room): ₱1,600/night, up to 2 pax (King bed, Balcony, Smart TV, Breakfast).',
-            '- [ID #9] Studio Unit 01 (Room S01, Studio): ₱1,800/night, up to 2 pax (Kitchenette, workspace, Smart TV).',
-            '- [ID #6] Family Room 401 (Room 401, Family Room): ₱2,200/night, up to 4 pax (Two double beds, spacious).',
-            '- [ID #5] Executive Suite 301 (Room 301, Suite): ₱3,500/night, up to 4 pax (Hot tub, mini bar, panoramic view).'
+            '- [ID #1] Standard Hotel Room 101 (Room 101, Hotel Room · Overnight / Pang-gabi): ₱800/night (weekend: ₱950), Floor 1, up to 2 pax (Private room, Air Con, TV, WiFi, Hot Shower, Ref).',
+            '- [ID #2] Deluxe Hotel Room 201 (Room 201, Hotel Room · Overnight / Pang-gabi): ₱1,500/night (weekend: ₱1,800), Floor 2, up to 2 pax (King bed, Smart TV, Safe Box, Breakfast).',
+            '- [ID #3] Executive Suite 301 (Room 301, Hotel Room · Overnight / Pang-gabi): ₱2,500/night (weekend: ₱3,000), Floor 3, up to 4 pax (Living lounge, Hot Tub, Mini Bar, Balcony, Breakfast).',
+            '- [ID #4] Dormitory Room - Female Wing (Room D01, Dormitory): ₱350/bed·night (weekend: ₱400), Floor 1, 1 pax/bed (Air Con, privacy curtain, lockers, WiFi, shared bathroom).',
+            '- [ID #5] Dormitory Room - Male Wing (Room D02, Dormitory): ₱350/bed·night (weekend: ₱400), Floor 1, 1 pax/bed (Air Con, privacy curtain, lockers, WiFi, shared bathroom).',
+            '- [ID #6] Dormitory Room - Co-ed Deluxe Wing (Room D03, Dormitory): ₱450/bed·night (weekend: ₱500), Floor 2, 1 pax/bed (Timber pods, study nook, lockers, WiFi, shared bathroom).'
         ];
     }
 

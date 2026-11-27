@@ -349,18 +349,15 @@ INSERT INTO `room_types` (`name`, `description`, `icon`) VALUES
 ('Studio', 'Self-contained studio unit', 'fa-house');
 
 -- ============================================================
--- SEED DATA: Rooms
+-- SEED DATA: Rooms (6 Total: 3 Overnight Hotel Rooms + 3 Dormitory Rooms)
 -- ============================================================
 INSERT INTO `rooms` (`room_number`,`room_type_id`,`name`,`description`,`floor`,`capacity`,`price_per_night`,`weekend_rate`,`amenities`,`tags`,`thumbnail`,`status`) VALUES
-('101',1,'Standard Room 101','A cozy and clean standard room on the ground floor with garden view.',1,2,800.00,950.00,'["WiFi","Air Con","TV","Hot Shower","Ref"]','["budget","quiet","garden view"]','room-101.jpg','available'),
-('102',1,'Standard Room 102','Comfortable standard room with street-facing window.',1,2,800.00,950.00,'["WiFi","Air Con","TV","Hot Shower"]','["budget","street view"]','room-102.jpg','available'),
-('201',2,'Deluxe Room 201','Spacious deluxe room with premium bedding and city view.',2,2,1500.00,1800.00,'["WiFi","Air Con","Smart TV","Hot Shower","Ref","Safe Box","Breakfast"]','["deluxe","city view","premium"]','room-201.jpg','available'),
-('202',2,'Deluxe Room 202','Elegant deluxe room with king-size bed and balcony.',2,2,1600.00,1900.00,'["WiFi","Air Con","Smart TV","Hot Shower","Ref","Safe Box","Balcony","Breakfast"]','["deluxe","balcony","romantic"]','room-202.jpg','available'),
-('301',3,'Executive Suite 301','Luxurious suite with separate living room and panoramic view.',3,4,3500.00,4000.00,'["WiFi","Air Con","Smart TV","Hot Tub","Ref","Safe Box","Mini Bar","Balcony","Breakfast","Lounge"]','["luxury","suite","panoramic","family"]','suite-301.jpg','available'),
-('401',4,'Family Room 401','Spacious family room with two double beds, perfect for 4 guests.',4,4,2200.00,2600.00,'["WiFi","Air Con","TV","Hot Shower","Ref","Sofa Bed"]','["family","spacious","kids friendly"]','room-401.jpg','available'),
-('D01',5,'Dormitory Bed - Female Wing','Female-only dormitory with 8 beds, lockers, and shared bathroom.',1,1,350.00,400.00,'["WiFi","Air Con","Locker","Shared Bathroom","Charging Station"]','["budget","female only","backpacker"]','dorm-f01.jpg','available'),
-('D02',5,'Dormitory Bed - Male Wing','Male-only dormitory with 8 beds, lockers, and shared bathroom.',1,1,350.00,400.00,'["WiFi","Air Con","Locker","Shared Bathroom","Charging Station"]','["budget","male only","backpacker"]','dorm-m02.jpg','available'),
-('S01',6,'Studio Unit 01','Self-contained studio with small kitchen and workspace.',2,2,1800.00,2100.00,'["WiFi","Air Con","Smart TV","Kitchenette","Hot Shower","Workspace","Ref"]','["studio","long stay","workspace"]','studio-s01.jpg','available');
+('101',1,'Standard Hotel Room 101','Cozy overnight hotel room on the ground floor with tropical garden view, plush queen bed, and private bath.',1,2,800.00,950.00,'["WiFi","Air Con","TV","Hot Shower","Ref"]','["hotel room","overnight","budget","garden view"]','room-101.jpg','available'),
+('201',2,'Deluxe Hotel Room 201','Spacious overnight deluxe hotel room with premium king bedding, Smart TV, Safe Box, and city skyline view.',2,2,1500.00,1800.00,'["WiFi","Air Con","Smart TV","Hot Shower","Ref","Safe Box","Breakfast"]','["hotel room","overnight","deluxe","city view"]','room-201.jpg','available'),
+('301',3,'Executive Suite 301','Luxurious overnight hotel suite with separate living lounge, king bedroom, panoramic city view, and Hot Tub.',3,4,2500.00,3000.00,'["WiFi","Air Con","Smart TV","Hot Tub","Ref","Safe Box","Mini Bar","Balcony","Breakfast","Lounge"]','["hotel room","overnight","luxury","suite","family"]','suite-301.jpg','available'),
+('D01',5,'Dormitory Room - Female Wing','Clean female-only boutique dormitory with light-wood capsule bunks, privacy curtains, personal lockers, and shared bath.',1,1,350.00,400.00,'["WiFi","Air Con","Locker","Privacy Curtain","Shared Bathroom","Charging Station"]','["dormitory","budget","female only","student"]','dorm-f01.jpg','available'),
+('D02',5,'Dormitory Room - Male Wing','Modern male-only boutique dormitory with dark-wood & steel bunk pods, privacy curtains, lockers, and charging shelves.',1,1,350.00,400.00,'["WiFi","Air Con","Locker","Privacy Curtain","Shared Bathroom","Charging Station"]','["dormitory","budget","male only","student"]','dorm-m02.jpg','available'),
+('D03',5,'Dormitory Room - Co-ed Deluxe Wing','Upscale co-ed boutique dormitory with timber sleeping pods, study desk nook, personal lockers, and high-speed WiFi.',2,1,450.00,500.00,'["WiFi","Air Con","Locker","Privacy Curtain","Study Nook","Shared Bathroom","Charging Station"]','["dormitory","budget","co-ed","study friendly"]','dorm-03.jpg','available');
 
 -- ============================================================
 -- SEED DATA: Default Admin Account

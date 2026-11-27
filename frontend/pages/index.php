@@ -15,13 +15,13 @@ releaseReadOnlySession();
 
 throttleStaleBookingSweep(24, 15);
 
-// Fetch data for homepage
+// Fetch data for homepage (3 Overnight Hotel Rooms + 3 Dormitory Rooms)
 $rooms = dbRows("
     SELECT r.*, rt.name as type_name 
     FROM rooms r 
     JOIN room_types rt ON r.room_type_id = rt.id 
     WHERE r.status != 'maintenance' 
-    ORDER BY r.price_per_night ASC 
+    ORDER BY CASE WHEN rt.name = 'Dormitory' THEN 1 ELSE 0 END ASC, r.price_per_night ASC, r.room_number ASC 
     LIMIT 6
 ");
 $allBookingsMap = getAllRoomsActiveBookingsMap();
@@ -569,14 +569,14 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
       <div class="search-field">
         <div class="search-field-icon"><i class="fa-solid fa-bed"></i></div>
         <div>
-          <div class="search-field-label">Room Type</div>
+          <div class="search-field-label">Room Category</div>
           <select id="searchType">
-            <option>All Types</option>
-            <option>Standard Room</option>
-            <option>Deluxe Room</option>
-            <option>Suite</option>
-            <option>Dormitory</option>
-            <option>Studio</option>
+            <option value="">All Rooms (Hotel &amp; Dormitory)</option>
+            <option value="hotel">Hotel Rooms (Overnight / Pang-gabi)</option>
+            <option value="dormitory">Dormitory Rooms</option>
+            <option value="Standard Room">Standard Room</option>
+            <option value="Deluxe Room">Deluxe Room</option>
+            <option value="Suite">Suite</option>
           </select>
         </div>
       </div>
@@ -660,7 +660,23 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
       </a>
     </div>
 
-    <div class="rooms-grid">
+    <?php
+      $homeHotelCount = count(array_filter($rooms, fn($x) => strcasecmp((string)($x['type_name'] ?? ''), 'Dormitory') !== 0));
+      $homeDormCount  = count($rooms) - $homeHotelCount;
+    ?>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px;" id="homeRoomFilterBar">
+      <button type="button" class="btn btn-gold btn-sm home-room-cat-btn" data-cat="all" onclick="filterHomeRooms('all', this)">
+        <i class="fa-solid fa-layer-group"></i> All Rooms (<?= count($rooms) ?>)
+      </button>
+      <button type="button" class="btn btn-ghost btn-sm home-room-cat-btn" data-cat="hotel" onclick="filterHomeRooms('hotel', this)" style="border:1px solid rgba(201,168,76,0.35);">
+        <i class="fa-solid fa-moon" style="color:var(--gold);"></i> Hotel Rooms — Overnight (<?= $homeHotelCount ?>)
+      </button>
+      <button type="button" class="btn btn-ghost btn-sm home-room-cat-btn" data-cat="dormitory" onclick="filterHomeRooms('dormitory', this)" style="border:1px solid rgba(96,165,250,0.35);">
+        <i class="fa-solid fa-building" style="color:#60a5fa;"></i> Dormitory Rooms (<?= $homeDormCount ?>)
+      </button>
+    </div>
+
+    <div class="rooms-grid" id="homeRoomsGrid">
       <?php if(empty($rooms)): ?>
         <div class="empty-state" style="grid-column:1/-1;">
           <div class="empty-state-icon"><i class="fa-solid fa-bed"></i></div>
@@ -673,8 +689,10 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
           $tags = safeJson($room['tags']);
           $rating = $roomRatingsMap[(int)$room['id']] ?? 0;
           $occ = getRoomOccupancyStatus((int)$room['id'], $room['status'], $allBookingsMap[(int)$room['id']] ?? []);
+          $isDorm = strcasecmp((string)($room['type_name'] ?? ''), 'Dormitory') === 0;
+          $roomCat = $isDorm ? 'dormitory' : 'hotel';
         ?>
-        <div class="room-card reveal" style="transition-delay:<?= $i * 0.06 ?>s;">
+        <div class="room-card reveal" data-room-cat="<?= $roomCat ?>" style="transition-delay:<?= $i * 0.06 ?>s;">
           <div class="room-card-img">
             <img src="<?= roomThumbUrl($room['thumbnail']) ?>"
                  alt="<?= h($room['name']) ?>"
@@ -688,7 +706,11 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
           <div class="room-card-body">
             <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:6px;">
               <h3 class="room-card-name"><?= h($room['name']) ?></h3>
-              <span class="badge badge-gold"><?= h($room['type_name']) ?></span>
+              <?php if ($isDorm): ?>
+                <span class="badge" style="background:rgba(59,130,246,0.18);color:#93c5fd;border:1px solid rgba(59,130,246,0.38);white-space:nowrap;"><i class="fa-solid fa-building"></i> Dormitory</span>
+              <?php else: ?>
+                <span class="badge badge-gold" style="white-space:nowrap;"><i class="fa-solid fa-moon"></i> Hotel · Overnight</span>
+              <?php endif; ?>
             </div>
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
               <span class="stars">
@@ -722,7 +744,7 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
             <div class="room-card-footer">
               <div>
                 <div class="room-price-main"><?= formatCurrency($room['price_per_night']) ?></div>
-                <div class="room-price-sub">per night</div>
+                <div class="room-price-sub"><?= $isDorm ? 'per bed / night' : 'per night (overnight)' ?></div>
               </div>
               <a href="<?= isLoggedIn() ? 'user/booking.php?room_id='.$room['id'] : 'auth/login.php?redirect='.urlencode('user/booking.php?room_id='.$room['id']) ?>" 
                  class="btn btn-gold btn-sm" id="bookBtn<?= $room['id'] ?>">
@@ -734,6 +756,21 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
         <?php endforeach; ?>
       <?php endif; ?>
     </div>
+    <script>
+      function filterHomeRooms(cat, btn) {
+        document.querySelectorAll('#homeRoomsGrid .room-card').forEach(card => {
+          card.style.display = (cat === 'all' || card.dataset.roomCat === cat) ? '' : 'none';
+        });
+        document.querySelectorAll('.home-room-cat-btn').forEach(b => {
+          b.classList.remove('btn-gold');
+          b.classList.add('btn-ghost');
+        });
+        if (btn) {
+          btn.classList.remove('btn-ghost');
+          btn.classList.add('btn-gold');
+        }
+      }
+    </script>
   </div>
 </section>
 

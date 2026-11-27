@@ -130,15 +130,12 @@ function extractBudgetFromQuery(string $msg): ?float {
 // ------------------------------------------------------------
 function getFallbackSeedRooms(): array {
     return [
-        ['id' => 7, 'room_number' => 'D01', 'name' => 'Dormitory Bed - Female Wing', 'type_name' => 'Dormitory', 'price_per_night' => 350.00, 'floor' => 1, 'capacity' => 1, 'amenities' => '["WiFi","Air Con","Locker","Shared Bathroom"]', 'thumbnail' => 'dorm-f01.jpg'],
-        ['id' => 8, 'room_number' => 'D02', 'name' => 'Dormitory Bed - Male Wing', 'type_name' => 'Dormitory', 'price_per_night' => 350.00, 'floor' => 1, 'capacity' => 1, 'amenities' => '["WiFi","Air Con","Locker","Shared Bathroom"]', 'thumbnail' => 'dorm-m02.jpg'],
-        ['id' => 1, 'room_number' => '101', 'name' => 'Standard Room 101', 'type_name' => 'Standard Room', 'price_per_night' => 800.00, 'floor' => 1, 'capacity' => 2, 'amenities' => '["WiFi","Air Con","TV","Hot Shower","Ref"]', 'thumbnail' => 'room-101.jpg'],
-        ['id' => 2, 'room_number' => '102', 'name' => 'Standard Room 102', 'type_name' => 'Standard Room', 'price_per_night' => 800.00, 'floor' => 1, 'capacity' => 2, 'amenities' => '["WiFi","Air Con","TV","Hot Shower"]', 'thumbnail' => 'room-102.jpg'],
-        ['id' => 3, 'room_number' => '201', 'name' => 'Deluxe Room 201', 'type_name' => 'Deluxe Room', 'price_per_night' => 1500.00, 'floor' => 2, 'capacity' => 2, 'amenities' => '["WiFi","Air Con","Smart TV","Hot Shower","Breakfast"]', 'thumbnail' => 'room-201.jpg'],
-        ['id' => 4, 'room_number' => '202', 'name' => 'Deluxe Room 202', 'type_name' => 'Deluxe Room', 'price_per_night' => 1600.00, 'floor' => 2, 'capacity' => 2, 'amenities' => '["WiFi","Air Con","Smart TV","Balcony","Breakfast"]', 'thumbnail' => 'room-202.jpg'],
-        ['id' => 9, 'room_number' => 'S01', 'name' => 'Studio Unit 01', 'type_name' => 'Studio', 'price_per_night' => 1800.00, 'floor' => 2, 'capacity' => 2, 'amenities' => '["WiFi","Air Con","Smart TV","Kitchenette","Workspace"]', 'thumbnail' => 'studio-s01.jpg'],
-        ['id' => 6, 'room_number' => '401', 'name' => 'Family Room 401', 'type_name' => 'Family Room', 'price_per_night' => 2200.00, 'floor' => 4, 'capacity' => 4, 'amenities' => '["WiFi","Air Con","TV","Hot Shower","Sofa Bed"]', 'thumbnail' => 'room-401.jpg'],
-        ['id' => 5, 'room_number' => '301', 'name' => 'Executive Suite 301', 'type_name' => 'Suite', 'price_per_night' => 3500.00, 'floor' => 3, 'capacity' => 4, 'amenities' => '["WiFi","Air Con","Smart TV","Hot Tub","Mini Bar"]', 'thumbnail' => 'suite-301.jpg'],
+        ['id' => 4, 'room_number' => 'D01', 'name' => 'Dormitory Room - Female Wing', 'type_name' => 'Dormitory', 'price_per_night' => 350.00, 'floor' => 1, 'capacity' => 1, 'amenities' => '["WiFi","Air Con","Locker","Privacy Curtain","Shared Bathroom"]', 'thumbnail' => 'dorm-f01.jpg'],
+        ['id' => 5, 'room_number' => 'D02', 'name' => 'Dormitory Room - Male Wing', 'type_name' => 'Dormitory', 'price_per_night' => 350.00, 'floor' => 1, 'capacity' => 1, 'amenities' => '["WiFi","Air Con","Locker","Privacy Curtain","Shared Bathroom"]', 'thumbnail' => 'dorm-m02.jpg'],
+        ['id' => 6, 'room_number' => 'D03', 'name' => 'Dormitory Room - Co-ed Deluxe Wing', 'type_name' => 'Dormitory', 'price_per_night' => 450.00, 'floor' => 2, 'capacity' => 1, 'amenities' => '["WiFi","Air Con","Locker","Privacy Curtain","Study Nook"]', 'thumbnail' => 'dorm-03.jpg'],
+        ['id' => 1, 'room_number' => '101', 'name' => 'Standard Hotel Room 101', 'type_name' => 'Standard Room', 'price_per_night' => 800.00, 'floor' => 1, 'capacity' => 2, 'amenities' => '["WiFi","Air Con","TV","Hot Shower","Ref"]', 'thumbnail' => 'room-101.jpg'],
+        ['id' => 2, 'room_number' => '201', 'name' => 'Deluxe Hotel Room 201', 'type_name' => 'Deluxe Room', 'price_per_night' => 1500.00, 'floor' => 2, 'capacity' => 2, 'amenities' => '["WiFi","Air Con","Smart TV","Hot Shower","Breakfast"]', 'thumbnail' => 'room-201.jpg'],
+        ['id' => 3, 'room_number' => '301', 'name' => 'Executive Suite 301', 'type_name' => 'Suite', 'price_per_night' => 2500.00, 'floor' => 3, 'capacity' => 4, 'amenities' => '["WiFi","Air Con","Smart TV","Hot Tub","Mini Bar"]', 'thumbnail' => 'suite-301.jpg'],
     ];
 }
 
@@ -188,12 +185,10 @@ function findRoomByContextText(string $text): ?array {
 
     // Match by room category keyword
     $keywordGroups = [
-        'dormitory' => ['dorm', 'dormitory', 'bedspace', 'female wing', 'male wing', '350', 'pinakamura', 'cheapest'],
-        'suite'     => ['suite', 'executive', 'luxury', 'hot tub', '3500', '3,500'],
-        'family'    => ['family', 'pamilya', '4 pax', '4 tao', 'apat', '2200', '2,200'],
-        'studio'    => ['studio', 'kitchenette', '1800', '1,800'],
-        'deluxe'    => ['deluxe', 'king', 'balcony', 'couple', 'mag-asawa', '1500', '1,500', '1600', '1,600'],
-        'standard'  => ['standard', '800', 'private room'],
+        'dormitory' => ['dorm', 'dormitory', 'bedspace', 'female wing', 'male wing', 'co-ed', 'd01', 'd02', 'd03', '350', '450', 'pinakamura', 'cheapest'],
+        'suite'     => ['suite', 'executive', 'luxury', 'hot tub', 'family', 'pamilya', '4 pax', '4 tao', 'apat', '2500', '2,500'],
+        'deluxe'    => ['deluxe', 'king', 'couple', 'mag-asawa', '1500', '1,500'],
+        'standard'  => ['standard', '800', 'private room', 'overnight', 'pang-gabi', 'pang gabi', 'hotel room'],
     ];
     foreach ($keywordGroups as $typeHint => $keywords) {
         foreach ($keywords as $kw) {
@@ -240,10 +235,10 @@ function getBestRoomForBudget(?float $budget): array {
     if (!$room) {
         $seeds = getFallbackSeedRooms();
         if ($budget === null || $budget >= 800.0) {
-            $room = $seeds[2]; // Standard Room 101
-            $cheaperAlt = $seeds[0]; // Dormitory Bed
+            $room = $seeds[3]; // Standard Hotel Room 101
+            $cheaperAlt = $seeds[0]; // Dormitory Room - Female Wing
         } else {
-            $room = $seeds[0]; // Dormitory Bed
+            $room = $seeds[0]; // Dormitory Room - Female Wing
         }
     }
 

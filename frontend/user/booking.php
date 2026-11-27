@@ -407,15 +407,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <?php if (!empty($rooms)): ?>
+              <?php
+                $bkHotelCnt = count(array_filter($rooms, fn($x) => strcasecmp((string)($x['type_name'] ?? ''), 'Dormitory') !== 0));
+                $bkDormCnt  = count($rooms) - $bkHotelCnt;
+              ?>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+                <button type="button" class="btn btn-gold btn-sm bk-cat-btn" onclick="filterBookingPicker('all', this)">All (<?= count($rooms) ?>)</button>
+                <button type="button" class="btn btn-ghost btn-sm bk-cat-btn" onclick="filterBookingPicker('hotel', this)" style="border:1px solid rgba(201,168,76,0.35);"><i class="fa-solid fa-moon" style="color:var(--gold);"></i> Hotel Rooms · Overnight (<?= $bkHotelCnt ?>)</button>
+                <button type="button" class="btn btn-ghost btn-sm bk-cat-btn" onclick="filterBookingPicker('dormitory', this)" style="border:1px solid rgba(96,165,250,0.35);"><i class="fa-solid fa-building" style="color:#60a5fa;"></i> Dormitory (<?= $bkDormCnt ?>)</button>
+              </div>
               <div class="booking-room-picker-grid" id="bookingRoomPickerGrid">
                 <?php foreach ($rooms as $rm):
                   $rid = (int)$rm['id'];
                   $occ = $roomOccupancyMap[$rid];
                   $thumbUrl = roomThumbUrl($rm['thumbnail'] ?? null);
                   $isSelected = ($selectedRoomId === $rid);
+                  $isDorm = strcasecmp((string)($rm['type_name'] ?? ''), 'Dormitory') === 0;
                 ?>
                   <div class="booking-room-card<?= $isSelected ? ' selected' : '' ?>"
                        data-room-id="<?= $rid ?>"
+                       data-room-cat="<?= $isDorm ? 'dormitory' : 'hotel' ?>"
                        role="button"
                        tabindex="0"
                        aria-pressed="<?= $isSelected ? 'true' : 'false' ?>"
@@ -438,14 +449,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       <span class="booking-room-selected-pill"><i class="fa-solid fa-check"></i> Selected</span>
                     </div>
                     <div class="booking-room-card-body">
-                      <div class="booking-room-card-type"><?= h($rm['type_name'] ?: 'Room') ?> · #<?= h($rm['room_number']) ?></div>
+                      <div class="booking-room-card-type"><?= $isDorm ? 'Dormitory' : 'Hotel Room · Overnight' ?> · #<?= h($rm['room_number']) ?></div>
                       <div class="booking-room-card-title"><?= h($rm['name']) ?></div>
                       <div class="booking-room-card-meta">Floor <?= (int)$rm['floor'] ?> · Max <?= (int)$rm['capacity'] ?> pax</div>
-                      <div class="booking-room-card-price">₱<?= number_format((float)$rm['price_per_night'], 2) ?> <span>/night</span></div>
+                      <div class="booking-room-card-price">₱<?= number_format((float)$rm['price_per_night'], 2) ?> <span><?= $isDorm ? '/bed·night' : '/night' ?></span></div>
                     </div>
                   </div>
                 <?php endforeach; ?>
               </div>
+              <script>
+                function filterBookingPicker(cat, btn) {
+                  document.querySelectorAll('#bookingRoomPickerGrid .booking-room-card').forEach(c => {
+                    c.style.display = (cat === 'all' || c.dataset.roomCat === cat) ? '' : 'none';
+                  });
+                  document.querySelectorAll('.bk-cat-btn').forEach(b => {
+                    b.classList.remove('btn-gold');
+                    b.classList.add('btn-ghost');
+                  });
+                  if (btn) { btn.classList.remove('btn-ghost'); btn.classList.add('btn-gold'); }
+                }
+              </script>
             <?php endif; ?>
 
             <select name="room_id" id="roomSelect" class="form-control" required onchange="onRoomOrDateChanged('room')">

@@ -60,7 +60,7 @@
     <ellipse cx="520" cy="1015.5" rx="175" ry="23.5" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5"/>
     <text class="uc-text" x="520" y="1015.5">Change Own Password</text>
     <ellipse cx="520" cy="1069.0" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
-    <text class="uc-text" x="520" y="1069.0">Manage Users, KYC &amp; Resets</text>
+    <text class="uc-text" x="520" y="1069.0">Manage Users, KYC &amp; Reset Codes</text>
     <ellipse cx="520" cy="1122.5" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>
     <text class="uc-text" x="520" y="1122.5">Manage Staff Accounts</text>
     <ellipse cx="520" cy="1176.0" rx="175" ry="23.5" fill="#F8CECC" stroke="#B85450" stroke-width="1.5"/>

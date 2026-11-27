@@ -2,28 +2,49 @@
 # MARVELOUS HOTEL — Git Ignore Rules
 # ============================================================
 
-# Environment & Sensitive Config
+# Environment, Secrets & Local Tunnel State
 .env
 .env.*
 !.env.example
 LIVE_URL.txt
 storage/.cred_vault.key
 storage/*.key
+*.pem
+*.p12
 
-# Cache & Temporary Files
+# Database Dumps & Local Backups (keep schema & migrations tracked)
+*.sql.gz
+*.sql.bak
+*.dump
+backup*.sql
+
+# Cache, Build & Temporary Files
 .phpunit.result.cache
+.phpunit.cache/
+coverage/
 *.cache
 *.tmp
 *.bak
+*.orig
 *.swp
 *.swo
 *~
 *.zip
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Generated Documentation PDFs (keep docs/diagrams/ tracked for README layouts)
+# Python Script Artifacts (scripts/*.py)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Generated Documentation PDFs & Exports (keep docs/diagrams/*.png & *.svg tracked)
 docs/*.pdf
+docs/**/*.pdf
+payments-export-*.csv
 
 # IDE & Editor Settings
 .vscode/
@@ -31,22 +52,28 @@ docs/*.pdf
 *.sublime-project
 *.sublime-workspace
 
-# Log Files, Sessions & Runtime Cache (keep .gitkeep)
-logs/*.log
-storage/logs/*.log
+# Log Files, Sessions & Runtime Cache (keep .gitkeep & .htaccess)
+logs/*
+storage/logs/*
 storage/sessions/*
 storage/cache/*
 !logs/.gitkeep
+!logs/.htaccess
 !storage/logs/.gitkeep
+!storage/logs/.htaccess
 !storage/sessions/.gitkeep
+!storage/sessions/.htaccess
 !storage/cache/.gitkeep
+!storage/cache/.htaccess
+npm-debug.log*
 
-# User & Admin Uploads (keep directory structure and default images)
+# User & Admin Uploads (keep directory structure, .htaccess & default avatar)
 uploads/avatars/*
 uploads/proofs/*
 uploads/ids/*
 uploads/documents/*
 uploads/rooms/*
+!uploads/.htaccess
 !uploads/avatars/default-avatar.png
 !uploads/avatars/.gitkeep
 !uploads/proofs/.gitkeep
@@ -58,4 +85,3 @@ uploads/rooms/*
 /vendor/
 node_modules/
 frontend/node_modules/
-

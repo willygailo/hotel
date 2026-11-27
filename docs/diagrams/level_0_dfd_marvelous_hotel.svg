@@ -116,8 +116,8 @@
   <!-- Left arrow: Admin -> System (Down) -->
   <line class="flow-line" x1="560" y1="146" x2="560" y2="325"/>
   <g transform="translate(534, 237) rotate(-90)">
-    <text class="flow-label" x="0" y="-12">Room, Account &amp;</text>
-    <text class="flow-label" x="0" y="7">System Management</text>
+    <text class="flow-label" x="0" y="-12">Rooms, Accounts &amp;</text>
+    <text class="flow-label" x="0" y="7">Reset Code Dispatch</text>
   </g>
 
   <!-- Right arrow: System -> Admin (Up) -->
@@ -130,12 +130,12 @@
   <!-- LEFT FLOWS: Guest / Customer <-> System (x=216 to x=465, gap=249px) -->
   <!-- Top arrow: Guest -> System (Right) -->
   <line class="flow-line" x1="216" y1="402" x2="462" y2="402"/>
-  <text class="flow-label" x="340" y="375">Registration, Booking,</text>
-  <text class="flow-label" x="340" y="393">KYC &amp; Payment Proof</text>
+  <text class="flow-label" x="340" y="375">Registration, Reset Code,</text>
+  <text class="flow-label" x="340" y="393">KYC, Booking &amp; Payment</text>
 
   <!-- Bottom arrow: System -> Guest (Left) -->
   <line class="flow-line" x1="465" y1="458" x2="219" y2="458"/>
-  <text class="flow-label" x="340" y="479">Room Availability, Status</text>
+  <text class="flow-label" x="340" y="479">Room Status, Reset Code</text>
   <text class="flow-label" x="340" y="497">&amp; AI Recommendations</text>
 
   <!-- RIGHT FLOWS: Frontdesk Staff <-> System (x=735 to x=984, gap=249px) -->

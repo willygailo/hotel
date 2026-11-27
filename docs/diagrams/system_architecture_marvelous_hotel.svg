@@ -113,7 +113,7 @@
             <rect x="-11" y="-2.2" width="22" height="4.4" rx="1" transform="rotate(45)"/>
           </g>
           <circle cx="0" cy="0" r="4.2" fill="#FFFFFF"/>
-        </g><text class="actor-label" x="96" y="159">Admin</text></g>
+        </g><text class="actor-label" x="96" y="159">Super Admin</text></g>
 <g>
       <circle cx="96" cy="283" r="14.5" fill="#1D63DC"/>
       <path d="M 70 325 C 70 303, 122 303, 122 325 Z" fill="#1D63DC"/>
@@ -303,7 +303,7 @@
           <path d="M 1 8 C 1 2, 14 2, 14 8 Z" opacity="0.85"/>
         </g>
           <text class="mod-title" x="814" y="257">Authentication &amp; Role Management</text>
-          <text class="mod-sub" x="814" y="276">(Admin, Staff &amp; Guest Portals + KYC)</text>
+          <text class="mod-sub" x="814" y="276">(Portals, KYC &amp; Admin Reset Codes)</text>
         </g>
         <g>
           <rect x="754" y="305" width="344" height="66" rx="10" ry="10"
@@ -317,7 +317,7 @@
           <line x1="14" y1="12" x2="14" y2="9"/>
         </g>
           <text class="mod-title" x="814" y="334">Room &amp; Dormitory Management</text>
-          <text class="mod-sub" x="814" y="353">(Overnight Rooms &amp; Dorms + Photos)</text>
+          <text class="mod-sub" x="814" y="353">(3 Hotel Rooms, 3 Dorms &amp; Photos)</text>
         </g>
         <g>
           <rect x="754" y="382" width="344" height="66" rx="10" ry="10"
@@ -412,8 +412,8 @@
                  fill="url(#dbTopGrad)" stroke="#1E293B" stroke-width="2.4"/>
         
       <text class="tier-label" x="1282" y="393">MySQL Database</text>
-      <text class="tier-sub" x="1282" y="411">(users, rooms, bookings,</text>
-      <text class="tier-sub" x="1282" y="426">payments, audit &amp; AI logs)</text>
+      <text class="tier-sub" x="1282" y="411">(users, reset codes, rooms,</text>
+      <text class="tier-sub" x="1282" y="426">bookings, payments &amp; logs)</text>
     </g>
     <g>
       <g transform="translate(1282,643)">
@@ -439,7 +439,7 @@
         </g>
       </g>
       <text class="tier-label" x="1282" y="691">NVIDIA NIM AI API</text>
-      <text class="tier-sub" x="1282" y="709">(Live LLM Inference</text>
+      <text class="tier-sub" x="1282" y="709">(Live SSE Inference</text>
       <text class="tier-sub" x="1282" y="724">&amp; Local Fallback)</text>
     </g>
 </svg>

@@ -31,7 +31,11 @@ if (!function_exists('renderSidebar')) {
             $flaggedAiCount = isset($GLOBALS['flaggedAiLogs']) ? (int)$GLOBALS['flaggedAiLogs'] : 0;
             $latestReset = null;
             if (function_exists('dbRow')) {
-                $pendingResetsCount = (int)(dbRow("SELECT COUNT(*) as c FROM password_reset_requests WHERE status = 'pending'")['c'] ?? 0);
+                try {
+                    $pendingResetsCount = (int)(dbRow("SELECT COUNT(*) as c FROM password_reset_requests WHERE status = 'pending'")['c'] ?? 0);
+                } catch (\Throwable $e) {
+                    $pendingResetsCount = 0;
+                }
                 if (!isset($GLOBALS['pendingPayments'])) {
                     $pendingPaymentsCount = (int)(dbRow("SELECT COUNT(*) as c FROM payments WHERE status = 'pending'")['c'] ?? 0);
                 }
@@ -40,7 +44,11 @@ if (!function_exists('renderSidebar')) {
                 }
                 $onResetsTab = ($active === 'users.php' && (($_GET['tab'] ?? '') === 'resets'));
                 if ($pendingResetsCount > 0 && !$onResetsTab) {
-                    $latestReset = dbRow("SELECT pr.*, u.first_name, u.last_name FROM password_reset_requests pr LEFT JOIN users u ON pr.user_id = u.id WHERE pr.status = 'pending' ORDER BY pr.id DESC LIMIT 1");
+                    try {
+                        $latestReset = dbRow("SELECT pr.*, u.first_name, u.last_name FROM password_reset_requests pr LEFT JOIN users u ON pr.user_id = u.id WHERE pr.status = 'pending' ORDER BY pr.id DESC LIMIT 1");
+                    } catch (\Throwable $e) {
+                        $latestReset = null;
+                    }
                 }
             }
 
@@ -163,7 +171,7 @@ if (!function_exists('renderSidebar')) {
     <?php if ($me): ?>
     <div class="sidebar-footer">
       <div class="sidebar-user">
-        <img src="<?= h(getUserAvatarUrl($me['avatar'] ?? null)) ?>" decoding="async" style="object-fit:cover;border-radius:50%;" onerror="this.src='../frontend/assets/images/avatars/default-avatar.png'">
+        <img src="<?= h(getUserAvatarUrl($me['avatar'] ?? null)) ?>" decoding="async" style="object-fit:cover;border-radius:50%;" onerror="this.src='<?= h(assetUrl('images/avatars/default-avatar.png')) ?>'; this.onerror=null;">
         <div style="overflow:hidden;">
           <div class="sidebar-user-name"><?= h($me['name']) ?><?= $role === 'admin' ? ' ' . $footRole : '' ?></div>
           <div class="sidebar-user-role" <?= $footStyle ?>><?= h($footSub !== '' ? $footSub : $footRole) ?></div>

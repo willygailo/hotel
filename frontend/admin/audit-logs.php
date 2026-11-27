@@ -7,7 +7,18 @@ require_once __DIR__ . '/../../backend/core/functions.php';
 requireRole('admin');
 releaseReadOnlySession();
 
-$filter = trim($_GET['role'] ?? 'all');
+$rawFilter = strtolower(trim($_GET['role'] ?? 'all'));
+$filterMap = [
+    'user'       => 'user_auth',
+    'user_auth'  => 'user_auth',
+    'staff'      => 'staff_auth',
+    'staff_auth' => 'staff_auth',
+    'admin'      => 'admin_auth',
+    'admin_auth' => 'admin_auth',
+    'failed'     => 'failed',
+    'all'        => 'all',
+];
+$filter = $filterMap[$rawFilter] ?? 'all';
 $search = trim($_GET['q'] ?? '');
 $page   = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 50;
@@ -22,9 +33,9 @@ $failedCond = "(a.action LIKE '%Failed%' OR a.action LIKE '%Blocked%' OR a.actio
 $conditions = [];
 $params     = [];
 
-if ($filter === 'user_auth' || $filter === 'user') {
+if ($filter === 'user_auth') {
     $conditions[] = $userCond;
-} elseif ($filter === 'staff_auth' || $filter === 'staff') {
+} elseif ($filter === 'staff_auth') {
     $conditions[] = $staffCond;
 } elseif ($filter === 'admin_auth') {
     $conditions[] = $adminCond;

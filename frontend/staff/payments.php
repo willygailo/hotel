@@ -127,7 +127,7 @@ $payments = dbRows("
           </div>
           <div>
             <div style="font-weight:700;color:#fff;font-size:0.95rem;">Frontdesk Payment Delegation Active</div>
-            <div style="font-size:0.8rem;color:var(--text-muted);">You can verify online receipts (Maya / GCash) and over-the-counter payments while the Super Admin is away.</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);">You can verify Maya and GCash payment receipts while the Super Admin is away.</div>
           </div>
         </div>
         <div>

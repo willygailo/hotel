@@ -136,7 +136,7 @@ foreach ($rawSettings as $row) {
         </div>
       </div>
 
-      <form action="" method="POST" id="main-settings-form">
+      <form action="settings.php" method="POST" id="main-settings-form">
         <?= csrfField() ?>
         <input type="hidden" name="save_settings" value="1">
 

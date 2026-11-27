@@ -89,7 +89,7 @@ $prompt = "Create a warm, organized, and actionable Shift Operational Briefing i
     . "Keep it brief, practical, and inspiring.";
 
 $aiText = null;
-if (getSetting('ai_enabled', '1')) {
+if (getSetting('ai_enabled', '1') === '1') {
     $aiReply = queryNvidiaAI($prompt, ['role' => 'staff']);
     if (!empty($aiReply)) {
         $aiText = sanitizeAiHtml($aiReply);

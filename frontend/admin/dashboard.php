@@ -366,27 +366,6 @@ $securityAlerts = dbRows("SELECT * FROM ai_logs WHERE flagged = 1 ORDER BY id DE
 </div>
 
 <script>
-function switchAuditTab(tabName, btn) {
-  var panes = document.querySelectorAll('.audit-tab-pane');
-  panes.forEach(function(pane) {
-    pane.style.display = 'none';
-  });
-
-  var target = document.getElementById('audit-tab-' + tabName);
-  if (target) {
-    target.style.display = 'block';
-  }
-
-  var pills = document.querySelectorAll('.audit-tab-pills .tab-pill');
-  pills.forEach(function(pill) {
-    pill.classList.remove('active');
-  });
-
-  if (btn) {
-    btn.classList.add('active');
-  }
-}
-
 function loadAdminAiInsights(forceRefresh = false) {
   const loading = document.getElementById('adminAiLoading');
   const content = document.getElementById('adminAiContent');
@@ -396,8 +375,11 @@ function loadAdminAiInsights(forceRefresh = false) {
   content.style.display = 'none';
   if (btn) btn.disabled = true;
 
-  fetch('../ai/admin-insights.php' + (forceRefresh ? '?refresh=1' : ''))
-    .then(res => res.json())
+  fetch('../ai/admin-insights.php' + (forceRefresh ? '?refresh=1' : ''), { credentials: 'same-origin' })
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
     .then(data => {
       loading.style.display = 'none';
       if (data.success && data.report) {

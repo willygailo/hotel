@@ -228,7 +228,7 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
           <span style="font-size:0.75rem;color:var(--text-muted);"><i class="fa-solid fa-lock"></i> Auto-verified &amp; active upon creation</span>
         </div>
 
-        <form action="" method="POST" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:14px;">
+        <form action="staff.php" method="POST" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:14px;">
           <?= csrfField() ?>
           <input type="hidden" name="add_staff" value="1">
           <div>
@@ -303,9 +303,9 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
                       <td class="col-nowrap">#<?= $st['id'] ?></td>
                       <td>
                         <div class="user-account-inline">
-                          <img class="user-account-avatar" src="<?= h(getUserAvatarUrl($st['avatar'] ?? null)) ?>" onerror="this.src='../frontend/assets/images/avatars/default-avatar.png'; this.onerror=null;" alt="">
+                          <img class="user-account-avatar" src="<?= h(getUserAvatarUrl($st['avatar'] ?? null)) ?>" onerror="this.src='<?= h(assetUrl('images/avatars/default-avatar.png')) ?>'; this.onerror=null;" alt="">
                           <div class="user-account-details">
-                            <strong style="color:#fff;"><?= h($st['first_name'] . ' ' . $st['last_name']) ?></strong>
+                            <strong style="color:#fff;"><?= h(formatFullName($st)) ?></strong>
                             <div class="user-account-sub"><span class="badge badge-info" style="font-size:0.64rem;padding:2px 6px;">Frontdesk Staff</span></div>
                           </div>
                         </div>
@@ -326,10 +326,16 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
                         ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' title="Edit Staff Details">
                           <i class="fa-solid fa-pen-to-square"></i>
                         </button>
-                        <button type="button" class="btn btn-gold btn-sm" onclick="openResetModal(<?= $st['id'] ?>, '<?= addslashes(h($st['first_name'] . ' ' . $st['last_name'])) ?>', '<?= addslashes(h($st['email'])) ?>')" title="Set / Reset Staff Password">
+                        <?php
+                          $stFullName = formatFullName($st);
+                          $stNameJson = json_encode($stFullName, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                          $stEmailJson = json_encode((string)$st['email'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                          $stDeleteConfirmJson = json_encode("Permanently delete staff account for {$stFullName}? This cannot be undone!", JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                        ?>
+                        <button type="button" class="btn btn-gold btn-sm" onclick='openResetModal(<?= (int)$st['id'] ?>, <?= $stNameJson ?>, <?= $stEmailJson ?>)' title="Set / Reset Staff Password">
                           <i class="fa-solid fa-key"></i>
                         </button>
-                        <form action="" method="POST" style="display:inline;">
+                        <form action="staff.php" method="POST" style="display:inline;">
                           <?= csrfField() ?>
                           <input type="hidden" name="action" value="toggle_status">
                           <input type="hidden" name="staff_id" value="<?= $st['id'] ?>">
@@ -337,7 +343,7 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
                             <?= $st['status'] === 'active' ? '<i class="fa-solid fa-user-slash"></i>' : '<i class="fa-solid fa-user-check"></i>' ?>
                           </button>
                         </form>
-                        <form action="" method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete staff account for <?= addslashes(h($st['first_name'] . ' ' . $st['last_name'])) ?>? This cannot be undone!')">
+                        <form action="staff.php" method="POST" style="display:inline;" onsubmit='return confirm(<?= $stDeleteConfirmJson ?>)'>
                           <?= csrfField() ?>
                           <input type="hidden" name="action" value="delete_staff">
                           <input type="hidden" name="staff_id" value="<?= $st['id'] ?>">
@@ -369,7 +375,7 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
       <button type="button" onclick="closeEditStaffModal()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;">&times;</button>
     </div>
 
-    <form action="" method="POST">
+    <form action="staff.php" method="POST">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="edit_staff">
       <input type="hidden" name="staff_id" id="editStaffId">
@@ -422,7 +428,7 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
     <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">
       Directly set a new login password for Staff <strong id="modalUserName" style="color:#fff;"></strong> (<span id="modalUserEmail"></span>).
     </p>
-    <form action="" method="POST">
+    <form action="staff.php" method="POST">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="reset_password">
       <input type="hidden" name="user_id" id="modalUserId">

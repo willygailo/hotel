@@ -133,7 +133,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;">
         <div>
           <h1 class="page-header-title">Payment Management and Verification</h1>
-          <div class="page-header-sub">Review uploaded GCash, Maya, and bank transfer proofs before confirming.</div>
+          <div class="page-header-sub">Review uploaded Maya and GCash payment receipts before confirming.</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <a href="payments.php?status=all" class="btn btn-sm <?= $statusFilter === 'all' ? 'btn-gold' : 'btn-ghost' ?>">All</a>
@@ -172,14 +172,14 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
               </thead>
               <tbody>
                 <?php if (empty($payments)): ?>
-                  <tr><td colspan="9" class="text-center" style="padding:30px;color:var(--text-muted);">No payment records found.</td></tr>
+                  <tr data-empty-row><td colspan="9" class="text-center" style="padding:30px;color:var(--text-muted);">No payment records found.</td></tr>
                 <?php else: ?>
                   <?php foreach ($payments as $pay): ?>
                     <tr>
                       <td class="col-nowrap">#<?= $pay['id'] ?></td>
                       <td>
                         <div class="user-account-inline">
-                          <img src="<?= h(getUserAvatarUrl($pay['avatar'] ?? null)) ?>" class="user-account-avatar" alt="" onerror="this.src='../frontend/assets/images/avatars/default-avatar.png'; this.onerror=null;">
+                          <img src="<?= h(getUserAvatarUrl($pay['avatar'] ?? null)) ?>" class="user-account-avatar" alt="" onerror="this.src='<?= h(assetUrl('images/avatars/default-avatar.png')) ?>'; this.onerror=null;">
                           <div class="user-account-details">
                             <div class="user-account-top">
                               <strong style="color:#fff;"><?= h(formatFullName($pay)) ?></strong>
@@ -235,7 +235,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                           <?php if ($pay['proof_image']): ?>
                             <button type="button" class="btn btn-ghost btn-sm" onclick='openReceiptInspector(<?= json_encode([
                               'id' => $pay['id'],
-                              'guest' => $pay['first_name'] . ' ' . $pay['last_name'],
+                              'guest' => formatFullName($pay),
                               'email' => $pay['email'],
                               'booking_code' => $pay['booking_code'],
                               'room' => $pay['room_name'],

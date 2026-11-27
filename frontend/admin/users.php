@@ -683,7 +683,7 @@ if ($tab === 'resets') {
                     <td class="col-nowrap">#<?= $u['id'] ?></td>
                     <td>
                       <div class="user-account-inline">
-                        <img class="user-account-avatar" src="<?= h(getUserAvatarUrl($u['avatar'] ?? null)) ?>" onerror="this.src='../frontend/assets/images/avatars/default-avatar.png'; this.onerror=null;" alt="">
+                        <img class="user-account-avatar" src="<?= h(getUserAvatarUrl($u['avatar'] ?? null)) ?>" onerror="this.src='<?= h(assetUrl('images/avatars/default-avatar.png')) ?>'; this.onerror=null;" alt="">
                         <div class="user-account-details">
                           <strong style="color:#fff;"><?= h(formatFullName($u)) ?></strong>
                           <div class="user-account-sub">Registered <?= formatDate($u['created_at'], 'M d, Y') ?></div>
@@ -777,7 +777,13 @@ if ($tab === 'resets') {
                           </button>
                         </form>
 
-                        <form action="<?= h($buildUsersRedirect()) ?>" method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete account for <?= addslashes(h(formatFullName($u))) ?> (#<?= $u['id'] ?>)? This will delete all associated bookings, payments, and reviews. This cannot be undone!')">
+                        <?php
+                          $uDeleteConfirmJson = json_encode(
+                            'Permanently delete account for ' . formatFullName($u) . ' (#' . (int)$u['id'] . ')? This will delete all associated bookings, payments, and reviews. This cannot be undone!',
+                            JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+                          );
+                        ?>
+                        <form action="<?= h($buildUsersRedirect()) ?>" method="POST" style="display:inline;" onsubmit='return confirm(<?= $uDeleteConfirmJson ?>)'>
                           <?= csrfField() ?>
                           <input type="hidden" name="action" value="delete_user">
                           <input type="hidden" name="user_id" value="<?= $u['id'] ?>">

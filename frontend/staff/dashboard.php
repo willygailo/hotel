@@ -122,8 +122,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_payment'])) {
 // Stats (exposed to $GLOBALS for shared sidebar badge rendering)
 $pendingBookings = (int)(dbRow("SELECT COUNT(*) as cnt FROM bookings WHERE status = 'pending'")['cnt'] ?? 0);
 $pendingPayments = (int)(dbRow("SELECT COUNT(*) as cnt FROM payments WHERE status = 'pending'")['cnt'] ?? 0);
-$todayCheckIns   = (int)(dbRow("SELECT COUNT(*) as cnt FROM bookings WHERE check_in = CURDATE() AND status = 'confirmed'")['cnt'] ?? 0);
-$occupiedRooms   = (int)(dbRow("SELECT COUNT(*) as cnt FROM rooms WHERE status = 'occupied'")['cnt'] ?? 0);
+$todayCheckIns   = (int)(dbRow("SELECT COUNT(*) as cnt FROM bookings WHERE check_in <= CURDATE() AND status = 'confirmed'")['cnt'] ?? 0);
+$occupiedRooms   = (int)(dbRow("
+    SELECT COUNT(DISTINCT r.id) as cnt
+    FROM rooms r
+    WHERE r.status = 'occupied'
+       OR EXISTS (SELECT 1 FROM bookings b WHERE b.room_id = r.id AND b.status = 'checked_in')
+")['cnt'] ?? 0);
 
 $GLOBALS['pendingBookings'] = $pendingBookings;
 $GLOBALS['pendingPayments'] = $pendingPayments;
@@ -134,7 +139,7 @@ if ($ppage > $totalPayPages) $ppage = $totalPayPages;
 $payOffset = ($ppage - 1) * $payPerPage;
 
 $pendingPaymentsList = dbRows("
-    SELECT p.*, b.booking_code, u.first_name, u.last_name, u.phone, r.name as room_name, r.room_number
+    SELECT p.*, b.booking_code, u.first_name, u.middle_name, u.last_name, u.suffix, u.phone, r.name as room_name, r.room_number
     FROM payments p
     JOIN bookings b ON p.booking_id = b.id
     JOIN users u ON p.user_id = u.id
@@ -150,7 +155,7 @@ if ($bpage > $totalBkPages) $bpage = $totalBkPages;
 $bkOffset = ($bpage - 1) * $bkPerPage;
 
 $pendingList = dbRows("
-    SELECT b.*, u.first_name, u.last_name, u.phone, r.name as room_name, r.room_number
+    SELECT b.*, u.first_name, u.middle_name, u.last_name, u.suffix, u.phone, r.name as room_name, r.room_number
     FROM bookings b
     JOIN users u ON b.user_id = u.id
     JOIN rooms r ON b.room_id = r.id
@@ -389,7 +394,7 @@ $pendingList = dbRows("
                   <?php foreach ($pendingList as $p): ?>
                     <tr>
                       <td><strong>#<?= h($p['booking_code']) ?></strong></td>
-                      <td><?= h($p['first_name'] . ' ' . $p['last_name']) ?></td>
+                      <td><?= h(formatFullName($p)) ?></td>
                       <td><?= h($p['phone'] ?: 'N/A') ?></td>
                       <td><?= h($p['room_name']) ?> <small style="color:var(--text-muted);">(#<?= h($p['room_number']) ?>)</small></td>
                       <td><?= formatDate($p['check_in']) ?> - <?= formatDate($p['check_out']) ?></td>
@@ -482,8 +487,11 @@ function loadStaffAiBriefing(forceRefresh = false) {
   content.style.display = 'none';
   if (btn) btn.disabled = true;
 
-  fetch('../ai/staff-assistant.php' + (forceRefresh ? '?refresh=1' : ''))
-    .then(res => res.json())
+  fetch('../ai/staff-assistant.php' + (forceRefresh ? '?refresh=1' : ''), { credentials: 'same-origin' })
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
     .then(data => {
       loading.style.display = 'none';
       if (data.success && data.briefing) {

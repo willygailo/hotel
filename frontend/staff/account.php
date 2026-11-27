@@ -19,6 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
 
     if (!verifyCsrfToken($token)) {
         setFlash('error', 'Invalid security token. Please refresh and try again.');
+    } elseif (!$staff) {
+        setFlash('error', 'Staff account record could not be loaded. Please sign in again.');
     } elseif (!password_verify($currentPass, $staff['password'])) {
         setFlash('error', 'Current password is incorrect.');
     } elseif (strlen($newPass) < 8) {
@@ -31,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
         $hashed = password_hash($newPass, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
         dbExec("UPDATE users SET password = ? WHERE id = ?", [$hashed, $staffId]);
         clearAdminTempPassword($staffId);
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
         auditLog('Staff Changed Password', 'Staff Auth', "Staff #$staffId ({$staff['email']}) updated personal password.");
         setFlash('success', 'Your staff password has been updated securely.');
         header('Location: account.php');

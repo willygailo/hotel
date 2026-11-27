@@ -38,8 +38,13 @@ $monthRevenue = dbRow("SELECT SUM(amount) as total FROM payments WHERE status = 
 $mayaRevenue = dbRow("SELECT SUM(amount) as total FROM payments WHERE status = 'verified' AND method = 'maya'")['total'] ?? 0;
 $gcashRevenue = dbRow("SELECT SUM(amount) as total FROM payments WHERE status = 'verified' AND method = 'gcash'")['total'] ?? 0;
 
-$totalRooms = dbRow("SELECT COUNT(*) as cnt FROM rooms")['cnt'] ?? 1;
-$occupiedRooms = dbRow("SELECT COUNT(*) as cnt FROM rooms WHERE status = 'occupied'")['cnt'] ?? 0;
+$totalRooms = (int)(dbRow("SELECT COUNT(*) as cnt FROM rooms WHERE status != 'maintenance'")['cnt'] ?? 0);
+$occupiedRooms = (int)(dbRow("
+    SELECT COUNT(DISTINCT r.id) as cnt
+    FROM rooms r
+    WHERE r.status != 'maintenance'
+      AND (r.status = 'occupied' OR EXISTS (SELECT 1 FROM bookings b WHERE b.room_id = r.id AND b.status = 'checked_in'))
+")['cnt'] ?? 0);
 $occupancyRate = round(($occupiedRooms / max(1, $totalRooms)) * 100, 1);
 
 $totalBookings = dbRow("SELECT COUNT(*) as cnt FROM bookings")['cnt'] ?? 0;
@@ -61,7 +66,7 @@ $prompt = "Provide a concise, high-level Strategic Executive Digest in professio
     . "Keep it executive, data-driven, and actionable.";
 
 $aiReport = null;
-if (getSetting('ai_enabled', '1')) {
+if (getSetting('ai_enabled', '1') === '1') {
     $aiReply = queryNvidiaAI($prompt, ['role' => 'admin']);
     if (!empty($aiReply)) {
         $aiReport = sanitizeAiHtml($aiReply);

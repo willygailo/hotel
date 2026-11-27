@@ -181,7 +181,7 @@ unset($rm);
             </div>
             <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;">
               <div><?= h($rm['name']) ?> (Floor <?= (int)$rm['floor'] ?>)</div>
-              <div><?= h($rm['type_name']) ?> &middot; Max <?= (int)$rm['capacity'] ?> Pax<?= !empty($rm['is_dorm']) ? ' (Dorm)' : '' ?></div>
+              <div><?= h($rm['type_name']) ?> &middot; Max <?= (int)$rm['capacity'] ?> Pax<?= (!empty($rm['is_dorm']) || strcasecmp((string)$rm['type_name'], 'Dormitory') === 0) ? ' (Dorm)' : '' ?></div>
             </div>
 
             <?php if (!empty($arrivals) && $effStatus !== 'occupied'): ?>

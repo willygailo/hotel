@@ -364,22 +364,26 @@ $logStats = dbRow("SELECT COUNT(*) AS total, SUM(CASE WHEN flagged = 1 THEN 1 EL
       </div>
 
       <!-- Log Filters -->
+      <?php $aiSearchQs = $search !== '' ? ('&q=' . urlencode($search)) : ''; ?>
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <a href="ai-config.php?filter=all" class="btn btn-sm <?= $filter === 'all' ? 'btn-gold' : 'btn-ghost' ?>">
+          <a href="ai-config.php?filter=all<?= $aiSearchQs ?>" class="btn btn-sm <?= $filter === 'all' ? 'btn-gold' : 'btn-ghost' ?>">
             All Logs (<?= (int)($logStats['total'] ?? 0) ?>)
           </a>
-          <a href="ai-config.php?filter=flagged" class="btn btn-sm <?= $filter === 'flagged' ? 'btn-danger' : 'btn-ghost' ?>">
+          <a href="ai-config.php?filter=flagged<?= $aiSearchQs ?>" class="btn btn-sm <?= $filter === 'flagged' ? 'btn-danger' : 'btn-ghost' ?>">
             <i class="fa-solid fa-shield-halved"></i> Flagged Threats (<?= (int)($logStats['flagged_cnt'] ?? 0) ?>)
           </a>
-          <a href="ai-config.php?filter=budget" class="btn btn-sm <?= $filter === 'budget' ? 'btn-gold' : 'btn-ghost' ?>">
+          <a href="ai-config.php?filter=budget<?= $aiSearchQs ?>" class="btn btn-sm <?= $filter === 'budget' ? 'btn-gold' : 'btn-ghost' ?>">
             Budget Recommendations
           </a>
         </div>
-        <form action="ai-config.php" method="GET" style="display:flex;gap:8px;">
+        <form action="ai-config.php" method="GET" style="display:flex;gap:8px;align-items:center;">
           <input type="hidden" name="filter" value="<?= h($filter) ?>">
           <input type="text" name="q" class="form-control" value="<?= h($search) ?>" placeholder="Search message or email..." style="min-width:220px;">
           <button type="submit" class="btn btn-ghost btn-sm"><i class="fa-solid fa-magnifying-glass"></i></button>
+          <?php if ($search !== ''): ?>
+            <a href="ai-config.php?filter=<?= urlencode($filter) ?>" class="btn btn-ghost btn-sm" title="Clear search"><i class="fa-solid fa-xmark"></i></a>
+          <?php endif; ?>
         </form>
       </div>
 
@@ -400,7 +404,7 @@ $logStats = dbRow("SELECT COUNT(*) AS total, SUM(CASE WHEN flagged = 1 THEN 1 EL
               </thead>
               <tbody>
                 <?php if (empty($aiLogs)): ?>
-                  <tr><td colspan="6" class="text-center" style="padding:28px;color:var(--text-muted);">No matching AI logs found.</td></tr>
+                  <tr data-empty-row><td colspan="6" class="text-center" style="padding:28px;color:var(--text-muted);">No matching AI logs found.</td></tr>
                 <?php else: ?>
                   <?php foreach ($aiLogs as $log): ?>
                     <tr style="<?= $log['flagged'] ? 'background:rgba(233,69,96,0.06);' : '' ?>">

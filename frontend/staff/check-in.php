@@ -37,10 +37,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_guest'])) {
 
         $bk = dbRow("
             SELECT b.*, u.verification_status, u.profile_verified,
-                   r.status AS room_status, r.room_number, r.name AS room_name, r.is_dorm
+                   r.status AS room_status, r.room_number, r.name AS room_name, r.is_dorm,
+                   rt.name AS type_name
             FROM bookings b
             JOIN users u ON b.user_id = u.id
             JOIN rooms r ON b.room_id = r.id
+            LEFT JOIN room_types rt ON r.room_type_id = rt.id
             WHERE b.id = ?
         ", [$bookingId]);
 
@@ -53,7 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_guest'])) {
                 setFlash('error', "Cannot check in Booking #{$bk['booking_code']}: Room #{$bk['room_number']} is currently under Maintenance. Update Room Status first.");
             } else {
                 // Guard non-dorm rooms against still-in-house previous guest
-                $inHouseGuest = empty($bk['is_dorm'])
+                $isDormRoom = (!empty($bk['is_dorm']) || strcasecmp((string)($bk['type_name'] ?? ''), 'Dormitory') === 0);
+                $inHouseGuest = !$isDormRoom
                     ? dbRow("SELECT booking_code FROM bookings WHERE room_id = ? AND status = 'checked_in' AND id != ? LIMIT 1", [(int)$bk['room_id'], $bookingId])
                     : null;
 

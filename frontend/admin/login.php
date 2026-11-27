@@ -28,9 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = dbRow("SELECT * FROM users WHERE email = ? AND role = 'admin'", [$email]);
 
         if ($user && password_verify($password, $user['password'])) {
-            if ($user['status'] === 'banned') {
-                $error = 'Your admin account is locked.';
-                logAuth('admin_login', $email, false, ['reason' => 'banned']);
+            if ($user['status'] !== 'active') {
+                $error = 'Your admin account is inactive or locked.';
+                logAuth('admin_login', $email, false, ['reason' => $user['status'] === 'banned' ? 'banned' : 'inactive']);
             } else {
                 // Session fixation defense: bagong session ID bago mag-login
                 session_regenerate_id(true);
@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="flash-message flash-error"><i class="fa-solid fa-circle-xmark"></i> <span><?= h($error) ?></span></div>
     <?php endif; ?>
 
-    <form action="" method="POST">
+    <form action="login.php" method="POST">
       <?= csrfField() ?>
 
       <div class="form-group">

@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="flash-message flash-error"><i class="fa-solid fa-circle-xmark"></i> <span><?= h($error) ?></span></div>
     <?php endif; ?>
 
-    <form action="" method="POST">
+    <form action="login.php" method="POST">
       <?= csrfField() ?>
 
       <div class="form-group">

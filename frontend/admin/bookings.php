@@ -1,4 +1,3 @@
-
 <?php
 require_once __DIR__ . '/../../backend/core/config.php';
 require_once __DIR__ . '/../../backend/core/db.php';
@@ -13,6 +12,14 @@ throttleStaleBookingSweep(24, 15);
 $adminId = currentUserId();
 $tab = $_GET['tab'] ?? 'all';
 
+$buildBookingsQs = function () use ($tab): string {
+    $redir = [];
+    if ($tab !== 'all') $redir['tab'] = $tab;
+    if (!empty($_GET['q'])) $redir['q'] = trim((string)$_GET['q']);
+    if (!empty($_GET['page']) && (int)$_GET['page'] > 1) $redir['page'] = (int)$_GET['page'];
+    return !empty($redir) ? ('?' . http_build_query($redir)) : '';
+};
+
 // Handle direct payment receipt verify / reject from Inspector modal
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_payment'])) {
     $token = $_POST[CSRF_TOKEN_NAME] ?? '';
@@ -24,8 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_payment'])) {
         $res = processPaymentDecision($payId, $act, $adminId, 'Admin');
         setFlash($res['flash_type'], $res['message']);
     }
-    $tabParam = $tab !== 'all' ? '?tab=' . urlencode($tab) : '';
-    header("Location: bookings.php$tabParam");
+    header("Location: bookings.php" . $buildBookingsQs());
     exit;
 }
 
@@ -40,7 +46,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['override_status'])) {
         $reason = trim($_POST['status_reason'] ?? '');
 
         if (in_array($newStat, ['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled', 'rejected'], true)) {
-            $bk = dbRow("SELECT * FROM bookings WHERE id = ?", [$bId]);
+            $bk = dbRow("
+                SELECT b.*, r.status AS room_status, r.room_number, r.is_dorm, rt.name AS room_type_name
+                FROM bookings b
+                JOIN rooms r ON b.room_id = r.id
+                LEFT JOIN room_types rt ON r.room_type_id = rt.id
+                WHERE b.id = ?
+            ", [$bId]);
             if ($bk) {
                 $wasCheckedIn = ($bk['status'] === 'checked_in');
                 if ($newStat === 'confirmed') {
@@ -70,24 +82,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['override_status'])) {
                     createNotification($bk['user_id'], 'Booking Status Update', "Your reservation #{$bk['booking_code']} was marked $newStat: $reason", 'alert');
                     setFlash('warning', "Booking #{$bk['booking_code']} marked as " . strtoupper($newStat) . ".");
                 } elseif ($newStat === 'checked_in') {
+                    $isDormRoom = (!empty($bk['is_dorm']) || strcasecmp((string)($bk['room_type_name'] ?? ''), 'Dormitory') === 0);
+                    $inHouseGuest = !$isDormRoom
+                        ? dbRow("SELECT booking_code FROM bookings WHERE room_id = ? AND status = 'checked_in' AND id != ? LIMIT 1", [(int)$bk['room_id'], $bId])
+                        : null;
                     $conflict = findConflictingBooking((int)$bk['room_id'], $bk['check_in'], $bk['check_out'], $bId);
-                    if ($conflict) {
+                    if (($bk['room_status'] ?? '') === 'maintenance') {
+                        setFlash('error', "Cannot check in Booking #{$bk['booking_code']}: Room #{$bk['room_number']} is currently under Maintenance. Update room status first.");
+                    } elseif ($inHouseGuest) {
+                        setFlash('error', "Cannot check in Booking #{$bk['booking_code']}: Room #{$bk['room_number']} still has Booking #{$inHouseGuest['booking_code']} checked in. Check out the previous guest first.");
+                    } elseif ($conflict) {
                         setFlash('error', "Cannot check in Booking #{$bk['booking_code']}: overlaps with Booking #{$conflict['booking_code']} (" . formatDate($conflict['check_in'], 'M d') . " - " . formatDate($conflict['check_out'], 'M d') . ").");
                     } else {
                         dbExec("UPDATE bookings SET status = 'checked_in', checked_in_at = NOW(), accepted_by = COALESCE(accepted_by, ?), accepted_at = COALESCE(accepted_at, NOW()), cancelled_reason = NULL WHERE id = ?", [$adminId, $bId]);
                         dbExec("UPDATE rooms SET status = 'occupied' WHERE id = ?", [$bk['room_id']]);
                         auditLog('Admin Checked In Guest', 'Admin Module', "Booking #{$bk['booking_code']} marked checked-in");
+                        createNotification((int)$bk['user_id'], 'Checked In — Welcome!', "You are now checked in to Room #{$bk['room_number']} for Booking #{$bk['booking_code']}. Enjoy your stay at Marvelous Hotel!", 'booking', 'my-bookings.php');
                         setFlash('success', "Customer for booking #{$bk['booking_code']} checked in successfully.");
                     }
                 } elseif ($newStat === 'checked_out') {
                     dbExec("UPDATE bookings SET status = 'checked_out', checked_out_at = NOW() WHERE id = ?", [$bId]);
-                    $otherCheckedIn = dbRow("SELECT id FROM bookings WHERE room_id = ? AND status = 'checked_in' AND id != ? LIMIT 1", [(int)$bk['room_id'], $bId]);
-                    if ($otherCheckedIn) {
-                        dbExec("UPDATE rooms SET status = 'occupied' WHERE id = ?", [$bk['room_id']]);
+                    $becameIdle = releaseRoomOccupancyIfIdle((int)$bk['room_id'], $bId, 'dirty');
+                    createNotification((int)$bk['user_id'], 'Checked Out — Thank You!', "You have checked out from Booking #{$bk['booking_code']}. We hope you enjoyed your stay!", 'booking', 'reviews.php');
+                    if (!$becameIdle) {
                         auditLog('Admin Checked Out Guest', 'Admin Module', "Booking #{$bk['booking_code']} marked checked-out (other dorm guest still in-house).");
                         setFlash('info', "Customer for booking #{$bk['booking_code']} checked out. Room stays occupied by remaining dorm guest.");
                     } else {
-                        dbExec("UPDATE rooms SET status = 'dirty' WHERE id = ?", [$bk['room_id']]);
                         auditLog('Admin Checked Out Guest', 'Admin Module', "Booking #{$bk['booking_code']} marked checked-out. Room marked for cleaning.");
                         setFlash('info', "Customer for booking #{$bk['booking_code']} checked out. Room marked for housekeeping.");
                     }
@@ -102,12 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['override_status'])) {
             }
         }
     }
-    $redir = [];
-    if ($tab !== 'all') $redir['tab'] = $tab;
-    if (!empty($_GET['q'])) $redir['q'] = trim((string)$_GET['q']);
-    if (!empty($_GET['page']) && (int)$_GET['page'] > 1) $redir['page'] = (int)$_GET['page'];
-    $qs = !empty($redir) ? ('?' . http_build_query($redir)) : '';
-    header("Location: bookings.php{$qs}");
+    header("Location: bookings.php" . $buildBookingsQs());
     exit;
 }
 
@@ -380,7 +395,7 @@ $allBookings = dbRows("
               </thead>
               <tbody>
                 <?php if (empty($allBookings)): ?>
-                  <tr><td colspan="7" class="text-center" style="padding:32px;color:var(--text-muted);">No reservation records found for this category.</td></tr>
+                  <tr data-empty-row><td colspan="7" class="text-center" style="padding:32px;color:var(--text-muted);">No reservation records found for this category.</td></tr>
                 <?php else: ?>
                   <?php foreach ($allBookings as $bk): 
                     $acceptorName = trim(($bk['acceptor_fn'] ?? '') . ' ' . ($bk['acceptor_ln'] ?? ''));
@@ -735,14 +750,6 @@ function handleBookingOverrideSubmit(form) {
     reasonInp.value = r.trim();
   }
   return true;
-}
-function filterBookingsTable() {
-  const query = document.getElementById('bookingSearchInput').value.toLowerCase();
-  const rows = document.querySelectorAll('#bookingsTable tbody tr');
-  rows.forEach(row => {
-    const text = row.innerText.toLowerCase();
-    row.style.display = text.includes(query) ? '' : 'none';
-  });
 }
 
 function openBookingTimeline(data) {

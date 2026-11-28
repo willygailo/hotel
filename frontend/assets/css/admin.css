@@ -1,7 +1,25 @@
 /* ============================================================
    MARVELOUS HOTEL — Admin Portal Dedicated Stylesheet
+   Workstation-Only Architecture (Laptop & Desktop PC >= 1024px)
    assets/css/admin.css
    ============================================================ */
+
+:root {
+  --sidebar-w: 244px;
+}
+@media (min-width: 1367px) {
+  :root {
+    --sidebar-w: 264px;
+  }
+}
+body.sidebar-collapsed {
+  --sidebar-w: 72px;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translate3d(24px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
 
 /* Layout & Background */
 .dashboard-layout,
@@ -14,7 +32,7 @@
 /* Sidebar */
 .sidebar,
 .admin-sidebar {
-  width: 270px;
+  width: var(--sidebar-w);
   background: #0d1238;
   border-right: 1px solid rgba(201,168,76,0.2);
   display: flex;
@@ -23,7 +41,8 @@
   left: 0; top: 0; bottom: 0;
   z-index: 1000;
   overflow-y: auto;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-x: hidden;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .sidebar-header,
 .admin-sidebar-header {
@@ -98,12 +117,14 @@
 /* Main Dashboard Area */
 .dashboard-main,
 .admin-main {
-  margin-left: 270px;
+  margin-left: var(--sidebar-w);
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  width: calc(100% - 270px);
+  width: calc(100% - var(--sidebar-w));
+  min-width: 0;
+  transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1), width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .topbar,
 .admin-topbar {
@@ -214,26 +235,30 @@
 .table,
 .admin-table {
   width: 100%;
-  min-width: 980px;
+  min-width: 820px;
   border-collapse: collapse;
   text-align: left;
   font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
 }
 .table th,
 .admin-table th {
-  padding: 10px 14px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 10px 12px;
   background: #0b1033;
   color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.72rem;
-  letter-spacing: 0.8px;
+  font-size: 0.7rem;
+  letter-spacing: 0.7px;
   border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
 }
 .table td,
 .admin-table td {
-  padding: 11px 14px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-main);
   vertical-align: middle;
@@ -288,30 +313,62 @@
   margin-top: 2px;
 }
 
-/* Tablet & Laptop Workstation Optimization */
-@media (min-width: 1024px) and (max-width: 1280px) {
-  .sidebar,
-  .admin-sidebar {
-    width: 240px;
-  }
-  .dashboard-main,
-  .admin-main {
-    margin-left: 240px;
-    width: calc(100% - 240px);
-  }
+/* Collapsed Sidebar Icon-Rail Mode (Extra Table Width on 1024px-1366px Laptops) */
+body.sidebar-collapsed .sidebar-header {
+  padding: 14px 12px;
+  display: flex;
+  justify-content: center;
+}
+body.sidebar-collapsed .nav-logo-text,
+body.sidebar-collapsed .sidebar-nav-label,
+body.sidebar-collapsed .sidebar-link-text,
+body.sidebar-collapsed .sidebar-badge,
+body.sidebar-collapsed .sidebar-user-meta {
+  display: none !important;
+}
+body.sidebar-collapsed .sidebar-link {
+  justify-content: center;
+  padding: 11px 0;
+}
+body.sidebar-collapsed .sidebar-link .sidebar-icon {
+  font-size: 1.05rem;
+  width: auto;
+}
+body.sidebar-collapsed .sidebar-user {
+  justify-content: center;
+  padding: 6px;
+}
+
+/* Desktop Sidebar Collapse Button */
+.sidebar-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(201, 168, 76, 0.25);
+  color: var(--text-main);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.sidebar-collapse-btn:hover {
+  background: rgba(201, 168, 76, 0.16);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.admin-mobile-toggle {
+  display: none !important;
 }
 
 /* Desktop Workstation Optimization (Laptop & PC: Chrome, Edge, Firefox) */
 @media (min-width: 1024px) {
-  .dashboard-main,
-  .admin-main {
-    margin-left: 270px;
-    width: calc(100% - 270px);
-  }
   .admin-metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
   }
   .admin-split-desk {
     display: grid;
@@ -329,44 +386,19 @@
     gap: 16px;
   }
 }
-
-.desktop-workstation-note {
-  display: none;
-}
-@media (max-width: 1023px) {
-  .desktop-workstation-note {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(201,168,76,0.12);
-    border: 1px solid rgba(201,168,76,0.3);
-    padding: 10px 16px;
-    border-radius: var(--radius-md);
-    color: var(--gold-light);
-    font-size: 0.82rem;
-    margin-bottom: 20px;
+@media (min-width: 1024px) and (max-width: 1366px) {
+  .page-content,
+  .admin-page-content {
+    padding: 18px 20px;
+  }
+  .topbar,
+  .admin-topbar {
+    padding: 11px 20px;
   }
 }
 
-/* Mobile drawer button */
-.admin-mobile-toggle {
-  display: none;
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.25rem;
-  cursor: pointer;
-  margin-right: 14px;
-}
-
-@media (max-width: 1024px) {
-  .sidebar,
-  .admin-sidebar { transform: translateX(-100%); }
-  .sidebar.open,
-  .admin-sidebar.open { transform: translateX(0); }
-  .dashboard-main,
-  .admin-main { margin-left: 0; width: 100%; }
-  .admin-mobile-toggle { display: inline-block; }
+.desktop-workstation-note {
+  display: none !important;
 }
 
 /* ==== Component styles migrated from main.css (wala sa base.css, admin.css) ==== */

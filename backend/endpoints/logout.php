@@ -1,40 +1,40 @@
 <?php
 require_once __DIR__ . '/../core/config.php';
+require_once __DIR__ . '/../core/db.php';
 require_once __DIR__ . '/../core/session.php';
 require_once __DIR__ . '/../core/functions.php';
 
+$role = $_SESSION['user_role'] ?? ACTIVE_PORTAL;
+if (!in_array($role, ['admin', 'staff', 'user'], true)) {
+    $role = 'user';
+}
+
 if (isLoggedIn()) {
     $uId = $_SESSION['user_id'] ?? null;
-    auditLog('User Logged Out', 'Auth', "User ID {$uId} logged out.");
-    if ($uId && function_exists('dbExec')) {
+    $module = $role === 'admin' ? 'Admin Auth' : ($role === 'staff' ? 'Staff Auth' : 'User Auth');
+    auditLog(ucfirst($role) . ' Logged Out', $module, ucfirst($role) . " ID {$uId} logged out.");
+    if ($uId && $role === 'user' && function_exists('dbExec')) {
         dbExec("UPDATE users SET remember_token = NULL, remember_expires = NULL WHERE id = ?", [$uId]);
     }
 }
 
-// Clear Remember Me cookie
-if (isset($_COOKIE['MH_REMEMBER_USER'])) {
+// Clear Remember Me cookie ONLY when logging out of the User portal (never wipe guest cookie during Admin/Staff logout)
+if ($role === 'user' && isset($_COOKIE['MH_REMEMBER_USER'])) {
     setcookie('MH_REMEMBER_USER', '', [
         'expires'  => time() - 3600,
         'path'     => '/',
-        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'secure'   => function_exists('isHttpsRequest') ? isHttpsRequest() : false,
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
 }
 
-// Capture the role before the session is destroyed so we can send
-// each role back to its own login portal (kanya-kanya server).
-$role = $_SESSION['user_role'] ?? 'user';
-
+// Destroy active portal session cleanly
 $_SESSION = [];
-if (ini_get("session.use_cookies")) {
-    $params = session_get_cookie_params();
-    setcookie(session_name(), '', time() - 42000,
-        $params["path"], $params["domain"],
-        $params["secure"], $params["httponly"]
-    );
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_regenerate_id(true);
+    setFlash('success', 'You have been signed out safely.');
 }
-session_destroy();
 
 $loginMap = [
     'admin' => ADMIN_SITE_URL . '/login.php',

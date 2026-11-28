@@ -1,6 +1,6 @@
 # 🏨 Marvelous Hotel and Dormitory Booking and Reservation Management System with AI-Based Room Recommendation
 
-A comprehensive **3-Tier Hotel & Dormitory Web Application** structured cleanly into **`frontend/`** (**Tailwind CSS + Alpine.js 3**, HTML5, CSS3, ES6+ JavaScript), **`backend/`** (**Slim 4 PHP 8 REST API Framework**, PSR-4 Services/Controllers/Middleware, Real-Time NVIDIA NIM SSE AI), and **`database/`** (**MySQL / MariaDB SQL** via PDO with 20 versioned migrations), designed to run natively on **XAMPP**.
+A comprehensive **3-Tier Hotel & Dormitory Web Application** structured cleanly into **`frontend/`** (**Tailwind CSS + Alpine.js 3**, HTML5, CSS3, ES6+ JavaScript), **`backend/`** (**Slim 4 PHP 8 REST API Framework**, PSR-4 Services/Controllers/Middleware, Real-Time NVIDIA NIM SSE AI), and **`database/`** (**MySQL / MariaDB SQL** via PDO with 21 versioned migrations), designed to run natively on **XAMPP**. The **Main Hotel Website & Guest Portal** is engineered for smooth, 60fps compatibility across **Android phones, laptops, and desktop PCs**, while the **Staff & Admin Portals** are strictly optimized as **Laptop & Desktop PC (`1024px+`) workstations**.
 
 ---
 
@@ -108,11 +108,28 @@ To host each portal on its dedicated port (`:8080`, `:8081`, `:8082`):
 
 Every module features its own dedicated URL, distinct access credentials, and isolated CSS/JS scripts. In addition to standard XAMPP paths, the system includes ready-to-run multi-port Apache configurations ([`vhosts-linux.conf`](file:///opt/lampp/htdocs/hotel/config/apache/vhosts-linux.conf) & [`vhosts-windows.conf`](file:///opt/lampp/htdocs/hotel/config/apache/vhosts-windows.conf)) to run each portal on dedicated servers/ports:
 
-| Server / Portal | Multi-Port URL | Standard XAMPP URL | Access Level & Permissions |
-|---|---|---|---|
-| 👑 **Super Admin** | `http://localhost:8081/` | `http://localhost/hotel/admin/login.php` | **Full Master Authority:** View all users & staff, Master Password Reset, ban/activate, room inventory, payment approvals, settings. |
-| 👨‍💼 **Staff Frontdesk** | `http://localhost:8082/` | `http://localhost/hotel/staff/login.php` | **Strict Operations Only:** Fast Check-in/out, live room status, guest inquiries. ❌ No account creation, no password resets. |
-| 🌐👤 **Guest & Public Portal** | `http://localhost:8080/` | `http://localhost/hotel/` (Website) & `auth/login.php` | **Unified Guest Self-Service & Public Showcase:** Public website showcase, room catalog, self-registration, booking, KYC ID submission, QR payments (GCash & Maya), and Marvi AI Chatbot. |
+| Server / Portal | Target Devices | Multi-Port URL | Standard XAMPP URL | Access Level & Permissions |
+|---|---|---|---|---|
+| 👑 **Super Admin** | 💻 **Laptop & PC Only (`1024px+`)** | `http://localhost:8081/` | `http://localhost/hotel/admin/login.php` | **Full Master Authority:** View all users & staff, Master Password Reset, ban/activate, room inventory, payment approvals, settings. |
+| 👨‍💼 **Staff Frontdesk** | 💻 **Laptop & PC Only (`1024px+`)** | `http://localhost:8082/` | `http://localhost/hotel/staff/login.php` | **Strict Operations Only:** Fast Check-in/out, live room status, guest inquiries. ❌ No account creation, no password resets. |
+| 🌐👤 **Guest & Public Portal** | 📱💻 **Android Phone, Laptop & PC** | `http://localhost:8080/` | `http://localhost/hotel/` (Website) & `auth/login.php` | **Unified Guest Self-Service & Public Showcase:** Public website showcase, room catalog, self-registration, booking, KYC ID submission, QR payments (GCash & Maya), and Marvi AI Chatbot. |
+
+---
+
+## 📱💻 Device Compatibility & 60fps UI/UX Performance Architecture
+
+The frontend is purposefully split by target hardware so guests enjoy a zero-lag mobile-first booking experience while hotel operators get an uncramped, high-productivity workstation interface:
+
+### 📱 Main Hotel Website & Guest Hub (Android Phone, Laptop & Desktop PC)
+- **Zero-Lag 60fps Mobile Rendering (`base.css`, `public.css`, `user.css`, `auth.css`, `ai-chat.css`):** Replaced expensive `transition: all` animations with GPU-composited properties, disabled heavy multi-layer `backdrop-filter: blur()` on mobile viewports (`<= 768px`), guarded hover lifts behind `@media (hover: hover)`, added `content-visibility: auto` on below-the-fold sections, and respected `prefers-reduced-motion`.
+- **Android Viewport & Keyboard Ergonomics:** Native dark status bar (`meta name="theme-color"`), `100dvh`/`90dvh` hero & modal heights, `44px+` touch targets, `16px` mobile form inputs (preventing auto-zoom), responsive check-in/out date & Maya/GCash channel stacks, and `window.visualViewport` resize adaptation in Marvi AI Chat (`ai-chat.js`) so the Android soft keyboard never obscures the input bar.
+- **Responsive Card Views (`< 768px`):** Guest Dashboard, My Bookings, Payment History, and My Reviews automatically switch from desktop data tables to touch-friendly stacked cards below `768px`.
+- **Zero-FOUC Non-Blocking Assets (`frontend/components/page-head.php`):** Preconnect hints, non-blocking Google Fonts (`media="print" onload`), inline SVG hotel favicon (zero `favicon.ico` 404 console errors), `hero-bg.jpg` LCP preload, `defer` script loading, and automatic `?v=<filemtime>` cache-busting via `assetUrl()` across every page.
+
+### 💻 Staff & Admin Portals (Laptop & Desktop PC Only — `1024px+`)
+- **Strict Desktop/Laptop-Only Guard (`frontend/components/desktop-only-guard.php`):** Opening any Staff or Admin page (including login and first-time setup) on a phone or viewport narrower than `1024px` displays a full-screen branded **Laptop & PC Workstation Required** overlay with live viewport dimensions and a direct button back to the Main Hotel Website. Resizing back to `>= 1024px` restores the workspace immediately.
+- **Fluid Laptop & PC Sidebar Architecture (`staff.css`, `admin.css`):** Unified `--sidebar-w` CSS custom property (`244px` on `1024px–1366px` laptops, `264px` on `1367px+` monitors, `72px` collapsed icon rail) with **0px dead gap** and persistent `localStorage` collapse toggle (`.sidebar-collapse-btn`) for maximum table width on 1280×720 / 1366×768 laptops.
+- **High-Productivity Workstation Ergonomics (`staff.js`, `admin.js`):** Sticky table headers, tabular numerals (`font-variant-numeric: tabular-nums`), cached + debounced live table/room search for 0ms typing lag, `/` keyboard shortcut to focus search inputs instantly, and `Esc` to close any active modal.
 
 ### 🔒 Independent Session Isolation Engine (Zero Cross-Portal Collisions)
 To completely prevent session conflicts and the "Auto Admin Only" bug when navigating between roles, each portal operates on an **isolated PHP session cookie namespace**:
@@ -264,7 +281,7 @@ hotel/
 │   ├── user/                   <- Authenticated Guest Hub (dashboard, booking, my-bookings, payment, payment-history, ai-recommend, profile, reviews, notifications)
 │   ├── auth/                   <- Authentication UI (login, register, forgot-password, reset-password, verify-email, resend-verification, welcome, setup-admin, register-staff)
 │   ├── pages/                  <- Public Website (index, rooms, about, contact, 404, 500)
-│   ├── components/             <- Shared UI components (sidebar, central-nav, ai-chatbot, reset-status-modal, frontend-frameworks)
+│   ├── components/             <- Shared UI components (page-head, desktop-only-guard, sidebar, central-nav, ai-chatbot, reset-status-modal, frontend-frameworks)
 │   └── assets/
 │       ├── css/                <- Role-dedicated stylesheets (base, admin, staff, user, auth, public, ai-chat, tailwind)
 │       └── js/                 <- Role-dedicated scripts (core, admin, staff, user, public, api-client, ai-chat)
@@ -279,7 +296,7 @@ hotel/
 ├── database/
 │   ├── marvelous_hotel.sql     <- Initial database schema & seed data
 │   ├── migrate.php             <- Versioned SQL migration runner (schema_migrations ledger)
-│   ├── migrations/             <- 20 versioned SQL migrations (0001–0020)
+│   ├── migrations/             <- 21 versioned SQL migrations (0001–0021)
 │   └── ERD.md                  <- 14-table Entity-Relationship Diagram & Data Dictionary
 │
 ├── docs/diagrams/              <- High-res System Architecture, Level 0/1 DFD & Use Case Diagram (PNG + SVG)
@@ -318,6 +335,13 @@ hotel/
 ---
 
 ## 📋 Changelog
+
+### v1.2.0 (Android/Laptop/PC Main Site 60fps Optimization & Laptop/PC-Only Staff/Admin Workstations — 2026-11-28)
+- ✅ **Strict Laptop & PC-Only Guard for Staff & Admin (`frontend/components/desktop-only-guard.php`)** — Enforces workstation-only access (`>= 1024px`) across all Staff & Admin portals, login screens, and admin bootstrap pages, replacing cramped mobile drawers with a branded Desktop/Laptop Required screen and live viewport readout at `< 1024px`.
+- ✅ **Workstation Sidebar & Table Architecture (`staff.css`, `admin.css`, `staff.js`, `admin.js`, `sidebar.php`)** — Fixed the `1024px–1280px` sidebar/content breakpoint collision (`0px` dead gap across `1024px`–`1920px+`), added a persistent collapsible icon-rail sidebar toggle (`244px/264px ↔ 72px`) for 1280px/1366px laptops, added sticky table headers & tabular numerals, defined the missing `@keyframes slideInRight`, cached/debounced live table search, added `/` keyboard search focus shortcut, and added password visibility toggle on `admin/login.php`.
+- ✅ **Main Hotel Website 60fps Android, Laptop & PC Upgrade (`base.css`, `public.css`, `user.css`, `auth.css`, `ai-chat.css`, `core.js`, `public.js`, `ai-chat.js`)** — Eliminated Android GPU lag (`backdrop-filter` disabled on mobile, GPU-safe transitions, `@media (hover: hover)` lift guards, `100dvh`/`90dvh`, `content-visibility: auto`, `requestAnimationFrame` scroll handling), added `visualViewport` keyboard adaptation for Marvi AI chat, expanded mobile card views to `< 768px` (including `user/reviews.php`), and made `rooms.php` Quick Availability bar and `booking.php` / `payment.php` date & channel tabs cleanly stack on `360px` Android screens.
+- ✅ **Zero-FOUC Shared Performance Head & Cache-Busting (`frontend/components/page-head.php`, `frontend-frameworks.php`, `ai-chatbot.php`)** — Standardized `renderPerformanceHeadLinks()` (Android `theme-color`, inline SVG favicon eliminating `favicon.ico` 404s, preconnect hints, non-blocking Google Fonts, early `<head>` AI chat CSS), `assetUrl()` `?v=<filemtime>` cache-busting, and `defer` scripts across all 43 HTML PHP views.
+- ✅ **Bug & Security Hardening** — Removed leading blank line before `<?php` in `frontend/pages/rooms.php` (preventing `headers already sent` redirect errors), enforced `verifyCsrfToken()` on `frontend/pages/contact.php`, replaced undefined `.alert.alert-danger` in `frontend/user/ai-recommend.php`, fixed fragment active-link matching in `sidebar.php`, replaced hardcoded `9+` room stat in `index.php` with live DB count, and rebuilt minified `tailwind.css`.
 
 ### v1.1.9 (6-Room Catalog, Admin Hotel/Dorm CRUD, Marvi AI Upgrade, Portal Audit & Design Layouts — 2026-11-27)
 - ✅ **System Design Layouts & Architecture Diagrams (`docs/diagrams/`)** — Added high-resolution print-ready **System Architecture**, **Level 0 DFD (Context Diagram)**, and **Level 1 DFD** diagrams (PNG + editable SVG) embedded directly in `README.md`.
@@ -433,4 +457,4 @@ MIT License — Feel free to use, modify, and distribute.
 
 ---
 
-*Last Updated: 2026-11-27 | Marvelous Hotel & Dormitory Booking System v1.1.9*
+*Last Updated: 2026-11-28 | Marvelous Hotel & Dormitory Booking System v1.2.0*

@@ -1121,11 +1121,28 @@
     if (icon) icon.className = 'fa-solid fa-xmark';
   }
 
+  function syncMobileChatViewport() {
+    const box = document.getElementById('aiChatBox');
+    if (!box) return;
+    if (window.innerWidth <= 640 && box.classList.contains('open') && window.visualViewport) {
+      const vh = Math.max(300, Math.round(window.visualViewport.height * 0.92));
+      box.style.height = vh + 'px';
+      box.style.maxHeight = vh + 'px';
+    } else {
+      box.style.height = '';
+      box.style.maxHeight = '';
+    }
+  }
+
   function closeAIChat() {
     const box = document.getElementById('aiChatBox');
     const icon = document.getElementById('aiFabIcon');
     stopMarviVoiceAll();
-    if (box) box.classList.remove('open');
+    if (box) {
+      box.classList.remove('open');
+      box.style.height = '';
+      box.style.maxHeight = '';
+    }
     if (icon) icon.className = 'fa-solid fa-robot';
   }
 
@@ -1197,6 +1214,10 @@
     updateMicButtonUI();
     updateVoiceReplyToggleUI();
     loadSavedConversation();
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncMobileChatViewport, { passive: true });
+    }
   });
 
   document.addEventListener('keydown', (e) => {

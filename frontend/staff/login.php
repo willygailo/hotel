@@ -35,10 +35,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Session fixation defense: bagong session ID bago mag-login
                 session_regenerate_id(true);
                 $_SESSION['user_id']     = $user['id'];
-                $_SESSION['user_name']   = $user['first_name'] . ' ' . $user['last_name'];
+                $_SESSION['user_name']   = formatFullName($user);
                 $_SESSION['user_email']  = $user['email'];
                 $_SESSION['user_role']   = 'staff';
                 $_SESSION['user_avatar'] = $user['avatar'] ?: 'default-avatar.png';
+                $_SESSION['_status_checked_at'] = time();
 
                 dbExec("UPDATE users SET last_login = NOW() WHERE id = ?", [$user['id']]);
                 auditLog('Staff Logged In via Dedicated Portal', 'Staff Auth', "Staff {$user['email']} authenticated.");
@@ -61,15 +62,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Staff Frontdesk Login — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
   <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
   <link rel="stylesheet" href="<?= h(assetUrl('css/staff.css')) ?>">
 </head>
 <body style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#080d24;">
+<?php require_once __DIR__ . '/../components/desktop-only-guard.php'; renderDesktopOnlyGuard('staff'); ?>
 
   <div class="glass-card" style="width:100%;max-width:440px;padding:36px;box-shadow:var(--shadow-deep);border:1px solid rgba(78,154,241,0.3);">
     <div style="text-align:center;margin-bottom:28px;">
@@ -85,6 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
     </div>
 
+    <?= renderFlash() ?>
+
     <?php if (!empty($error)): ?>
       <div class="flash-message flash-error"><i class="fa-solid fa-circle-xmark"></i> <span><?= h($error) ?></span></div>
     <?php endif; ?>
@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label class="form-label">Staff Gmail / Email Address <span class="required">*</span></label>
         <div class="form-icon-wrap">
           <i class="fa-solid fa-id-badge form-icon" style="color:var(--accent);"></i>
-          <input type="email" name="email" class="form-control" placeholder="staff@domain.com" value="<?= h($_POST['email'] ?? '') ?>" required autofocus>
+          <input type="email" name="email" class="form-control" placeholder="staff@domain.com" value="<?= h($_POST['email'] ?? '') ?>" required autofocus autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="email">
         </div>
       </div>
 
@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label class="form-label">Staff Password <span class="required">*</span></label>
         <div class="form-icon-wrap" style="position:relative;">
           <i class="fa-solid fa-key form-icon" style="color:var(--accent);"></i>
-          <input type="password" name="password" id="staffPassInput" class="form-control" placeholder="••••••••" required style="padding-right:38px;">
+          <input type="password" name="password" id="staffPassInput" class="form-control" placeholder="••••••••" required style="padding-right:38px;" autocomplete="current-password">
           <button type="button" onclick="toggleStaffPass(this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px;z-index:2;">
             <i class="fa-solid fa-eye"></i>
           </button>
@@ -121,8 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
-<script src="<?= h(assetUrl('js/staff.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/staff.js')) ?>"></script>
 <script>
 function toggleStaffPass(btn) {
   const inp = document.getElementById('staffPassInput');

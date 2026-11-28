@@ -33,14 +33,9 @@ $defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>User Dashboard — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/user.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -237,7 +232,7 @@ $defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
 </div>
 
 <?php require_once __DIR__ . '/../components/ai-chatbot.php'; ?>
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/user.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/user.js')) ?>"></script>
 </body>
 </html>

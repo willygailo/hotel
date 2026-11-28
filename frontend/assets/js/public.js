@@ -4,11 +4,20 @@
    ============================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Sticky Navbar styling
+  // 1. Sticky Navbar styling (rAF-throttled for 60fps Android scrolling)
   const navbar = document.getElementById('navbar');
   if (navbar) {
-    window.addEventListener('scroll', () => {
+    let scrollTicking = false;
+    const syncNavbarScroll = () => {
       navbar.classList.toggle('scrolled', window.scrollY > 30);
+      scrollTicking = false;
+    };
+    syncNavbarScroll();
+    window.addEventListener('scroll', () => {
+      if (!scrollTicking) {
+        scrollTicking = true;
+        window.requestAnimationFrame(syncNavbarScroll);
+      }
     }, { passive: true });
   }
 
@@ -22,11 +31,11 @@ document.addEventListener('DOMContentLoaded', () => {
   window.openCentralNav = function() {
     if (centralNav) {
       centralNav.classList.add('open');
-      centralNav.style.transform = 'translateX(0)';
+      centralNav.setAttribute('aria-hidden', 'false');
     }
     if (overlay) {
       overlay.classList.add('open');
-      overlay.style.display = 'block';
+      overlay.setAttribute('aria-hidden', 'false');
     }
     if (menuBtn) {
       menuBtn.classList.add('active');
@@ -42,11 +51,11 @@ document.addEventListener('DOMContentLoaded', () => {
   window.closeCentralNav = function() {
     if (centralNav) {
       centralNav.classList.remove('open');
-      centralNav.style.transform = 'translateX(100%)';
+      centralNav.setAttribute('aria-hidden', 'true');
     }
     if (overlay) {
       overlay.classList.remove('open');
-      overlay.style.display = 'none';
+      overlay.setAttribute('aria-hidden', 'true');
     }
     if (menuBtn) {
       menuBtn.classList.remove('active');
@@ -60,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   window.toggleCentralNav = function() {
-    if (centralNav && (centralNav.classList.contains('open') || centralNav.style.transform === 'translateX(0px)' || centralNav.style.transform === 'translateX(0)')) {
+    if (centralNav && centralNav.classList.contains('open')) {
       window.closeCentralNav();
     } else {
       window.openCentralNav();
@@ -99,14 +108,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 3. Set Default Search Dates
+  // 3. Set Default Search Dates (using local calendar date to avoid UTC-8/+8 day shift)
+  function formatLocalYmd(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
   const searchCheckIn = document.getElementById('searchCheckIn');
   const searchCheckOut = document.getElementById('searchCheckOut');
   if (searchCheckIn && searchCheckOut) {
-    const today = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    if (!searchCheckIn.value) searchCheckIn.value = today;
-    if (!searchCheckOut.value) searchCheckOut.value = tomorrow;
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    if (!searchCheckIn.value) searchCheckIn.value = formatLocalYmd(now);
+    if (!searchCheckOut.value) searchCheckOut.value = formatLocalYmd(tomorrow);
+
+    searchCheckIn.addEventListener('change', () => {
+      if (!searchCheckIn.value) return;
+      const parts = searchCheckIn.value.split('-').map(Number);
+      if (parts.length !== 3) return;
+      const nextDay = new Date(parts[0], parts[1] - 1, parts[2] + 1);
+      const minOut = formatLocalYmd(nextDay);
+      searchCheckOut.min = minOut;
+      if (!searchCheckOut.value || searchCheckOut.value <= searchCheckIn.value) {
+        searchCheckOut.value = minOut;
+      }
+    });
   }
 });
 

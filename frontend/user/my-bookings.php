@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_booking'])) {
         if ($bk) {
             if ($bk['status'] === 'pending') {
                 dbExec("UPDATE bookings SET status = 'cancelled', cancelled_at = NOW(), cancelled_reason = 'Cancelled by User' WHERE id = ? AND status = 'pending'", [$bookingId]);
+                rejectPendingPaymentsForBooking($bookingId, 'Auto-rejected: booking cancelled by guest');
                 auditLog('Cancelled Booking', 'User Module', "Booking #{$bk['booking_code']} cancelled by user");
                 setFlash('warning', 'Your pending booking has been cancelled.');
             } elseif ($bk['status'] === 'confirmed') {
@@ -32,10 +33,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_booking'])) {
 }
 
 $bookings = dbRows("
-    SELECT b.*, r.name as room_name, r.room_number, r.thumbnail, r.price_per_night, rt.name as type_name 
+    SELECT b.*, r.name as room_name, r.room_number, r.thumbnail, r.price_per_night, rt.name as type_name,
+           lp.status as latest_payment_status
     FROM bookings b 
     JOIN rooms r ON b.room_id = r.id 
     JOIN room_types rt ON r.room_type_id = rt.id 
+    LEFT JOIN (
+        SELECT p1.booking_id, p1.status
+        FROM payments p1
+        INNER JOIN (
+            SELECT booking_id, MAX(id) AS max_id
+            FROM payments
+            GROUP BY booking_id
+        ) pm ON p1.id = pm.max_id
+    ) lp ON lp.booking_id = b.id
     WHERE b.user_id = ? 
     ORDER BY b.id DESC
 ", [$userId]);
@@ -47,10 +58,9 @@ $defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Bookings — Marvelous Hotel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/user.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -148,9 +158,15 @@ $defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
                             </a>
                           <?php endif; ?>
                           <?php if ($b['status'] === 'pending'): ?>
-                            <a href="payment.php?booking_id=<?= $b['id'] ?>" class="btn btn-gold btn-sm">
-                              <i class="fa-solid fa-credit-card"></i> Pay Now
-                            </a>
+                            <?php if (in_array($b['latest_payment_status'] ?? '', ['pending', 'verified'], true)): ?>
+                              <a href="payment-history.php" class="btn btn-ghost btn-sm" title="View Submitted Payment Receipt" style="border:1px solid rgba(234,179,8,0.35);color:#fde047;">
+                                <i class="fa-solid fa-hourglass-half"></i> Payment Pending
+                              </a>
+                            <?php else: ?>
+                              <a href="payment.php?booking_id=<?= $b['id'] ?>" class="btn btn-gold btn-sm">
+                                <i class="fa-solid fa-credit-card"></i> Pay Now
+                              </a>
+                            <?php endif; ?>
                           <?php endif; ?>
                           <?php if ($b['status'] === 'pending'): ?>
                             <form action="" method="POST" onsubmit="return confirm('Cancel this pending booking?')">
@@ -247,9 +263,15 @@ $defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
                     <?php endif; ?>
 
                     <?php if ($b['status'] === 'pending'): ?>
-                      <a href="payment.php?booking_id=<?= $b['id'] ?>" class="btn btn-gold btn-sm">
-                        <i class="fa-solid fa-credit-card"></i> Pay Now
-                      </a>
+                      <?php if (in_array($b['latest_payment_status'] ?? '', ['pending', 'verified'], true)): ?>
+                        <a href="payment-history.php" class="btn btn-ghost btn-sm" style="border:1px solid rgba(234,179,8,0.35);color:#fde047;">
+                          <i class="fa-solid fa-hourglass-half"></i> Payment Pending
+                        </a>
+                      <?php else: ?>
+                        <a href="payment.php?booking_id=<?= $b['id'] ?>" class="btn btn-gold btn-sm">
+                          <i class="fa-solid fa-credit-card"></i> Pay Now
+                        </a>
+                      <?php endif; ?>
                     <?php endif; ?>
 
                     <?php if ($b['status'] === 'pending'): ?>
@@ -274,8 +296,8 @@ $defaultRoomImg = ASSETS_URL . '/images/rooms/default-room.jpg';
   </main>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/user.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/user.js')) ?>"></script>
 <?php require_once __DIR__ . '/../components/ai-chatbot.php'; ?>
 </body>
 </html>

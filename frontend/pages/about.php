@@ -30,14 +30,9 @@ $hotelName = getSetting('hotel_name', 'Marvelous Hotel');
   <meta name="twitter:title" content="About Us — <?= h($hotelName) ?>">
   <meta name="twitter:description" content="Discover the story and mission of <?= h($hotelName) ?>. Blending comfort and elegance.">
   <meta name="twitter:image" content="<?= ASSETS_URL ?>/images/hotel/hero-bg.jpg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="frontend/assets/css/base.css">
-  <link rel="stylesheet" href="frontend/assets/css/public.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/public.css')) ?>">
 </head>
 <body>
 
@@ -130,7 +125,7 @@ $hotelName = getSetting('hotel_name', 'Marvelous Hotel');
         <a href="<?= currentRole() ?>/dashboard.php" class="footer-link">Dashboard</a>
         <a href="user/my-bookings.php" class="footer-link">My Bookings</a>
         <a href="user/payment-history.php" class="footer-link">Payments</a>
-        <a href="auth/logout.php" class="footer-link">Logout</a>
+        <a href="auth/logout.php?portal=<?= h(currentRole() ?: 'user') ?>" class="footer-link">Logout</a>
         <?php endif; ?>
       </div>
       <div>
@@ -154,7 +149,7 @@ require_once __DIR__ . '/../components/central-nav.php';
 renderCentralNav('about');
 ?>
 <?php require_once __DIR__ . '/../components/ai-chatbot.php'; ?>
-<script src="frontend/assets/js/core.js"></script>
-<script src="frontend/assets/js/public.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/public.js')) ?>"></script>
 </body>
 </html>

@@ -130,10 +130,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         profile_verified = ?,
                         verified_by = ?,
                         verified_at = ?,
-                        rejection_reason = ?
+                        rejection_reason = ?,
+                        remember_token = IF(? = 'banned', NULL, remember_token),
+                        remember_expires = IF(? = 'banned', NULL, remember_expires)
                     WHERE id = ? AND role = 'user'", [
                         $fn, $mn, $ln, $sf, $email, $phone, $address, $location, $status, $kyc, $isVer,
-                        $verifiedByVal, $verifiedAtVal, $rejReasonVal, $uId
+                        $verifiedByVal, $verifiedAtVal, $rejReasonVal, $status, $status, $uId
                     ]);
 
                     auditLog('Admin Updated User Account', 'Admin Module', "Admin #$adminId edited Guest Account #$uId ($email)");
@@ -356,7 +358,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $target = dbRow("SELECT * FROM users WHERE id = ?", [$uId]);
         if ($target && $target['role'] === 'user') {
             $newStatus = $target['status'] === 'active' ? 'banned' : 'active';
-            dbExec("UPDATE users SET status = ? WHERE id = ?", [$newStatus, $uId]);
+            if ($newStatus === 'banned') {
+                dbExec("UPDATE users SET status = ?, remember_token = NULL, remember_expires = NULL WHERE id = ?", [$newStatus, $uId]);
+            } else {
+                dbExec("UPDATE users SET status = ? WHERE id = ?", [$newStatus, $uId]);
+            }
             auditLog('Toggled User Status', 'Admin Module', "User #$uId status changed to $newStatus");
             setFlash('info', "User status changed to $newStatus.");
         }
@@ -459,11 +465,7 @@ if ($tab === 'resets') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Manage Users & KYC Verification — Admin Portal</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
   <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
   <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
   <style>
@@ -485,7 +487,7 @@ if ($tab === 'resets') {
   <main class="dashboard-main">
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:12px;">
-        <button class="admin-mobile-toggle" data-sidebar-toggle><i class="fa-solid fa-bars"></i></button>
+        <button type="button" class="sidebar-collapse-btn" data-sidebar-collapse title="Toggle Compact Sidebar" aria-label="Toggle Compact Sidebar" aria-expanded="true"><i class="fa-solid fa-bars-staggered"></i></button>
         <div class="topbar-title">User Accounts &amp; KYC Verification</div>
       </div>
     </header>
@@ -1331,7 +1333,7 @@ function setRejectReason(reason) {
 }
 </script>
 
-<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
-<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

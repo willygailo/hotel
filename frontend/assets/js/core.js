@@ -10,52 +10,87 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       flash.style.opacity = '0';
       flash.style.transform = 'translateY(-10px)';
-      flash.style.transition = 'all 0.4s ease';
-      setTimeout(() => flash.remove(), 400);
+      flash.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+      setTimeout(() => flash.remove(), 380);
     }, 4500);
   });
 
-  // 2. Global Mobile Sidebar Drawer Toggle (Works for Admin, Staff, & User)
-  const toggleBtns = document.querySelectorAll('[data-sidebar-toggle]');
-  
-  // Ensure a reusable mobile overlay exists
-  let sidebarOverlay = document.getElementById('globalSidebarOverlay');
-  if (!sidebarOverlay) {
-    sidebarOverlay = document.createElement('div');
-    sidebarOverlay.id = 'globalSidebarOverlay';
-    sidebarOverlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:999;transition:opacity 0.25s ease;';
-    document.body.appendChild(sidebarOverlay);
+  // 2. Desktop-Only Guard live viewport readout (Staff & Admin < 1024px)
+  const guardViewportEl = document.getElementById('desktopGuardViewport');
+  if (guardViewportEl) {
+    const updateGuardViewport = () => {
+      guardViewportEl.textContent = `${window.innerWidth} × ${window.innerHeight} px`;
+    };
+    updateGuardViewport();
+    window.addEventListener('resize', updateGuardViewport, { passive: true });
   }
 
-  function setSidebarState(open) {
-    const sidebar = document.querySelector('.admin-sidebar, .staff-sidebar, .user-sidebar, .sidebar');
-    if (!sidebar) return;
-    if (open) {
-      sidebar.classList.add('open');
-      sidebarOverlay.style.display = 'block';
-      document.body.style.overflow = 'hidden'; // lock scroll on phones
-    } else {
-      sidebar.classList.remove('open');
-      sidebarOverlay.style.display = 'none';
-      document.body.style.overflow = '';
-    }
-  }
+  // 3. Workstation Sidebar Collapse Toggle (Staff & Admin Laptop/PC)
+  const sidebarEl = document.querySelector('.sidebar[data-portal-role]');
+  const portalRole = sidebarEl?.getAttribute('data-portal-role') || '';
+  if (portalRole === 'admin' || portalRole === 'staff') {
+    const storageKey = 'mh_sidebar_collapsed_' + portalRole;
+    try {
+      if (localStorage.getItem(storageKey) === '1' && window.innerWidth >= 1024) {
+        document.body.classList.add('sidebar-collapsed');
+      }
+    } catch (e) {}
 
-  toggleBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const sidebar = document.querySelector('.admin-sidebar, .staff-sidebar, .user-sidebar, .sidebar');
-      const willOpen = !sidebar?.classList.contains('open');
-      setSidebarState(willOpen);
+    document.querySelectorAll('[data-sidebar-collapse]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const collapsed = document.body.classList.toggle('sidebar-collapsed');
+        btn.setAttribute('aria-expanded', String(!collapsed));
+        try {
+          localStorage.setItem(storageKey, collapsed ? '1' : '0');
+        } catch (e) {}
+      });
     });
-  });
+  }
 
-  sidebarOverlay.addEventListener('click', () => setSidebarState(false));
+  // 4. Mobile Sidebar Drawer Toggle (User Portal on Android / Mobile)
+  const toggleBtns = document.querySelectorAll('[data-sidebar-toggle]');
+  if (toggleBtns.length > 0 && portalRole !== 'admin' && portalRole !== 'staff') {
+    let sidebarOverlay = document.getElementById('globalSidebarOverlay');
+    if (!sidebarOverlay) {
+      sidebarOverlay = document.createElement('div');
+      sidebarOverlay.id = 'globalSidebarOverlay';
+      sidebarOverlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(4,8,22,0.72);z-index:999;transition:opacity 0.22s ease;';
+      document.body.appendChild(sidebarOverlay);
+    }
 
-  // Close sidebar on Escape key
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') setSidebarState(false);
-  });
+    function setSidebarState(open) {
+      const sidebar = document.querySelector('.user-sidebar, .sidebar');
+      if (!sidebar) return;
+      if (open) {
+        sidebar.classList.add('open');
+        sidebarOverlay.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+      } else {
+        sidebar.classList.remove('open');
+        sidebarOverlay.style.display = 'none';
+        document.body.style.overflow = '';
+      }
+    }
+
+    toggleBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sidebar = document.querySelector('.user-sidebar, .sidebar');
+        const willOpen = !sidebar?.classList.contains('open');
+        setSidebarState(willOpen);
+      });
+    });
+
+    sidebarOverlay.addEventListener('click', () => setSidebarState(false));
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 1024) setSidebarState(false);
+    }, { passive: true });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') setSidebarState(false);
+    });
+  }
 });
 
 // Helper for modal controls

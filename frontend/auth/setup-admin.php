@@ -64,12 +64,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Account Setup — Marvelous Hotel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/auth.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/auth.css')) ?>">
 </head>
 <body style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--navy);">
+<?php require_once __DIR__ . '/../components/desktop-only-guard.php'; renderDesktopOnlyGuard('admin'); ?>
 
   <div class="glass-card" style="width:100%;max-width:540px;padding:36px;box-shadow:var(--shadow-deep);border-color:rgba(201,168,76,0.3);">
     <div style="text-align:center;margin-bottom:24px;">
@@ -132,6 +132,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-<script src="../frontend/assets/js/core.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
 </body>
 </html>

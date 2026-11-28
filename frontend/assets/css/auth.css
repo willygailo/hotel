@@ -5,6 +5,7 @@
 
 .auth-wrapper {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -87,11 +88,18 @@
   font-size: 0.9rem;
   pointer-events: none; }
 .form-icon-wrap .form-icon-right { position: absolute;
-  right: 14px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
-  cursor: pointer; }
+  cursor: pointer;
+  min-width: 38px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px; }
+.form-icon-wrap .form-control:has(+ .form-icon-right) { padding-right: 46px; }
 
 /* Responsive Form Rows & Mobile/Android Button Alignment */
 .form-row-2col {

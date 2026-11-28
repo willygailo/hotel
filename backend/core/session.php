@@ -43,9 +43,11 @@ if (session_status() === PHP_SESSION_NONE) {
         }
     }
 
-    $isHttpsConn = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
-        || (isset($_SERVER['HTTP_CF_VISITOR']) && strpos($_SERVER['HTTP_CF_VISITOR'], 'https') !== false);
+    $isHttpsConn = function_exists('isHttpsRequest')
+        ? isHttpsRequest()
+        : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+            || (isset($_SERVER['HTTP_CF_VISITOR']) && strpos($_SERVER['HTTP_CF_VISITOR'], 'https') !== false));
 
     session_set_cookie_params([
         'lifetime' => SESSION_LIFETIME,
@@ -87,8 +89,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $uri = $_SERVER['REQUEST_URI'] ?? '';
     $isPublicChatbot = (strpos($uri, 'ai/chatbot.php') !== false);
     $isSlimApi = (strpos($uri, 'backend/api/') !== false);
+    // Allow auth HTML pages to render their own styled in-page CSRF error message (they all verify CSRF before processing POST)
+    $isAuthFormPage = (bool)preg_match('#/(?:auth/(?:login|register|forgot-password|reset-password|resend-verification|register-staff|setup-admin)|(?:staff|admin)/login)\.php(?:$|\?)#i', $uri);
 
-    if (!$isPublicChatbot && !$isSlimApi) {
+    if (!$isPublicChatbot && !$isSlimApi && !$isAuthFormPage) {
         $csrfInput = $_POST[CSRF_TOKEN_NAME] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
         if (empty($csrfInput) && function_exists('getallheaders')) {
             $headers = getallheaders();
@@ -107,15 +111,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 }
 
-// ---- Check if user is logged in (with Remember Me support) ----
+// ---- Check if user is logged in (with Remember Me support strictly scoped to User portal) ----
 function isLoggedIn(): bool {
     if (!empty($_SESSION['user_id']) && !empty($_SESSION['user_role'])) {
         return true;
     }
 
-    // Attempt auto-login via persistent Remember Me cookie
+    // Attempt auto-login via persistent Remember Me cookie ONLY on the User/Main portal
+    // (never leak guest sessions into Admin or Staff portals)
     $rememberCookie = $_COOKIE['MH_REMEMBER_USER'] ?? '';
-    if (!empty($rememberCookie) && function_exists('dbRow')) {
+    if (ACTIVE_PORTAL === 'user' && !empty($rememberCookie) && function_exists('dbRow')) {
         $parts = explode(':', $rememberCookie, 2);
         if (count($parts) === 2) {
             $uId = (int)$parts[0];
@@ -129,6 +134,7 @@ function isLoggedIn(): bool {
                 $_SESSION['user_email']  = $u['email'];
                 $_SESSION['user_role']   = 'user';
                 $_SESSION['user_avatar'] = $u['avatar'] ?: 'default-avatar.png';
+                $_SESSION['_status_checked_at'] = time();
                 return true;
             }
         }
@@ -197,7 +203,7 @@ function getDashboardUrl(?string $role = null): string {
     return USER_SITE_URL . '/index.php';
 }
 
-// ---- Require specific role ----
+// ---- Require specific role (with live account-status enforcement) ----
 function requireRole(string ...$roles): void {
     if (!isLoggedIn()) {
         if (in_array('admin', $roles, true)) {
@@ -214,6 +220,45 @@ function requireRole(string ...$roles): void {
             exit;
         }
     }
+
+    // Enforce live account status so banned guests or deactivated staff are kicked immediately
+    $uId = (int)($_SESSION['user_id'] ?? 0);
+    $isWriteReq = (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET');
+    $lastChecked = (int)($_SESSION['_status_checked_at'] ?? 0);
+    if ($uId > 0 && function_exists('dbRow') && ($isWriteReq || (time() - $lastChecked) >= 30)) {
+        try {
+            $acct = dbRow("SELECT status, role FROM users WHERE id = ? LIMIT 1", [$uId]);
+            if (!$acct || ($acct['status'] ?? '') !== 'active' || ($acct['role'] ?? '') !== currentRole()) {
+                $portal = ACTIVE_PORTAL;
+                $_SESSION = [];
+                if (session_status() === PHP_SESSION_ACTIVE) {
+                    session_regenerate_id(true);
+                }
+                if ($portal === 'user' && isset($_COOKIE['MH_REMEMBER_USER'])) {
+                    setcookie('MH_REMEMBER_USER', '', [
+                        'expires'  => time() - 3600,
+                        'path'     => '/',
+                        'secure'   => function_exists('isHttpsRequest') ? isHttpsRequest() : false,
+                        'httponly' => true,
+                        'samesite' => 'Lax',
+                    ]);
+                }
+                setFlash('error', 'Your account session is no longer active. Please contact administration.');
+                if ($portal === 'admin') {
+                    header('Location: ' . ADMIN_SITE_URL . '/login.php');
+                } elseif ($portal === 'staff') {
+                    header('Location: ' . STAFF_SITE_URL . '/login.php');
+                } else {
+                    header('Location: ' . USER_SITE_URL . '/auth/login.php');
+                }
+                exit;
+            }
+            $_SESSION['_status_checked_at'] = time();
+        } catch (\Throwable $e) {
+            // Preserve existing session if DB is temporarily unreachable
+        }
+    }
+
     if (!in_array(currentRole(), $roles, true)) {
         // Redirect to their own dashboard
         header('Location: ' . getDashboardUrl(currentRole()));

@@ -19,11 +19,17 @@ if (!defined('DB_PASS')) define('DB_PASS', getenv('DB_PASS') !== false ? getenv(
 if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
 
 // ---- Site Config ----
+if (!function_exists('isHttpsRequest')) {
+    function isHttpsRequest(): bool {
+        return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower((string)$_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+            || (isset($_SERVER['HTTP_CF_VISITOR']) && strpos((string)$_SERVER['HTTP_CF_VISITOR'], 'https') !== false);
+    }
+}
+
 if (!defined('SITE_NAME')) define('SITE_NAME', 'Marvelous Hotel');
 if (!defined('SITE_URL')) {
-    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
-        || (isset($_SERVER['HTTP_CF_VISITOR']) && strpos($_SERVER['HTTP_CF_VISITOR'], 'https') !== false);
+    $isHttps = isHttpsRequest();
     $protocol = $isHttps ? 'https://' : 'http://';
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $uri  = $_SERVER['REQUEST_URI'] ?? '';
@@ -85,7 +91,15 @@ if (!function_exists('getActivePortal')) {
             return 'staff';
         }
 
-        // 4b. Explicit X-Portal header hint for shared REST API endpoints (/backend/api/*)
+        // 4b. Explicit portal query parameter for shared logout endpoint (survives stripped Referer headers)
+        if (stripos($target, 'logout.php') !== false) {
+            $portalQuery = strtolower(trim((string)($_GET['portal'] ?? '')));
+            if (in_array($portalQuery, ['admin', 'staff', 'user'], true)) {
+                return $portalQuery;
+            }
+        }
+
+        // 4c. Explicit X-Portal header hint for shared REST API endpoints (/backend/api/*)
         $portalHeader = strtolower(trim((string)($_SERVER['HTTP_X_PORTAL'] ?? '')));
         if (in_array($portalHeader, ['admin', 'staff', 'user'], true)) {
             return $portalHeader;

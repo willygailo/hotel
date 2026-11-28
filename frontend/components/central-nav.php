@@ -10,17 +10,17 @@ if (!function_exists('renderCentralNav')) {
         $kycNav = ($uNav && function_exists('isUser') && isUser()) ? getUserKycStatus($uNav['id']) : null;
         $navProfileUrl = ($uNav && function_exists('isUser') && isUser()) 
             ? SITE_URL . '/user/profile.php' 
-            : (function_exists('isAdmin') && isAdmin() ? SITE_URL . '/admin/settings.php' : SITE_URL . '/staff/dashboard.php');
+            : (function_exists('isAdmin') && isAdmin() ? SITE_URL . '/admin/settings.php' : SITE_URL . '/staff/account.php');
         $navSettingsUrl = ($uNav && function_exists('isUser') && isUser()) 
             ? SITE_URL . '/user/profile.php#security' 
-            : (function_exists('isAdmin') && isAdmin() ? SITE_URL . '/admin/settings.php' : SITE_URL . '/staff/dashboard.php');
+            : (function_exists('isAdmin') && isAdmin() ? SITE_URL . '/admin/settings.php' : SITE_URL . '/staff/account.php');
         $navPrefUrl = ($uNav && function_exists('isUser') && isUser()) 
             ? SITE_URL . '/user/ai-recommend.php' 
             : SITE_URL . '/rooms.php';
         ?>
 <!-- ======================== CENTRALIZED NAVIGATION (THREE-DOT MENU) ======================== -->
-<div class="central-nav-overlay" id="centralNavOverlay" onclick="closeCentralNav()"></div>
-<div class="central-nav" id="centralNav" aria-label="Centralized Navigation Menu">
+<div class="central-nav-overlay" id="centralNavOverlay" aria-hidden="true"></div>
+<div class="central-nav" id="centralNav" aria-label="Centralized Navigation Menu" aria-hidden="true">
   <div class="central-nav-header">
     <a href="<?= SITE_URL ?>/index.php" class="central-nav-brand">
       <div class="central-nav-brand-icon">M</div>
@@ -29,7 +29,7 @@ if (!function_exists('renderCentralNav')) {
         <div class="central-nav-brand-sub">Hotel &amp; Dormitory</div>
       </div>
     </a>
-    <button class="central-nav-close" id="centralNavClose" onclick="closeCentralNav()" aria-label="Close Navigation Menu">
+    <button type="button" class="central-nav-close" id="centralNavClose" aria-label="Close Navigation Menu">
       <i class="fa-solid fa-xmark"></i>
     </button>
   </div>
@@ -95,7 +95,7 @@ if (!function_exists('renderCentralNav')) {
       </a>
 
       <div class="central-nav-divider"></div>
-      <a href="<?= SITE_URL ?>/auth/logout.php" class="central-nav-item danger">
+      <a href="<?= SITE_URL ?>/auth/logout.php?portal=<?= h(currentRole() ?: 'user') ?>" class="central-nav-item danger">
         <i class="fa-solid fa-right-from-bracket"></i>
         <span>Logout</span>
       </a>

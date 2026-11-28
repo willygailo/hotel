@@ -52,6 +52,7 @@ foreach ($rooms as $rm) {
         'floor'           => (int)($rm['floor'] ?? 1),
         'capacity'        => (int)($rm['capacity'] ?? 1),
         'price_per_night' => (float)$rm['price_per_night'],
+        'weekend_rate'    => ($rm['weekend_rate'] !== null && (float)$rm['weekend_rate'] > 0) ? (float)$rm['weekend_rate'] : (float)$rm['price_per_night'],
         'description'     => (string)($rm['description'] ?? ''),
         'amenities'       => safeJson($rm['amenities'] ?? null),
         'thumbnail_url'   => roomThumbUrl($rm['thumbnail'] ?? null),
@@ -67,9 +68,9 @@ $mayaPhone  = getSetting('hotel_maya_phone', '+63 *** *** 6963');
 $mayaQrUrl  = '../frontend/assets/images/maya_qr.jpg';
 
 $gcashName   = getSetting('hotel_gcash_name', 'JU***N J.');
-$gcashPhone  = getSetting('hotel_gcash_phone', '+63 964 142 ****');
+$gcashNum    = getSetting('hotel_gcash', '');
+$gcashPhone  = ($gcashNum !== '') ? $gcashNum : getSetting('hotel_gcash_phone', '+63 964 142 ****');
 $gcashUserId = getSetting('hotel_gcash_userid', '••••••••••6SONJP');
-$gcashNum    = getSetting('hotel_gcash', '0964 142 ****');
 $gcashQrUrl  = '../frontend/assets/images/gcash_qr_card.jpg';
 $gcashQrFull = '../frontend/assets/images/gcash_qr.jpg';
 
@@ -132,16 +133,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         if (!$room || $room['status'] === 'maintenance') {
                             getDB()->rollBack();
+                            if ($proofFile) deleteUpload($proofFile);
                             $error = 'The selected room is unavailable or currently under maintenance.';
                         } elseif ($guests > (int)$room['capacity']) {
                             getDB()->rollBack();
+                            if ($proofFile) deleteUpload($proofFile);
                             $error = 'Selected guest count (' . $guests . ') exceeds the maximum capacity (' . (int)$room['capacity'] . ' pax) of ' . h($room['name']) . '.';
                         } elseif ($conflictLock) {
                             getDB()->rollBack();
+                            if ($proofFile) deleteUpload($proofFile);
                             $error = 'This room was just booked by another guest for those dates. Please choose another date or room.';
                         } else {
-                        $nights      = calculateNights($checkIn, $checkOut);
-                        $totalAmount = $nights * $room['price_per_night'];
+                        $quote       = calculateStayQuote((float)$room['price_per_night'], $room['weekend_rate'] !== null ? (float)$room['weekend_rate'] : null, $checkIn, $checkOut);
+                        $nights      = $quote['nights'];
+                        $totalAmount = $quote['estimated_total'];
                         $bookingCode = generateBookingCode();
 
                         // 1. Insert Booking Record
@@ -159,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 [$bookingId, $userId, $totalAmount, $paymentMethod, $refNum, $proofFile, $notes]
                             );
 
-                            createNotification($userId, 'Payment Submitted', "Your receipt for booking #$bookingCode has been received. Verification is in progress.", 'payment');
+                            createNotification($userId, 'Payment Submitted', "Your receipt for booking #$bookingCode has been received. Verification is in progress.", 'payment', 'payment-history.php');
                             auditLog('Created Booking & Uploaded Proof', 'User Module', "Booking #$bookingCode created with immediate payment proof by User #$userId");
                             getDB()->commit();
 
@@ -168,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             exit;
                         } else {
                             // Reserved without instant proof; take to payment screen
-                            createNotification($userId, 'Booking Created!', "Your booking (#$bookingCode) has been created. Please settle your reservation via " . ($paymentMethod === 'gcash' ? 'GCash' : 'PayMaya') . ".", 'booking');
+                            createNotification($userId, 'Booking Created!', "Your booking (#$bookingCode) has been created. Please settle your reservation via " . ($paymentMethod === 'gcash' ? 'GCash' : 'PayMaya') . ".", 'booking', 'payment.php?booking_id=' . $bookingId);
                             auditLog('Created Booking', 'User Module', "Booking #$bookingCode created (pay later) by User #$userId");
                             getDB()->commit();
 
@@ -181,7 +186,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (getDB()->inTransaction()) {
                         getDB()->rollBack();
                     }
-                    throw $e;
+                    if ($proofFile) {
+                        deleteUpload($proofFile);
+                    }
+                    error_log('Booking submission error: ' . $e->getMessage());
+                    $error = 'We could not complete your reservation right now. Please try again.';
                 }
             }
         }
@@ -195,14 +204,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Book a Room — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/user.css')) ?>">
   <?php require_once __DIR__ . '/../components/frontend-frameworks.php'; renderFrontendFrameworks(true, true); ?>
   <style>
     .verified-banner {
@@ -393,7 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
       </div>
 
-      <div class="glass-card" style="max-width:960px;padding:32px;">
+      <div class="glass-card booking-form-card">
         <form action="" method="POST" id="bookingForm" enctype="multipart/form-data">
           <?= csrfField() ?>
           <input type="hidden" name="action_mode" id="actionModeInput" value="book_and_pay">
@@ -537,7 +541,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $prefillCheckIn  = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['check_in'] ?? '') ? $_GET['check_in'] : '';
             $prefillCheckOut = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['check_out'] ?? '') ? $_GET['check_out'] : '';
           ?>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div class="form-row-2col">
             <div class="form-group">
               <label class="form-label">Check-in Date <span class="required">*</span></label>
               <input type="date" name="check_in" id="checkInDate" class="form-control" min="<?= date('Y-m-d') ?>" value="<?= h($prefillCheckIn) ?>" required onchange="onRoomOrDateChanged('check_in')">
@@ -581,9 +585,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
 
           <!-- 3. Pax Count -->
+          <?php $prefillGuests = max(1, min(10, (int)($_POST['guests'] ?? ($_GET['guests'] ?? 1)))); ?>
           <div class="form-group">
             <label class="form-label">Number of Pax (Persons)</label>
-            <input type="number" name="guests" id="guestsCount" class="form-control" value="1" min="1" max="10">
+            <input type="number" name="guests" id="guestsCount" class="form-control" value="<?= $prefillGuests ?>" min="1" max="10">
           </div>
 
           <!-- 4. Special Requests -->
@@ -645,7 +650,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <button type="button" class="btn btn-ghost btn-sm" onclick="closePaymentModal()" style="padding:4px 8px;font-size:1.2rem;color:#94a3b8;">&times;</button>
     </div>
 
-    <div style="padding:24px;max-height:calc(90vh - 140px);overflow-y:auto;">
+    <div class="payment-modal-body">
       
       <!-- Summary Bar in Modal -->
       <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
@@ -666,7 +671,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <!-- Payment Channel Selector Tabs -->
       <div style="margin-bottom:18px;">
         <label class="form-label" style="font-size:0.85rem;margin-bottom:8px;">Choose Payment Channel:</label>
-        <div style="display:flex;gap:12px;">
+        <div class="channel-tabs-row">
           <button type="button" class="channel-tab-btn active tab-maya" id="tabMayaBtn" onclick="switchModalChannel('maya')">
             <i class="fa-solid fa-qrcode" style="font-size:1.2rem;color:#00e074;"></i>
             <div style="text-align:left;">
@@ -703,11 +708,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div style="font-size:0.85rem;color:#fff;margin-bottom:4px;">
               Account: <strong><?= h($mayaName) ?></strong> 
-              <button type="button" class="copy-btn" onclick="copyModalText('<?= h($mayaName) ?>', this)"><i class="fa-regular fa-copy"></i> Copy</button>
+              <button type="button" class="copy-btn" onclick='copyModalText(<?= json_encode($mayaName, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, this)'><i class="fa-regular fa-copy"></i> Copy</button>
             </div>
             <div style="font-size:0.85rem;color:#00e074;margin-bottom:4px;">
               Handle: <strong><?= h($mayaHandle) ?></strong> 
-              <button type="button" class="copy-btn" onclick="copyModalText('<?= h($mayaHandle) ?>', this)"><i class="fa-regular fa-copy"></i> Copy</button>
+              <button type="button" class="copy-btn" onclick='copyModalText(<?= json_encode($mayaHandle, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, this)'><i class="fa-regular fa-copy"></i> Copy</button>
             </div>
             <div style="font-size:0.8rem;color:#cbd5e1;">Mobile: <?= h($mayaPhone) ?></div>
             <div style="font-size:0.75rem;color:#94a3b8;margin-top:6px;line-height:1.4;">
@@ -736,11 +741,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div style="font-size:0.85rem;color:#fff;margin-bottom:4px;">
               Account: <strong><?= h($gcashName) ?></strong> 
-              <button type="button" class="copy-btn" onclick="copyModalText('<?= h($gcashName) ?>', this)"><i class="fa-regular fa-copy"></i> Copy</button>
+              <button type="button" class="copy-btn" onclick='copyModalText(<?= json_encode($gcashName, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, this)'><i class="fa-regular fa-copy"></i> Copy</button>
             </div>
             <div style="font-size:0.85rem;color:#64b5f6;margin-bottom:4px;">
               Mobile: <strong><?= h($gcashPhone) ?></strong> 
-              <button type="button" class="copy-btn" onclick="copyModalText('<?= h($gcashPhone) ?>', this)"><i class="fa-regular fa-copy"></i> Copy</button>
+              <button type="button" class="copy-btn" onclick='copyModalText(<?= json_encode($gcashPhone, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, this)'><i class="fa-regular fa-copy"></i> Copy</button>
             </div>
             <div style="font-size:0.8rem;color:#cbd5e1;">User ID: <?= h($gcashUserId) ?></div>
             <div style="font-size:0.75rem;color:#94a3b8;margin-top:6px;line-height:1.4;">
@@ -818,8 +823,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/user.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/user.js')) ?>"></script>
 <script>
 let activeChannel = 'maya';
 
@@ -1011,18 +1016,61 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+function formatLocalYmd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function computeLocalStayQuote(roomId, fallbackPrice, checkInVal, checkOutVal) {
+  if (!checkInVal || !checkOutVal || checkInVal >= checkOutVal) {
+    return null;
+  }
+  const p1 = checkInVal.split('-').map(Number);
+  const p2 = checkOutVal.split('-').map(Number);
+  if (p1.length !== 3 || p2.length !== 3) return null;
+
+  const d1 = new Date(p1[0], p1[1] - 1, p1[2]);
+  const d2 = new Date(p2[0], p2[1] - 1, p2[2]);
+  const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return null;
+
+  const room = getRoomData(roomId);
+  const weekdayRate = room ? Number(room.price_per_night || 0) : Number(fallbackPrice || 0);
+  const weekendRate = (room && Number(room.weekend_rate || 0) > 0) ? Number(room.weekend_rate) : weekdayRate;
+  if (weekdayRate <= 0) return null;
+
+  let total = 0;
+  let weekendNights = 0;
+  const cursor = new Date(d1.getTime());
+  for (let i = 0; i < diffDays; i++) {
+    const dow = cursor.getDay(); // 0=Sun, 6=Sat (matches PHP date('N') >= 6)
+    if (dow === 0 || dow === 6) {
+      total += weekendRate;
+      weekendNights++;
+    } else {
+      total += weekdayRate;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return { nights: diffDays, weekendNights, weekdayRate, weekendRate, total };
+}
+
 function onRoomOrDateChanged(triggerSource) {
   const checkInInput = document.getElementById('checkInDate');
   const checkOutInput = document.getElementById('checkOutDate');
 
-  // If check-in date changed, advance check-out min date by at least 1 day
+  // If check-in date changed, advance check-out min date by at least 1 local calendar day
   if (triggerSource === 'check_in' && checkInInput.value) {
-    const d = new Date(checkInInput.value + 'T00:00:00');
-    d.setDate(d.getDate() + 1);
-    const minOut = d.toISOString().split('T')[0];
-    checkOutInput.min = minOut;
-    if (checkOutInput.value && checkOutInput.value <= checkInInput.value) {
-      checkOutInput.value = minOut;
+    const parts = checkInInput.value.split('-').map(Number);
+    if (parts.length === 3) {
+      const nextDay = new Date(parts[0], parts[1] - 1, parts[2] + 1);
+      const minOut = formatLocalYmd(nextDay);
+      checkOutInput.min = minOut;
+      if (checkOutInput.value && checkOutInput.value <= checkInInput.value) {
+        checkOutInput.value = minOut;
+      }
     }
   }
 
@@ -1112,8 +1160,9 @@ function checkRoomScheduleAndConflict() {
 
     if (conflict) {
       if (conflictAlert) {
+        const safeEsc = (v) => (typeof escapeHtml === 'function') ? escapeHtml(v) : String(v ?? '');
         conflictAlert.style.display = 'block';
-        conflictDesc.innerHTML = 'Room <strong>' + roomName + '</strong> is already reserved on <strong>' + conflict.display_dates + '</strong> (Booking #' + conflict.booking_code + '). Please pick different dates to prevent duplicate booking.';
+        conflictDesc.innerHTML = 'Room <strong>' + safeEsc(roomName) + '</strong> is already reserved on <strong>' + safeEsc(conflict.display_dates) + '</strong> (Booking #' + safeEsc(conflict.booking_code) + '). Please pick different dates to prevent duplicate booking.';
       }
       checkInInput.style.borderColor = '#ef4444';
       checkOutInput.style.borderColor = '#ef4444';
@@ -1160,19 +1209,15 @@ function updatePriceCalculator() {
   const checkInVal = checkInInput.value;
   const checkOutVal = checkOutInput.value;
 
-  if (checkInVal && checkOutVal) {
-    const d1 = new Date(checkInVal + 'T00:00:00');
-    const d2 = new Date(checkOutVal + 'T00:00:00');
-    const diffTime = d2.getTime() - d1.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays > 0 && price > 0) {
-      const total = diffDays * price;
-      summaryRoomName.textContent = roomName;
-      summaryDatesText.textContent = diffDays + (diffDays === 1 ? ' night' : ' nights') + ' · Rate: ₱' + price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '/night';
-      summaryTotalText.textContent = '₱' + total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-      return;
-    }
+  const quote = computeLocalStayQuote(roomSelect.value, price, checkInVal, checkOutVal);
+  if (quote) {
+    summaryRoomName.textContent = roomName;
+    const rateNote = (quote.weekendNights > 0 && quote.weekendRate !== quote.weekdayRate)
+      ? ` · Weekday ₱${quote.weekdayRate.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} / Weekend ₱${quote.weekendRate.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+      : ` · Rate: ₱${quote.weekdayRate.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}/night`;
+    summaryDatesText.textContent = quote.nights + (quote.nights === 1 ? ' night' : ' nights') + rateNote;
+    summaryTotalText.textContent = '₱' + quote.total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    return;
   }
 
   if (price > 0) {
@@ -1214,11 +1259,9 @@ function openPaymentModal() {
   const selectedOption = roomSelect.options[roomSelect.selectedIndex];
   const price = parseFloat(selectedOption.getAttribute('data-price')) || 0;
   const roomName = selectedOption.getAttribute('data-name') || selectedOption.text;
-
-  const d1 = new Date(checkIn + 'T00:00:00');
-  const d2 = new Date(checkOut + 'T00:00:00');
-  const diffDays = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-  const total = diffDays * price;
+  const quote = computeLocalStayQuote(roomSelect.value, price, checkIn, checkOut);
+  const diffDays = quote ? quote.nights : 1;
+  const total = quote ? quote.total : price;
 
   document.getElementById('modalRoomName').textContent = roomName;
   document.getElementById('modalStayDates').textContent = checkIn + ' to ' + checkOut + ' (' + diffDays + (diffDays === 1 ? ' night' : ' nights') + ')';
@@ -1242,22 +1285,29 @@ function closePaymentModal(e) {
 }
 
 function copyModalText(text, btn) {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => {
-      const orig = btn.innerHTML;
-      btn.innerHTML = '<i class="fa-solid fa-check" style="color:#00e074;"></i> Copied!';
-      setTimeout(() => btn.innerHTML = orig, 1800);
-    });
-  } else {
-    const temp = document.createElement('input');
-    temp.value = text;
-    document.body.appendChild(temp);
-    temp.select();
-    document.execCommand('copy');
-    document.body.removeChild(temp);
+  const showAck = () => {
     const orig = btn.innerHTML;
     btn.innerHTML = '<i class="fa-solid fa-check" style="color:#00e074;"></i> Copied!';
     setTimeout(() => btn.innerHTML = orig, 1800);
+  };
+  if (typeof copyToClipboard === 'function') {
+    copyToClipboard(text, showAck);
+    return;
+  }
+  const fallback = () => {
+    const temp = document.createElement('textarea');
+    temp.value = text;
+    temp.setAttribute('readonly', '');
+    temp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+    document.body.appendChild(temp);
+    temp.select();
+    try { document.execCommand('copy'); } finally { document.body.removeChild(temp); }
+    showAck();
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(showAck).catch(fallback);
+  } else {
+    fallback();
   }
 }
 

@@ -15,18 +15,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 2. Universal Live Table Search ([data-table-search] -> data-table-target)
+  // 2. Universal Live Table Search (Cached + Debounced for 0ms workstation typing lag)
   const searchInputs = document.querySelectorAll('[data-table-search], #adminTableSearch');
   searchInputs.forEach(input => {
     const targetSelector = input.getAttribute('data-table-target') || '.table, .admin-table';
-    input.addEventListener('input', (e) => {
-      const term = (e.target.value || '').toLowerCase().trim();
+    let debounceTimer = null;
+    const runFilter = () => {
+      const term = (input.value || '').toLowerCase().trim();
       const rows = document.querySelectorAll(`${targetSelector} tbody tr`);
       rows.forEach(row => {
         if (row.hasAttribute('data-empty-row')) return;
-        const text = (row.innerText || '').toLowerCase();
-        row.style.display = text.includes(term) ? '' : 'none';
+        if (row.dataset.searchCache === undefined) {
+          row.dataset.searchCache = (row.textContent || '').toLowerCase().replace(/\s+/g, ' ');
+        }
+        row.style.display = (term === '' || row.dataset.searchCache.includes(term)) ? '' : 'none';
       });
+    };
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => window.requestAnimationFrame(runFilter), 90);
     });
   });
 
@@ -48,6 +55,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('keydown', (e) => {
+    // Workstation shortcut: press '/' to focus search input
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = (document.activeElement?.tagName || '').toLowerCase();
+      if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+        const firstSearch = document.querySelector('[data-table-search], #adminTableSearch, input[name="q"]');
+        if (firstSearch) {
+          e.preventDefault();
+          firstSearch.focus();
+          firstSearch.select();
+        }
+      }
+      return;
+    }
     if (e.key === 'Escape') {
       document.querySelectorAll('.admin-modal-overlay, .timeline-modal').forEach(modal => {
         if (modal.style.display && modal.style.display !== 'none') {

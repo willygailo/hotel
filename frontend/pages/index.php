@@ -56,10 +56,11 @@ $userBookings = isLoggedIn() ? dbRows("
     FROM bookings b 
     JOIN rooms r ON b.room_id = r.id 
     LEFT JOIN reviews rev ON b.id = rev.booking_id 
-    WHERE b.user_id = ? AND rev.id IS NULL
+    WHERE b.user_id = ? AND b.status IN ('confirmed', 'checked_in', 'checked_out') AND rev.id IS NULL
     ORDER BY b.id DESC
 ", [currentUserId()]) : [];
 
+$activeRoomsTotal = (int)(dbRow("SELECT COUNT(*) as cnt FROM rooms WHERE status != 'maintenance'")['cnt'] ?? count($rooms));
 $reviewCount = dbRow("SELECT COUNT(*) as cnt FROM reviews WHERE status='approved'")['cnt'] ?? 0;
 $totalBookings = dbRow("SELECT COUNT(*) as cnt FROM bookings WHERE status NOT IN ('cancelled','rejected')")['cnt'] ?? 0;
 $hotelName = getSetting('hotel_name', 'Marvelous Hotel');
@@ -84,22 +85,18 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
   <meta name="twitter:description" content="Book hotel rooms, dormitories, and studios online with AI recommendations at <?= h($hotelName) ?>.">
   <meta name="twitter:image" content="<?= ASSETS_URL ?>/images/hotel/hero-bg.jpg">
 
-  <!-- Performance Preconnect & Resource Hints -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <!-- Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <!-- Performance Preconnect, Preload & Resource Hints -->
+  <link rel="preload" as="image" href="<?= h(ASSETS_URL) ?>/images/hotel/hero-bg.jpg">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
   <!-- Main CSS -->
-  <link rel="stylesheet" href="frontend/assets/css/base.css">
-  <link rel="stylesheet" href="frontend/assets/css/public.css">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/public.css')) ?>">
 
   <style>
     /* ===== HERO ===== */
     .hero {
       min-height: 100vh;
+      min-height: 100dvh;
       position: relative;
       display: flex;
       align-items: center;
@@ -349,25 +346,9 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
       pointer-events: none;
     }
     .cta-section .section-title { margin-bottom: 16px; }
-
-    /* ===== FOOTER ===== */
-    footer {
-      background: var(--navy-card);
-      border-top: 1px solid var(--border);
-      padding: 60px 0 30px;
+    @media (max-width: 600px) {
+      .cta-section { padding: 40px 20px; }
     }
-    .footer-grid {
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr;
-      gap: 48px;
-      margin-bottom: 48px;
-    }
-    .footer-brand-desc { font-size: 0.875rem; color: var(--text-muted); line-height: 1.7; margin: 16px 0; }
-    .footer-heading { font-size: 0.8rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
-    .footer-link { display: block; font-size: 0.875rem; color: var(--text-muted); padding: 4px 0; transition: var(--transition); }
-    .footer-link:hover { color: var(--text-main); padding-left: 6px; }
-    .footer-bottom { border-top: 1px solid var(--border); padding-top: 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-    .footer-bottom-text { font-size: 0.8rem; color: var(--text-muted); }
 
     /* ===== SCROLL ANIMATIONS ===== */
     .reveal {
@@ -520,7 +501,7 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
       </div>
       <div class="hero-stats">
         <div class="hero-stat">
-          <div class="hero-stat-value">9+</div>
+          <div class="hero-stat-value"><?= max(1, $activeRoomsTotal) ?></div>
           <div class="hero-stat-label">Room Options</div>
         </div>
         <div class="hero-stat">
@@ -945,7 +926,7 @@ $hotelTagline = getSetting('hotel_tagline', 'Your Home Away From Home');
         <a href="<?= currentRole() ?>/dashboard.php" class="footer-link">Dashboard</a>
         <a href="user/my-bookings.php" class="footer-link">My Bookings</a>
         <a href="user/payment-history.php" class="footer-link">Payments</a>
-        <a href="auth/logout.php" class="footer-link">Logout</a>
+        <a href="auth/logout.php?portal=<?= h(currentRole() ?: 'user') ?>" class="footer-link">Logout</a>
         <?php endif; ?>
       </div>
       <div>
@@ -980,11 +961,14 @@ renderCentralNav('home');
   }, { threshold: 0.08 });
   document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-  // Particles (lighter count on mobile viewports for smooth 60fps scrolling)
+  // Particles (desktop/laptop only & respects reduced-motion for 60fps Android scrolling)
   function createParticles() {
     const container = document.getElementById('particles');
     if (!container) return;
-    const count = window.innerWidth < 768 ? 8 : 20;
+    if (window.innerWidth < 768 || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+      return;
+    }
+    const count = 16;
     for(let i = 0; i < count; i++) {
       const p = document.createElement('div');
       p.className = 'particle';
@@ -1017,7 +1001,7 @@ renderCentralNav('home');
     if (m) m.style.display = 'none';
   }
 
-  (function() {
+  function initReviewStarPicker() {
     const starLabels = {
       1: '1.0 — Needs Improvement',
       2: '2.0 — Below Average',
@@ -1048,14 +1032,24 @@ renderCentralNav('home');
       }
 
       stars.forEach(s => {
+        s.setAttribute('role', 'button');
+        s.setAttribute('tabindex', '0');
+        s.setAttribute('aria-label', 'Rate ' + s.getAttribute('data-val') + ' star(s)');
         s.addEventListener('mouseenter', () => {
           highlightStars(parseInt(s.getAttribute('data-val'), 10));
         });
 
-        s.addEventListener('click', () => {
+        const selectStar = () => {
           const chosen = parseInt(s.getAttribute('data-val'), 10);
           input.value = chosen;
           highlightStars(chosen);
+        };
+        s.addEventListener('click', selectStar);
+        s.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            selectStar();
+          }
         });
       });
 
@@ -1063,12 +1057,17 @@ renderCentralNav('home');
         highlightStars(parseInt(input.value || 5, 10));
       });
     }
-  })();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initReviewStarPicker);
+  } else {
+    initReviewStarPicker();
+  }
 </script>
 
 <!-- ======================== WRITE A REVIEW MODAL ======================== -->
-<div id="writeReviewModal" style="display:none;position:fixed;inset:0;background:rgba(5,10,24,0.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px;" onclick="closeWriteReviewModal()">
-  <div class="glass-card" style="max-width:540px;width:100%;max-height:90vh;overflow-y:auto;padding:32px;background:var(--navy-card,#0f172a);border:1px solid rgba(201,168,76,0.3);border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,0.7);" onclick="event.stopPropagation()">
+<div id="writeReviewModal" style="display:none;position:fixed;inset:0;background:rgba(5,10,24,0.88);z-index:9999;align-items:center;justify-content:center;padding:16px;" onclick="closeWriteReviewModal()">
+  <div class="glass-card" style="max-width:540px;width:100%;max-height:90dvh;overflow-y:auto;padding:24px;background:var(--navy-card,#0f172a);border:1px solid rgba(201,168,76,0.3);border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,0.7);" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:20px;">
       <div style="display:flex;align-items:center;gap:10px;">
         <span style="width:40px;height:40px;border-radius:10px;background:rgba(201,168,76,0.15);display:flex;align-items:center;justify-content:center;color:var(--gold);font-size:1.2rem;">
@@ -1129,7 +1128,7 @@ renderCentralNav('home');
   </div>
 </div>
 
-<script src="frontend/assets/js/core.js"></script>
-<script src="frontend/assets/js/public.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/public.js')) ?>"></script>
 </body>
 </html>

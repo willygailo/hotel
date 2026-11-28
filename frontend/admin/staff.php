@@ -99,8 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 if ($emailExists) {
                     setFlash('error', "The email '$email' is already in use by another account.");
                 } else {
-                    dbExec("UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?, status = ? WHERE id = ? AND role = 'staff'", [
-                        $fn, $ln, $email, $phone, $status, $sId
+                    dbExec("UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?, status = ?, remember_token = IF(? = 'inactive', NULL, remember_token), remember_expires = IF(? = 'inactive', NULL, remember_expires) WHERE id = ? AND role = 'staff'", [
+                        $fn, $ln, $email, $phone, $status, $status, $status, $sId
                     ]);
                     auditLog('Admin Updated Staff Account', 'Admin Module', "Admin updated Staff #$sId ($email)");
                     setFlash('success', "Staff account for <strong>" . h("$fn $ln") . "</strong> (" . h($email) . ") updated successfully.");
@@ -147,7 +147,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $stf = dbRow("SELECT * FROM users WHERE id = ? AND role = 'staff'", [$sId]);
         if ($stf) {
             $newStat = $stf['status'] === 'active' ? 'inactive' : 'active';
-            dbExec("UPDATE users SET status = ? WHERE id = ?", [$newStat, $sId]);
+            if ($newStat === 'inactive') {
+                dbExec("UPDATE users SET status = ?, remember_token = NULL, remember_expires = NULL WHERE id = ?", [$newStat, $sId]);
+            } else {
+                dbExec("UPDATE users SET status = ? WHERE id = ?", [$newStat, $sId]);
+            }
             auditLog('Toggled Staff Status', 'Admin Module', "Staff #$sId status changed to $newStat");
             setFlash('info', "Staff status changed.");
         }
@@ -165,11 +169,7 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Manage Staff — Admin Portal</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
   <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
   <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
 </head>
@@ -181,7 +181,7 @@ $staffMembers = dbRows("SELECT * FROM users WHERE role = 'staff' ORDER BY id DES
   <main class="dashboard-main">
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:12px;">
-        <button class="admin-mobile-toggle" data-sidebar-toggle><i class="fa-solid fa-bars"></i></button>
+        <button type="button" class="sidebar-collapse-btn" data-sidebar-collapse title="Toggle Compact Sidebar" aria-label="Toggle Compact Sidebar" aria-expanded="true"><i class="fa-solid fa-bars-staggered"></i></button>
         <div class="topbar-title">Staff Administration &amp; Roles</div>
       </div>
     </header>
@@ -516,7 +516,7 @@ function copyStaffPortalUrl() {
 }
 </script>
 
-<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
-<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

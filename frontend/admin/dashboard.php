@@ -56,11 +56,7 @@ $securityAlerts = dbRows("SELECT * FROM ai_logs WHERE flagged = 1 ORDER BY id DE
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
   <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
   <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
 </head>
@@ -74,7 +70,7 @@ $securityAlerts = dbRows("SELECT * FROM ai_logs WHERE flagged = 1 ORDER BY id DE
   <main class="dashboard-main">
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:12px;">
-        <button class="admin-mobile-toggle" data-sidebar-toggle><i class="fa-solid fa-bars"></i></button>
+        <button type="button" class="sidebar-collapse-btn" data-sidebar-collapse title="Toggle Compact Sidebar" aria-label="Toggle Compact Sidebar" aria-expanded="true"><i class="fa-solid fa-bars-staggered"></i></button>
         <div class="topbar-title">Control Hub &amp; Executive Management</div>
       </div>
       <div class="topbar-actions">
@@ -84,11 +80,6 @@ $securityAlerts = dbRows("SELECT * FROM ai_logs WHERE flagged = 1 ORDER BY id DE
 
     <div class="page-content">
       <?= renderFlash() ?>
-
-      <div class="desktop-workstation-note">
-        <i class="fa-solid fa-laptop"></i>
-        <span><strong>Workstation Mode:</strong> Ang Admin Portal ay dinisenyo para sa Laptop at Desktop PC screens (Chrome, Edge, Firefox) para sa pinakamataas na produktibidad at data overview.</span>
-      </div>
 
       <div class="page-header">
         <div>
@@ -404,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadAdminAiInsights();
 });
 </script>
-<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
-<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

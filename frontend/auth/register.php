@@ -8,6 +8,8 @@ require_once __DIR__ . '/../../backend/core/rate-limiter.php';
 
 redirectIfLoggedIn();
 
+applyAuthRateLimit('register');
+
 $error = '';
 $success = '';
 
@@ -67,25 +69,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'system'
             );
 
-            auditLog('New User Registration', 'Auth', "User ID $newUserId registered and auto-logged in ($email)");
+            auditLog('New User Registration', 'Auth', "User ID $newUserId registered ($email; email_verified={$emailVerified})");
 
-            // Auto-login registered user so they can immediately access the main hotel website!
+            // If SMTP email verification is required, do not bypass verification via auto-login
+            if (!$emailVerified) {
+                setFlash('info', 'Account created! Please check your email inbox to verify your address before logging in.');
+                header('Location: login.php?email=' . urlencode($email));
+                exit;
+            }
+
+            // Auto-login verified user so they can immediately access the main hotel website
             session_regenerate_id(true);
             $_SESSION['user_id']     = $newUserId;
             $_SESSION['user_name']   = formatFullName($firstName, $middleName, $lastName, $suffix);
             $_SESSION['user_email']  = $email;
             $_SESSION['user_role']   = 'user';
             $_SESSION['user_avatar'] = 'default-avatar.png';
+            $_SESSION['_status_checked_at'] = time();
 
             dbExec("UPDATE users SET last_login = NOW() WHERE id = ?", [$newUserId]);
 
             setFlash('success', 'Registration successful! Welcome to Marvelous Hotel.');
-            $regRedirect = $_GET['redirect'] ?? '';
-            if (!empty($regRedirect)) {
-                header("Location: " . filter_var($regRedirect, FILTER_SANITIZE_URL));
-            } else {
-                header("Location: ../index.php");
-            }
+            $target = getSafeRedirectUrl($_GET['redirect'] ?? '', SITE_URL . '/index.php');
+            header('Location: ' . $target);
             exit;
         }
     }
@@ -97,14 +103,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Register — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/auth.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/auth.css')) ?>">
 </head>
 <body style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--navy);">
 
@@ -187,14 +188,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="form-group">
           <label class="form-label">Password <span class="required">*</span></label>
           <div class="form-icon-wrap">
-            <input type="password" name="password" id="regPass" class="form-control" placeholder="••••••••" required autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="new-password">
+            <i class="fa-solid fa-lock form-icon"></i>
+            <input type="password" name="password" id="regPass" class="form-control" placeholder="Min. 8 chars" minlength="8" required autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="new-password">
             <i class="fa-solid fa-eye form-icon-right" onclick="togglePass('regPass', this)" style="cursor:pointer;" title="Show/Hide"></i>
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">Confirm <span class="required">*</span></label>
           <div class="form-icon-wrap">
-            <input type="password" name="confirm_password" id="regConfirmPass" class="form-control" placeholder="••••••••" required autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="new-password">
+            <i class="fa-solid fa-lock form-icon"></i>
+            <input type="password" name="confirm_password" id="regConfirmPass" class="form-control" placeholder="Repeat password" minlength="8" required autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="new-password">
             <i class="fa-solid fa-eye form-icon-right" onclick="togglePass('regConfirmPass', this)" style="cursor:pointer;" title="Show/Hide"></i>
           </div>
         </div>
@@ -210,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-<script src="../frontend/assets/js/core.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
 <script>
 let checkTimeout = null;
 const fnInput  = document.getElementById('regFirstName');
@@ -238,21 +241,26 @@ function runNameCheck() {
   fetch('check-name.php?' + query)
     .then(res => res.json())
     .then(data => {
+      if (!badge) return;
       badge.style.display = 'block';
+      badge.innerHTML = '';
+      const icon = document.createElement('i');
       if (data.available) {
         badge.style.background = 'rgba(0, 210, 106, 0.15)';
         badge.style.border = '1px solid rgba(0, 210, 106, 0.35)';
         badge.style.color = '#00e074';
-        badge.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + data.message;
+        icon.className = 'fa-solid fa-circle-check';
       } else {
         badge.style.background = 'rgba(235, 32, 38, 0.15)';
         badge.style.border = '1px solid rgba(235, 32, 38, 0.35)';
         badge.style.color = '#ff6b6b';
-        badge.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ' + data.message;
+        icon.className = 'fa-solid fa-circle-xmark';
       }
+      badge.appendChild(icon);
+      badge.appendChild(document.createTextNode(' ' + String(data.message || '')));
     })
     .catch(() => {
-      badge.style.display = 'none';
+      if (badge) badge.style.display = 'none';
     });
 }
 

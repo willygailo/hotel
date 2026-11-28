@@ -11,25 +11,8 @@ redirectIfLoggedIn();
 applyAuthRateLimit('login');
 
 $error = '';
-$errorType = ''; // 'email' | 'password' | 'role' | 'general'
+$errorType = ''; // 'email' | 'password' | 'role' | 'unverified' | 'general'
 $redirectUrl = $_GET['redirect'] ?? '';
-
-/**
- * Validates and returns a safe relative redirect URL to prevent Open Redirect vulnerabilities.
- */
-function getSafeRedirectUrl(?string $url, string $default = ''): string {
-    if (empty($default)) {
-        $default = SITE_URL . '/index.php';
-    }
-    if (empty($url)) {
-        return $default;
-    }
-    $sanitized = filter_var($url, FILTER_SANITIZE_URL);
-    if (preg_match('/^(\/[^\/]|(?:\.\.\/)+)/', $sanitized)) {
-        return $sanitized;
-    }
-    return $default;
-}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = strtolower(trim($_POST['email'] ?? ''));
@@ -91,8 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (!$account['email_verified']) {
-                    $errorType = 'general';
-                    $error = 'Your email is not yet verified. Check your inbox for the verification link.';
+                    $errorType = 'unverified';
+                    $error = 'Your email address is not yet verified. Please check your inbox for the verification link or request a new one below.';
                     auditLog('User Login Blocked (Unverified)', 'User Auth', "Unverified user {$email} attempted to log in.");
                     logAuth('login', $email, false, ['reason' => 'unverified']);
                 } else {
@@ -103,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['user_email']  = $account['email'];
                     $_SESSION['user_role']   = 'user';
                     $_SESSION['user_avatar'] = $account['avatar'] ?: 'default-avatar.png';
+                    $_SESSION['_status_checked_at'] = time();
 
                     // Persistent "Remember Me" for 30 days
                     if ($remember) {
@@ -113,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         setcookie('MH_REMEMBER_USER', $account['id'] . ':' . $rawToken, [
                             'expires'  => time() + (86400 * 30),
                             'path'     => '/',
-                            'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+                            'secure'   => isHttpsRequest(),
                             'httponly' => true,
                             'samesite' => 'Lax',
                         ]);
@@ -139,14 +123,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/auth.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/auth.css')) ?>">
   <style>
     .caps-indicator {
       display: none;
@@ -214,6 +193,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <i class="fa-solid fa-lock-open"></i> Reset My Password &rarr;
                 </a>
               </div>
+            <?php elseif ($errorType === 'unverified'): ?>
+              <div style="margin-top:8px;">
+                <a href="resend-verification.php?email=<?= urlencode($_POST['email'] ?? '') ?>" style="color:var(--gold);font-weight:700;text-decoration:underline;">
+                  <i class="fa-solid fa-envelope-open-text"></i> Resend Verification Email &rarr;
+                </a>
+              </div>
             <?php endif; ?>
           </div>
         </div>
@@ -262,7 +247,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
 
     <div style="margin-top:24px;text-align:center;font-size:0.88rem;color:var(--text-muted);border-top:1px solid var(--border-subtle);padding-top:20px;">
-      Don't have an account? <a href="register.php" style="color:var(--gold);font-weight:700;">Register Here &rarr;</a>
+      Don't have an account? <a href="register.php<?= $redirectUrl !== '' ? '?redirect=' . urlencode($redirectUrl) : '' ?>" style="color:var(--gold);font-weight:700;">Register Here &rarr;</a>
     </div>
     <div style="text-align:center;margin-top:12px;font-size:0.8rem;color:var(--text-muted);">
       Need help? <a href="forgot-password.php" style="color:var(--gold);font-weight:600;">Contact Admin to Reset</a>
@@ -308,7 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       });
     }
   </script>
-<script src="../frontend/assets/js/core.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
 <?php
 if (!empty($_SESSION['password_reset_watch']['token'])) {
     require_once __DIR__ . '/../components/reset-status-modal.php';

@@ -21,7 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
         $allowedSettings = [
             'hotel_name', 'hotel_tagline', 'hotel_email', 'hotel_phone',
             'hotel_address', 'check_in_time', 'check_out_time',
-            'hotel_maya_name', 'hotel_maya_handle', 'hotel_maya_phone', 'hotel_gcash',
+            'hotel_maya_name', 'hotel_maya_handle', 'hotel_maya_phone',
+            'hotel_gcash', 'hotel_gcash_name', 'hotel_gcash_userid',
         ];
         if (!empty($_POST['settings']) && is_array($_POST['settings'])) {
             $errMsg = null;
@@ -36,6 +37,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
                     break;
                 }
                 $toSave[$key] = $trimmedVal;
+            }
+            if (array_key_exists('hotel_gcash', $toSave)) {
+                $toSave['hotel_gcash_phone'] = $toSave['hotel_gcash'];
             }
 
             if ($errMsg !== null) {
@@ -71,11 +75,7 @@ foreach ($rawSettings as $row) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>System Settings — Admin Portal</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
   <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
   <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
   <style>
@@ -121,7 +121,7 @@ foreach ($rawSettings as $row) {
   <main class="dashboard-main">
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:12px;">
-        <button class="admin-mobile-toggle" data-sidebar-toggle><i class="fa-solid fa-bars"></i></button>
+        <button type="button" class="sidebar-collapse-btn" data-sidebar-collapse title="Toggle Compact Sidebar" aria-label="Toggle Compact Sidebar" aria-expanded="true"><i class="fa-solid fa-bars-staggered"></i></button>
         <div class="topbar-title">Global Configuration &amp; Policies</div>
       </div>
     </header>
@@ -205,7 +205,15 @@ foreach ($rawSettings as $row) {
             </div>
             <div class="form-group">
               <label class="form-label">GCash Registered Number</label>
-              <input type="text" name="settings[hotel_gcash]" class="form-control" value="<?= h($s['hotel_gcash'] ?? '') ?>">
+              <input type="text" name="settings[hotel_gcash]" class="form-control" value="<?= h($s['hotel_gcash'] ?? ($s['hotel_gcash_phone'] ?? '')) ?>">
+            </div>
+            <div class="form-group">
+              <label class="form-label">GCash Account Name</label>
+              <input type="text" name="settings[hotel_gcash_name]" class="form-control" value="<?= h($s['hotel_gcash_name'] ?? '') ?>" placeholder="e.g. JUAN D.">
+            </div>
+            <div class="form-group">
+              <label class="form-label">GCash User ID / Reference</label>
+              <input type="text" name="settings[hotel_gcash_userid]" class="form-control" value="<?= h($s['hotel_gcash_userid'] ?? '') ?>" placeholder="Optional masked ID">
             </div>
           </div>
         </div>
@@ -219,7 +227,7 @@ foreach ($rawSettings as $row) {
   </main>
 </div>
 
-<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
-<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

@@ -1,4 +1,3 @@
-
 <?php
 require_once __DIR__ . '/../../backend/core/config.php';
 require_once __DIR__ . '/../../backend/core/db.php';
@@ -17,10 +16,14 @@ throttleStaleBookingSweep(24, 15);
 
 $hotelName = getSetting('hotel_name', 'Marvelous Hotel');
 
-// Filter inputs
+// Filter inputs (including homepage Quick Search params: check_in, check_out, guests)
 $categoryFilter = strtolower(trim($_GET['category'] ?? ''));
 $typeFilter = $_GET['type'] ?? '';
 $searchQuery = trim($_GET['q'] ?? '');
+$checkInFilter = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($_GET['check_in'] ?? '')) ? (string)$_GET['check_in'] : '';
+$checkOutFilter = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($_GET['check_out'] ?? '')) ? (string)$_GET['check_out'] : '';
+$guestsFilter = max(0, (int)($_GET['guests'] ?? 0));
+$hasValidDateFilter = ($checkInFilter !== '' && $checkOutFilter !== '' && $checkInFilter >= date('Y-m-d') && $checkOutFilter > $checkInFilter);
 
 if ($typeFilter === 'hotel') {
     $categoryFilter = 'hotel';
@@ -44,6 +47,11 @@ if (!empty($typeFilter)) {
     $params[] = $typeFilter;
 }
 
+if ($guestsFilter > 0) {
+    $sql .= " AND r.capacity >= ?";
+    $params[] = $guestsFilter;
+}
+
 if (!empty($searchQuery)) {
     $sql .= " AND (r.name LIKE ? OR r.description LIKE ?)";
     $params[] = "%$searchQuery%";
@@ -52,6 +60,21 @@ if (!empty($searchQuery)) {
 
 $sql .= " ORDER BY CASE WHEN rt.name = 'Dormitory' THEN 1 ELSE 0 END ASC, r.price_per_night ASC, r.room_number ASC";
 $rooms = dbRows($sql, $params);
+if ($hasValidDateFilter) {
+    $rooms = array_values(array_filter($rooms, fn($rm) => isRoomAvailable((int)$rm['id'], $checkInFilter, $checkOutFilter)));
+}
+$bookQueryExtra = '';
+$bookExtraArr = [];
+if ($hasValidDateFilter) {
+    $bookExtraArr['check_in'] = $checkInFilter;
+    $bookExtraArr['check_out'] = $checkOutFilter;
+}
+if ($guestsFilter > 0) {
+    $bookExtraArr['guests'] = $guestsFilter;
+}
+if (!empty($bookExtraArr)) {
+    $bookQueryExtra = '&' . http_build_query($bookExtraArr);
+}
 $allActiveCounts = dbRow("SELECT COUNT(*) AS total, SUM(CASE WHEN rt.name = 'Dormitory' THEN 1 ELSE 0 END) AS dorms, SUM(CASE WHEN rt.name != 'Dormitory' THEN 1 ELSE 0 END) AS hotels FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id WHERE r.status != 'maintenance'");
 $totalActiveRoomsCount = (int)($allActiveCounts['total'] ?? count($rooms));
 $totalHotelRoomsCount  = (int)($allActiveCounts['hotels'] ?? 0);
@@ -76,15 +99,9 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
   <meta name="twitter:title" content="Browse All Rooms — <?= h($hotelName) ?>">
   <meta name="twitter:description" content="Explore comfortable dormitories, luxury hotel suites, and private rooms at <?= h($hotelName) ?>.">
   <meta name="twitter:image" content="<?= ASSETS_URL ?>/images/hotel/hero-bg.jpg">
-  <!-- Performance Preconnect & Resource Hints -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="frontend/assets/css/base.css">
-  <link rel="stylesheet" href="frontend/assets/css/public.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/public.css')) ?>">
   <?php require_once __DIR__ . '/../components/frontend-frameworks.php'; renderFrontendFrameworks(true, true); ?>
 </head>
 <body>
@@ -151,21 +168,44 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
     <!-- Filter Form -->
     <div class="glass-card" style="padding:16px 20px;margin-bottom:20px;">
       <form action="" method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
-        <input type="text" name="q" class="form-control" placeholder="Search by name..." value="<?= h($searchQuery) ?>" style="flex:2;min-width:200px;">
-        <select name="type" class="form-control" style="flex:1;min-width:160px;">
+        <input type="text" name="q" class="form-control" placeholder="Search by name..." value="<?= h($searchQuery) ?>" style="flex:2;min-width:180px;">
+        <select name="type" class="form-control" style="flex:1;min-width:150px;">
           <option value="">All Types</option>
           <?php foreach ($roomTypes as $t): ?>
             <option value="<?= h($t['name']) ?>" <?= $typeFilter === $t['name'] ? 'selected' : '' ?>><?= h($t['name']) ?></option>
           <?php endforeach; ?>
         </select>
+        <input type="number" name="guests" class="form-control" min="1" max="10" placeholder="Pax" value="<?= $guestsFilter > 0 ? $guestsFilter : '' ?>" style="width:95px;" title="Minimum guests capacity">
+        <?php if ($hasValidDateFilter): ?>
+          <input type="hidden" name="check_in" value="<?= h($checkInFilter) ?>">
+          <input type="hidden" name="check_out" value="<?= h($checkOutFilter) ?>">
+        <?php endif; ?>
         <button type="submit" class="btn btn-gold"><i class="fa-solid fa-filter"></i> Filter</button>
+        <?php if ($hasValidDateFilter || $guestsFilter > 0 || $searchQuery !== '' || $typeFilter !== '' || $categoryFilter !== ''): ?>
+          <a href="rooms.php" class="btn btn-ghost btn-sm" title="Reset all filters"><i class="fa-solid fa-rotate-left"></i> Reset</a>
+        <?php endif; ?>
       </form>
+      <?php if ($hasValidDateFilter || $guestsFilter > 0): ?>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:0.78rem;color:#cbd5e1;">
+          <span style="color:var(--gold);font-weight:600;"><i class="fa-solid fa-sliders"></i> Active Search:</span>
+          <?php if ($hasValidDateFilter): ?>
+            <span class="badge" style="background:rgba(34,197,94,0.14);color:#86efac;border:1px solid rgba(34,197,94,0.35);">
+              <i class="fa-solid fa-calendar-check"></i> Open <?= formatDate($checkInFilter, 'M d') ?> &rarr; <?= formatDate($checkOutFilter, 'M d, Y') ?>
+            </span>
+          <?php endif; ?>
+          <?php if ($guestsFilter > 0): ?>
+            <span class="badge" style="background:rgba(59,130,246,0.14);color:#93c5fd;border:1px solid rgba(59,130,246,0.35);">
+              <i class="fa-solid fa-users"></i> Min <?= $guestsFilter ?> Pax
+            </span>
+          <?php endif; ?>
+        </div>
+      <?php endif; ?>
     </div>
 
     <!-- Live REST API Quick Availability Bar (Tailwind CSS + Alpine.js + Slim 4) -->
-    <div x-data="roomsQuickAvailability()" class="glass-card rounded-2xl border border-gold/25 px-5 py-4 mb-8">
-      <div class="flex flex-wrap items-end gap-3">
-        <div class="flex-1 min-w-[180px]">
+    <div x-data="roomsQuickAvailability()" class="glass-card rounded-2xl border border-gold/25 px-4 sm:px-5 py-4 mb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end gap-3">
+        <div class="sm:col-span-2 lg:flex-1 lg:min-w-[180px]">
           <label class="block text-[11px] font-semibold uppercase tracking-wider text-gold mb-1">
             <i class="fa-solid fa-bolt mr-1"></i> Instant Availability Check
           </label>
@@ -176,15 +216,15 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="min-w-[145px]">
+        <div class="lg:min-w-[145px]">
           <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Check-in</label>
           <input type="date" x-model="checkIn" min="<?= date('Y-m-d') ?>" class="form-control">
         </div>
-        <div class="min-w-[145px]">
+        <div class="lg:min-w-[145px]">
           <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Check-out</label>
           <input type="date" x-model="checkOut" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" class="form-control">
         </div>
-        <button type="button" @click="checkNow()" :disabled="loading" class="btn btn-gold" style="height:46px;white-space:nowrap;">
+        <button type="button" @click="checkNow()" :disabled="loading" class="btn btn-gold w-full sm:col-span-2 lg:w-auto" style="height:46px;white-space:nowrap;">
           <i class="fa-solid" :class="loading ? 'fa-spinner fa-spin' : 'fa-magnifying-glass'"></i>
           <span x-text="loading ? 'Checking...' : 'Check Dates'"></span>
         </button>
@@ -207,8 +247,8 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
       function roomsQuickAvailability() {
         return {
           roomId: '',
-          checkIn: '<?= date('Y-m-d') ?>',
-          checkOut: '<?= date('Y-m-d', strtotime('+1 day')) ?>',
+          checkIn: '<?= h($hasValidDateFilter ? $checkInFilter : date('Y-m-d')) ?>',
+          checkOut: '<?= h($hasValidDateFilter ? $checkOutFilter : date('Y-m-d', strtotime('+1 day'))) ?>',
           loading: false,
           result: null,
           async checkNow() {
@@ -298,7 +338,7 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
                     <i class="fa-solid fa-id-card"></i> Verify ID to Book
                   </a>
                 <?php else: ?>
-                  <a href="<?= isLoggedIn() ? 'user/booking.php?room_id='.$r['id'] : 'auth/login.php?redirect='.urlencode('user/booking.php?room_id='.$r['id']) ?>" class="btn btn-gold btn-sm">
+                  <a href="<?= isLoggedIn() ? 'user/booking.php?room_id='.$r['id'].$bookQueryExtra : 'auth/login.php?redirect='.urlencode('user/booking.php?room_id='.$r['id'].$bookQueryExtra) ?>" class="btn btn-gold btn-sm">
                     Select &amp; Book
                   </a>
                 <?php endif; ?>
@@ -342,7 +382,7 @@ $currentKyc = isLoggedIn() ? getUserKycStatus(currentUserId()) : null;
         <a href="<?= currentRole() ?>/dashboard.php" class="footer-link">Dashboard</a>
         <a href="user/my-bookings.php" class="footer-link">My Bookings</a>
         <a href="user/payment-history.php" class="footer-link">Payments</a>
-        <a href="auth/logout.php" class="footer-link">Logout</a>
+        <a href="auth/logout.php?portal=<?= h(currentRole() ?: 'user') ?>" class="footer-link">Logout</a>
         <?php endif; ?>
       </div>
       <div>
@@ -366,7 +406,7 @@ require_once __DIR__ . '/../components/central-nav.php';
 renderCentralNav('rooms');
 ?>
 <?php require_once __DIR__ . '/../components/ai-chatbot.php'; ?>
-<script src="frontend/assets/js/core.js"></script>
-<script src="frontend/assets/js/public.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/public.js')) ?>"></script>
 </body>
 </html>

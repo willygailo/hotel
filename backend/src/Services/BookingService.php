@@ -62,6 +62,9 @@ class BookingService
             "UPDATE bookings SET status = 'cancelled', cancelled_reason = ?, cancelled_at = NOW() WHERE id = ? AND user_id = ? AND status = 'pending'",
             [$reason, $bookingId, $userId]
         );
+        if (\function_exists('rejectPendingPaymentsForBooking')) {
+            \rejectPendingPaymentsForBooking($bookingId, 'Auto-rejected: booking cancelled by guest via API');
+        }
         \auditLog('Cancelled Booking', 'REST API', "Guest #{$userId} cancelled Booking #{$booking['booking_code']}");
 
         return [

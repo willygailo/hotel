@@ -20,10 +20,9 @@ $notifs = dbRows("SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Notifications — Marvelous Hotel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/user.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -66,6 +65,17 @@ $notifs = dbRows("SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC
                     <span style="font-size:0.75rem;color:var(--text-muted);"><?= formatDate($n['created_at'], 'M d, Y h:i A') ?></span>
                   </div>
                   <p style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;"><?= h($n['message']) ?></p>
+                  <?php
+                    $rawLink = trim((string)($n['link'] ?? ''));
+                    $safeNotifLink = ($rawLink !== '' && preg_match('~^[a-z0-9_./-]+\.php(?:[?#][a-zA-Z0-9_=&%-]*)?$~', $rawLink)) ? $rawLink : '';
+                  ?>
+                  <?php if ($safeNotifLink !== ''): ?>
+                    <div style="margin-top:8px;">
+                      <a href="<?= h($safeNotifLink) ?>" class="btn btn-ghost btn-sm" style="font-size:0.75rem;padding:4px 10px;color:var(--gold);border-color:rgba(201,168,76,0.35);">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> View Details
+                      </a>
+                    </div>
+                  <?php endif; ?>
                 </div>
               </div>
             <?php endforeach; ?>
@@ -77,8 +87,8 @@ $notifs = dbRows("SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC
   </main>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/user.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/user.js')) ?>"></script>
 <?php require_once __DIR__ . '/../components/ai-chatbot.php'; ?>
 </body>
 </html>

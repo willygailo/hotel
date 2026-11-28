@@ -3,7 +3,7 @@
 // MARVELOUS HOTEL — Shared Portal Sidebar
 // iisang component para sa lahat ng admin/ user/ staff/ pages.
 // Gamit sa page:
-//   require_once __DIR__ . '/../includes/components/sidebar.php';
+//   require_once __DIR__ . '/../components/sidebar.php';
 //   renderSidebar('admin');   // 'admin' | 'user' | 'staff'
 //
 // - Ang aktibong link ay awtomatikong batay sa filename ng page.
@@ -127,8 +127,13 @@ if (!function_exists('renderSidebar')) {
             ];
             $logoutStyle = '';
         }
+        $isWorkstationPortal = ($role === 'admin' || $role === 'staff');
+        if ($isWorkstationPortal) {
+            require_once __DIR__ . '/desktop-only-guard.php';
+            renderDesktopOnlyGuard($role);
+        }
         ?>
-  <aside class="sidebar">
+  <aside class="sidebar" data-portal-role="<?= h($role) ?>">
     <div class="sidebar-header">
       <a href="<?= h((defined('USER_SITE_URL') ? USER_SITE_URL : '..') . '/index.php') ?>" class="nav-logo">
         <div class="nav-logo-icon"<?= $iconStyle !== '' ? ' style="' . $iconStyle . '"' : '' ?>><?= $icon ?></div>
@@ -146,11 +151,16 @@ if (!function_exists('renderSidebar')) {
           <?php
             [$href, $iconClass, $label, $extraStyle, $badgeVar] = array_pad($rawItem, 5, '');
             $badgeCount = is_int($badgeVar) ? $badgeVar : ($badgeVar !== '' ? (int)($GLOBALS[$badgeVar] ?? 0) : 0);
+            $hrefPath = strtok($href, '#?') ?: $href;
+            $hasFragment = strpos($href, '#') !== false;
+            $isActiveLink = !$hasFragment && (basename($hrefPath) === $active);
+            $plainTitle = trim(strip_tags(html_entity_decode($label, ENT_QUOTES | ENT_HTML5, 'UTF-8')));
           ?>
-          <a href="<?= $href ?>" class="sidebar-link<?= basename($href) === $active ? ' active' : '' ?>">
-            <i class="fa-solid <?= $iconClass ?> sidebar-icon"<?= $extraStyle !== '' ? ' style="' . $extraStyle . '"' : '' ?>></i> <?= $label ?>
+          <a href="<?= $href ?>" class="sidebar-link<?= $isActiveLink ? ' active' : '' ?>" title="<?= h($plainTitle) ?>">
+            <i class="fa-solid <?= $iconClass ?> sidebar-icon"<?= $extraStyle !== '' ? ' style="' . $extraStyle . '"' : '' ?>></i>
+            <span class="sidebar-link-text"><?= $label ?></span>
             <?php if ($badgeCount > 0): ?>
-              <span class="badge badge-warning"><?= $badgeCount ?></span>
+              <span class="badge badge-warning sidebar-badge"><?= $badgeCount ?></span>
             <?php endif; ?>
           </a>
         <?php endforeach; ?>
@@ -158,21 +168,22 @@ if (!function_exists('renderSidebar')) {
 
       <?php if ($role === 'staff'): ?>
         <div class="sidebar-nav-label">Limited Access</div>
-        <div style="padding:10px 14px;font-size:0.75rem;color:var(--text-muted);background:rgba(255,255,255,0.02);border-radius:8px;margin:4px 8px;">
+        <div class="sidebar-restricted-note" style="padding:10px 14px;font-size:0.75rem;color:var(--text-muted);background:rgba(255,255,255,0.02);border-radius:8px;margin:4px 8px;">
           <i class="fa-solid fa-lock" style="color:var(--gold);margin-right:4px;"></i> User account management &amp; room pricing are restricted to Super Admin.
         </div>
       <?php endif; ?>
 
-      <a href="../auth/logout.php" class="sidebar-link danger"<?= $logoutStyle !== '' ? ' style="' . $logoutStyle . '"' : '' ?>>
-        <i class="fa-solid fa-right-from-bracket sidebar-icon"></i> Logout
+      <a href="../auth/logout.php?portal=<?= h($role) ?>" class="sidebar-link danger" title="Logout"<?= $logoutStyle !== '' ? ' style="' . $logoutStyle . '"' : '' ?>>
+        <i class="fa-solid fa-right-from-bracket sidebar-icon"></i>
+        <span class="sidebar-link-text">Logout</span>
       </a>
     </nav>
 
     <?php if ($me): ?>
     <div class="sidebar-footer">
-      <div class="sidebar-user">
+      <div class="sidebar-user" title="<?= h($me['name']) ?>">
         <img src="<?= h(getUserAvatarUrl($me['avatar'] ?? null)) ?>" decoding="async" style="object-fit:cover;border-radius:50%;" onerror="this.src='<?= h(assetUrl('images/avatars/default-avatar.png')) ?>'; this.onerror=null;">
-        <div style="overflow:hidden;">
+        <div class="sidebar-user-meta" style="overflow:hidden;">
           <div class="sidebar-user-name"><?= h($me['name']) ?><?= $role === 'admin' ? ' ' . $footRole : '' ?></div>
           <div class="sidebar-user-role" <?= $footStyle ?>><?= h($footSub !== '' ? $footSub : $footRole) ?></div>
         </div>

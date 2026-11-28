@@ -65,9 +65,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['override_status'])) {
                             releaseRoomOccupancyIfIdle((int)$bk['room_id'], $bId);
                         }
                         // Auto-sync pending payment receipt to verified so it does not stay stuck in 'verification pending'
-                        dbExec("UPDATE payments SET status = 'verified', verified_by = ?, verified_at = NOW() WHERE booking_id = ? AND status = 'pending'", [$adminId, $bId]);
+                        $autoVerifiedPay = dbExec("UPDATE payments SET status = 'verified', verified_by = ?, verified_at = NOW() WHERE booking_id = ? AND status = 'pending'", [$adminId, $bId]);
+                        if ($autoVerifiedPay > 0) {
+                            auditLog('Admin Auto-Verified Payment', 'Admin Module', "Auto-verified {$autoVerifiedPay} pending payment(s) during Booking #{$bk['booking_code']} approval by Admin #$adminId");
+                        }
                         auditLog('Admin Approved Booking', 'Admin Module', "Booking #{$bk['booking_code']} approved by Admin #$adminId");
-                        createNotification($bk['user_id'], 'Reservation Confirmed', "Your booking (#{$bk['booking_code']}) has been officially confirmed by Administration.", 'booking');
+                        createNotification($bk['user_id'], 'Reservation Confirmed', "Your booking (#{$bk['booking_code']}) has been officially confirmed by Administration.", 'booking', 'my-bookings.php');
                         setFlash('success', "Booking #{$bk['booking_code']} has been approved and confirmed.");
                     }
                 } elseif (in_array($newStat, ['cancelled', 'rejected'], true)) {
@@ -75,11 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['override_status'])) {
                         $reason = ($newStat === 'rejected') ? 'Denied by Admin' : 'Cancelled by Admin';
                     }
                     dbExec("UPDATE bookings SET status = ?, cancelled_at = NOW(), cancelled_reason = ? WHERE id = ?", [$newStat, $reason, $bId]);
+                    rejectPendingPaymentsForBooking($bId, "Auto-rejected: booking {$newStat} by Admin");
                     if ($wasCheckedIn) {
                         releaseRoomOccupancyIfIdle((int)$bk['room_id'], $bId);
                     }
                     auditLog('Admin Denied/Cancelled Booking', 'Admin Module', "Booking #{$bk['booking_code']} marked $newStat. Reason: $reason");
-                    createNotification($bk['user_id'], 'Booking Status Update', "Your reservation #{$bk['booking_code']} was marked $newStat: $reason", 'alert');
+                    createNotification($bk['user_id'], 'Booking Status Update', "Your reservation #{$bk['booking_code']} was marked $newStat: $reason", 'alert', 'my-bookings.php');
                     setFlash('warning', "Booking #{$bk['booking_code']} marked as " . strtoupper($newStat) . ".");
                 } elseif ($newStat === 'checked_in') {
                     $isDormRoom = (!empty($bk['is_dorm']) || strcasecmp((string)($bk['room_type_name'] ?? ''), 'Dormitory') === 0);
@@ -213,11 +217,7 @@ $allBookings = dbRows("
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Master Bookings Registry &amp; Lifecycle Audit — Admin Portal</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
   <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
   <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
   <style>
@@ -330,7 +330,7 @@ $allBookings = dbRows("
   <main class="dashboard-main">
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:12px;">
-        <button class="admin-mobile-toggle" data-sidebar-toggle><i class="fa-solid fa-bars"></i></button>
+        <button type="button" class="sidebar-collapse-btn" data-sidebar-collapse title="Toggle Compact Sidebar" aria-label="Toggle Compact Sidebar" aria-expanded="true"><i class="fa-solid fa-bars-staggered"></i></button>
         <div class="topbar-title">Master Bookings Registry</div>
       </div>
       <div class="topbar-actions">
@@ -737,8 +737,8 @@ $allBookings = dbRows("
   </div>
 </div>
 
-<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
-<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 <script>
 function handleBookingOverrideSubmit(form) {
   const sel = form.querySelector('select[name="status"]');
@@ -753,6 +753,9 @@ function handleBookingOverrideSubmit(form) {
 }
 
 function openBookingTimeline(data) {
+  const safeEsc = (v) => (typeof escapeHtml === 'function')
+    ? escapeHtml(v)
+    : String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
   document.getElementById('modalBookingCode').textContent = '#' + data.booking_code;
   document.getElementById('modalGuestInfo').textContent = data.guest + ' • ' + data.room;
   document.getElementById('modalAmount').textContent = data.total_amount;
@@ -766,9 +769,9 @@ function openBookingTimeline(data) {
       <div class="timeline-icon-dot" style="background:#3b82f6;color:#fff;"><i class="fa-solid fa-calendar-plus"></i></div>
       <div style="font-weight:700;color:#fff;font-size:0.9rem;">Reservation Submitted by User</div>
       <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">
-        <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${escapeHtml(data.created_at)}
+        <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${safeEsc(data.created_at)}
       </div>
-      <div style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">Account: ${escapeHtml(data.guest)} (${escapeHtml(data.email)})</div>
+      <div style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">Account: ${safeEsc(data.guest)} (${safeEsc(data.email)})</div>
     </div>
   `;
 
@@ -776,7 +779,7 @@ function openBookingTimeline(data) {
   if (data.payment_created_at) {
     let proofHtml = '';
     if (data.proof_url) {
-      const safeProofUrl = escapeHtml(data.proof_url);
+      const safeProofUrl = safeEsc(data.proof_url);
       proofHtml = `
         <div style="margin-top:10px;background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.25);border-radius:10px;padding:10px;display:inline-block;">
           <a href="${safeProofUrl}" target="_blank" style="display:block;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
@@ -793,12 +796,12 @@ function openBookingTimeline(data) {
     track.innerHTML += `
       <div class="timeline-node">
         <div class="timeline-icon-dot" style="background:#eab308;color:#000;"><i class="fa-solid fa-receipt"></i></div>
-        <div style="font-weight:700;color:#fff;font-size:0.9rem;">Payment Receipt Uploaded (${escapeHtml(data.payment_method)})</div>
+        <div style="font-weight:700;color:#fff;font-size:0.9rem;">Payment Receipt Uploaded (${safeEsc(data.payment_method)})</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">
-          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${escapeHtml(data.payment_created_at)}
+          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${safeEsc(data.payment_created_at)}
         </div>
-        ${data.reference_number ? `<div style="font-size:0.78rem;color:#facc15;margin-top:2px;">Reference #: <code>${escapeHtml(data.reference_number)}</code></div>` : ''}
-        <div style="font-size:0.78rem;color:#cbd5e1;margin-top:2px;">Status: <span style="text-transform:uppercase;">${escapeHtml(data.payment_status)}</span></div>
+        ${data.reference_number ? `<div style="font-size:0.78rem;color:#facc15;margin-top:2px;">Reference #: <code>${safeEsc(data.reference_number)}</code></div>` : ''}
+        <div style="font-size:0.78rem;color:#cbd5e1;margin-top:2px;">Status: <span style="text-transform:uppercase;">${safeEsc(data.payment_status)}</span></div>
         ${proofHtml}
       </div>
     `;
@@ -811,9 +814,9 @@ function openBookingTimeline(data) {
         <div class="timeline-icon-dot" style="background:#22c55e;color:#fff;"><i class="fa-solid fa-check"></i></div>
         <div style="font-weight:700;color:#4ade80;font-size:0.9rem;">Reservation Officially Approved &amp; Confirmed</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">
-          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${escapeHtml(data.accepted_at)}
+          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${safeEsc(data.accepted_at)}
         </div>
-        <div style="font-size:0.78rem;color:#cbd5e1;margin-top:2px;">Decision made by: <strong>${escapeHtml(data.acceptor)}</strong></div>
+        <div style="font-size:0.78rem;color:#cbd5e1;margin-top:2px;">Decision made by: <strong>${safeEsc(data.acceptor)}</strong></div>
       </div>
     `;
   } else if (data.cancelled_at) {
@@ -823,9 +826,9 @@ function openBookingTimeline(data) {
         <div class="timeline-icon-dot" style="background:#ef4444;color:#fff;"><i class="fa-solid fa-ban"></i></div>
         <div style="font-weight:700;color:#f87171;font-size:0.9rem;">${isDenied ? 'Reservation Denied' : 'Reservation Cancelled'}</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">
-          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${escapeHtml(data.cancelled_at)}
+          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${safeEsc(data.cancelled_at)}
         </div>
-        <div style="font-size:0.78rem;color:#fca5a5;margin-top:2px;">Reason: ${escapeHtml(data.cancelled_reason || 'No specific reason recorded.')}</div>
+        <div style="font-size:0.78rem;color:#fca5a5;margin-top:2px;">Reason: ${safeEsc(data.cancelled_reason || 'No specific reason recorded.')}</div>
       </div>
     `;
   } else {
@@ -845,7 +848,7 @@ function openBookingTimeline(data) {
         <div class="timeline-icon-dot" style="background:#3b82f6;color:#fff;"><i class="fa-solid fa-key"></i></div>
         <div style="font-weight:700;color:#60a5fa;font-size:0.9rem;">Customer Checked In at Frontdesk</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">
-          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${escapeHtml(data.checked_in_at)}
+          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${safeEsc(data.checked_in_at)}
         </div>
         <div style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">Room assigned and room key issued.</div>
       </div>
@@ -859,7 +862,7 @@ function openBookingTimeline(data) {
         <div class="timeline-icon-dot" style="background:#64748b;color:#fff;"><i class="fa-solid fa-door-closed"></i></div>
         <div style="font-weight:700;color:#e2e8f0;font-size:0.9rem;">Customer Checked Out &amp; Folio Settled</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">
-          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${escapeHtml(data.checked_out_at)}
+          <i class="fa-solid fa-clock" style="color:var(--gold);"></i> ${safeEsc(data.checked_out_at)}
         </div>
         <div style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">Room scheduled for housekeeping &amp; cleaning.</div>
       </div>

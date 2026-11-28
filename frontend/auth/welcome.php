@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../backend/core/config.php';
 require_once __DIR__ . '/../../backend/core/session.php';
+require_once __DIR__ . '/../../backend/core/functions.php';
 
 // Naka-login na? Diretso sa main website (o dashboard kung admin/staff)
 redirectIfLoggedIn();
@@ -24,14 +25,9 @@ $qs = $redirect !== '' ? '?redirect=' . urlencode($redirect) : '';
   <meta name="twitter:title" content="Welcome — Marvelous Hotel & Dormitory">
   <meta name="twitter:description" content="Register or log in to explore and reserve rooms at Marvelous Hotel & Dormitory.">
   <meta name="twitter:image" content="<?= ASSETS_URL ?>/images/hotel/hero-bg.jpg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/auth.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/auth.css')) ?>">
 </head>
 <body style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--navy);">
 
@@ -80,6 +76,6 @@ $qs = $redirect !== '' ? '?redirect=' . urlencode($redirect) : '';
 
   </div>
 
-<script src="../frontend/assets/js/core.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
 </body>
 </html>

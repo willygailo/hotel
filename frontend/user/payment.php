@@ -55,9 +55,9 @@ $mayaPhone  = getSetting('hotel_maya_phone', '+63 *** *** 6963');
 $mayaQrUrl  = '../frontend/assets/images/maya_qr.jpg';
 
 $gcashName   = getSetting('hotel_gcash_name', 'JU***N J.');
-$gcashPhone  = getSetting('hotel_gcash_phone', '+63 964 142 ****');
+$gcashNum    = getSetting('hotel_gcash', '');
+$gcashPhone  = ($gcashNum !== '') ? $gcashNum : getSetting('hotel_gcash_phone', '+63 964 142 ****');
 $gcashUserId = getSetting('hotel_gcash_userid', '••••••••••6SONJP');
-$gcashNum    = getSetting('hotel_gcash', '0964 142 ****');
 $gcashQrUrl  = '../frontend/assets/images/gcash_qr_card.jpg';
 $gcashQrFull = '../frontend/assets/images/gcash_qr.jpg';
 
@@ -119,14 +119,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pay for Booking #<?= h($booking['booking_code']) ?> — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/user.css')) ?>">
   <style>
     .payment-badge-pill {
       display: inline-flex;
@@ -295,11 +290,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </header>
 
     <div class="page-content">
+      <?= renderFlash() ?>
+
       <div style="margin-bottom:20px;">
         <a href="dashboard.php" class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left"></i> Back to Dashboard</a>
       </div>
 
-      <div class="glass-card" style="max-width:820px;padding:32px;">
+      <div class="glass-card booking-form-card" style="max-width:820px;">
     <!-- Header -->
     <div style="border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:24px;">
       <span style="font-size:0.8rem;text-transform:uppercase;color:var(--gold);font-weight:700;letter-spacing:1px;">Booking Settlement</span>
@@ -325,7 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Payment Channel Selector Tabs -->
     <div style="margin-bottom:20px;">
       <label class="form-label" style="margin-bottom:10px;font-size:0.85rem;">Choose Official Payment Channel:</label>
-      <div style="display:flex;gap:12px;">
+      <div class="channel-tabs-row">
         <button type="button" class="channel-tab-btn <?= $initialMethod === 'maya' ? 'active tab-maya' : '' ?>" id="tabMayaBtn" onclick="switchChannel('maya')">
           <i class="fa-solid fa-qrcode" style="font-size:1.2rem;color:#00e074;"></i>
           <div style="text-align:left;">
@@ -385,7 +382,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <span style="font-size:0.85rem;color:var(--text-muted);">Account Name:</span>
               <span style="font-size:0.9rem;font-weight:700;color:#fff;">
                 <span id="mayaAccountNameText"><?= h($mayaName) ?></span>
-                <button type="button" class="copy-btn" onclick="copyText('<?= h($mayaName) ?>', this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                <button type="button" class="copy-btn" onclick='copyText(<?= json_encode($mayaName, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, this)'><i class="fa-regular fa-copy"></i> Copy</button>
               </span>
             </div>
 
@@ -393,7 +390,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <span style="font-size:0.85rem;color:var(--text-muted);">Maya Username:</span>
               <span style="font-size:0.9rem;font-weight:700;color:#00e074;">
                 <span id="mayaHandleText"><?= h($mayaHandle) ?></span>
-                <button type="button" class="copy-btn" onclick="copyText('<?= h($mayaHandle) ?>', this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                <button type="button" class="copy-btn" onclick='copyText(<?= json_encode($mayaHandle, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, this)'><i class="fa-regular fa-copy"></i> Copy</button>
               </span>
             </div>
 
@@ -456,7 +453,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <span style="font-size:0.85rem;color:var(--text-muted);">Account Name:</span>
               <span style="font-size:0.9rem;font-weight:700;color:#fff;">
                 <span id="gcashAccountNameText"><?= h($gcashName) ?></span>
-                <button type="button" class="copy-btn" onclick="copyText('<?= h($gcashName) ?>', this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                <button type="button" class="copy-btn" onclick='copyText(<?= json_encode($gcashName, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, this)'><i class="fa-regular fa-copy"></i> Copy</button>
               </span>
             </div>
 
@@ -464,7 +461,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <span style="font-size:0.85rem;color:var(--text-muted);">Registered Mobile No.:</span>
               <span style="font-size:0.9rem;font-weight:700;color:#64b5f6;">
                 <span><?= h($gcashPhone) ?></span>
-                <button type="button" class="copy-btn" onclick="copyText('<?= h($gcashPhone) ?>', this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                <button type="button" class="copy-btn" onclick='copyText(<?= json_encode($gcashPhone, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, this)'><i class="fa-regular fa-copy"></i> Copy</button>
               </span>
             </div>
 
@@ -575,8 +572,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/user.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/user.js')) ?>"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   switchChannel('<?= $initialMethod ?>');
@@ -611,19 +608,40 @@ function onSelectMethodChange(val) {
   switchChannel(val);
 }
 
+const PAY_QR_DATA = <?= json_encode([
+  'gcash' => [
+    'img' => $gcashQrFull,
+    'name' => $gcashName,
+    'phone' => $gcashPhone,
+    'userid' => $gcashUserId,
+  ],
+  'maya' => [
+    'img' => $mayaQrUrl,
+    'name' => $mayaName,
+    'handle' => $mayaHandle,
+    'phone' => $mayaPhone,
+  ],
+], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
 function copyText(text, btn) {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => {
-      showCopiedFeedback(btn);
-    });
-  } else {
-    const temp = document.createElement('input');
+  if (typeof copyToClipboard === 'function') {
+    copyToClipboard(text, () => showCopiedFeedback(btn));
+    return;
+  }
+  const fallback = () => {
+    const temp = document.createElement('textarea');
     temp.value = text;
+    temp.setAttribute('readonly', '');
+    temp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
     document.body.appendChild(temp);
     temp.select();
-    document.execCommand('copy');
-    document.body.removeChild(temp);
+    try { document.execCommand('copy'); } finally { document.body.removeChild(temp); }
     showCopiedFeedback(btn);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => showCopiedFeedback(btn)).catch(fallback);
+  } else {
+    fallback();
   }
 }
 
@@ -644,25 +662,26 @@ function openQrModal(type) {
   const instr = document.getElementById('modalQrInstructions');
   const dl = document.getElementById('modalQrDownloadBtn');
   const box = document.getElementById('lightboxModalBox');
+  const safeEsc = (v) => (typeof escapeHtml === 'function') ? escapeHtml(v) : String(v ?? '');
 
   if (isGcash) {
     title.innerHTML = '<i class="fa-solid fa-qrcode" style="color:#64b5f6;"></i> Scan to Pay via GCash / InstaPay';
-    img.src = '<?= h($gcashQrFull) ?>';
+    img.src = PAY_QR_DATA.gcash.img;
     img.alt = 'GCash QR Full Image';
-    name.textContent = '<?= h($gcashName) ?>';
-    sub.innerHTML = '<span style="color:#64b5f6;"><?= h($gcashPhone) ?></span> &bull; <?= h($gcashUserId) ?>';
+    name.textContent = PAY_QR_DATA.gcash.name;
+    sub.innerHTML = '<span style="color:#64b5f6;">' + safeEsc(PAY_QR_DATA.gcash.phone) + '</span> &bull; ' + safeEsc(PAY_QR_DATA.gcash.userid);
     instr.textContent = 'I-scan gamit ang GCash App (Scan QR) o anumang banking app na sumusuporta sa InstaPay QR Ph.';
-    dl.href = '<?= h($gcashQrFull) ?>';
+    dl.href = PAY_QR_DATA.gcash.img;
     dl.download = 'Marvelous_Hotel_GCash_QR.jpg';
     if (box) box.style.borderColor = 'rgba(41, 121, 255, 0.4)';
   } else {
     title.innerHTML = '<i class="fa-solid fa-qrcode" style="color:#00e074;"></i> Scan to Pay via Maya / InstaPay';
-    img.src = '<?= h($mayaQrUrl) ?>';
+    img.src = PAY_QR_DATA.maya.img;
     img.alt = 'Maya QR Code';
-    name.textContent = '<?= h($mayaName) ?>';
-    sub.innerHTML = '<span style="color:#00e074;"><?= h($mayaHandle) ?></span> &bull; <?= h($mayaPhone) ?>';
+    name.textContent = PAY_QR_DATA.maya.name;
+    sub.innerHTML = '<span style="color:#00e074;">' + safeEsc(PAY_QR_DATA.maya.handle) + '</span> &bull; ' + safeEsc(PAY_QR_DATA.maya.phone);
     instr.textContent = 'Scannable via Maya App, GCash (Scan QR), or any bank app supporting QR Ph / InstaPay.';
-    dl.href = '<?= h($mayaQrUrl) ?>';
+    dl.href = PAY_QR_DATA.maya.img;
     dl.download = 'Marvelous_Hotel_Maya_QR.jpg';
     if (box) box.style.borderColor = 'rgba(0, 210, 106, 0.4)';
   }

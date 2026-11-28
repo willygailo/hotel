@@ -172,14 +172,9 @@ $kyc = getUserKycStatus($userId);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>User Profile & Verification — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/user.css')) ?>">
   <style>
     .profile-card { background: rgba(18, 28, 45, 0.75); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(12px); border-radius: 16px; padding: 32px; color: #fff; }
     .status-card { border-radius: 12px; padding: 18px 22px; margin-bottom: 24px; display: flex; align-items: flex-start; gap: 16px; font-size: 0.95rem; }
@@ -325,7 +320,7 @@ $kyc = getUserKycStatus($userId);
             </div>
             <div class="avatar-upload-info">
               <label class="form-label" style="display:block;margin-bottom:6px;">Upload Profile Picture <span style="color:var(--gold)">*</span></label>
-              <input type="file" name="avatar" class="form-control" accept="image/jpeg,image/png,image/webp" onchange="previewImage(this, 'avatarPreview'); optimizeImageInput(this, { maxDim: 400, minBytes: 102400, quality: 0.84, statusElId: 'avatarCompressStatus' });">
+              <input type="file" name="avatar" class="form-control" accept="image/jpeg,image/png,image/webp" onchange="previewImage(this, 'avatarPreview'); if (typeof optimizeImageInput === 'function') optimizeImageInput(this, { maxDim: 400, minBytes: 102400, quality: 0.84, statusElId: 'avatarCompressStatus' });">
               <small style="color:var(--text-muted);font-size:0.75rem;">Allowed: JPG, PNG, WebP (Auto-optimized for fast loading)</small>
               <div id="avatarCompressStatus" style="display:none;font-size:0.78rem;color:#38bdf8;margin-top:4px;"></div>
             </div>
@@ -452,8 +447,8 @@ $kyc = getUserKycStatus($userId);
   </main>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/user.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/user.js')) ?>"></script>
 <script>
 function previewImage(input, previewId) {
   if (input.files && input.files[0]) {

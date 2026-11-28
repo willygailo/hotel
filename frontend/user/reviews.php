@@ -55,10 +55,9 @@ $myReviews = dbRows("
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Reviews — Marvelous Hotel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/user.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -122,7 +121,7 @@ $myReviews = dbRows("
       <div class="card">
         <div class="card-header"><h2 class="card-title"><i class="fa-solid fa-comment-dots" style="color:var(--gold);margin-right:8px;"></i> My Previous Reviews</h2></div>
         <div class="card-body" style="padding:0;">
-          <div class="table-wrap">
+          <div class="table-wrap desktop-bookings-table">
             <table class="table">
               <thead>
                 <tr>
@@ -148,6 +147,24 @@ $myReviews = dbRows("
               </tbody>
             </table>
           </div>
+          <div class="mobile-bookings-list">
+            <?php if (empty($myReviews)): ?>
+              <div class="text-center" style="padding:30px 15px;color:var(--text-muted);">
+                You have not written any reviews yet.
+              </div>
+            <?php else: ?>
+              <?php foreach ($myReviews as $rv): ?>
+                <div class="booking-mobile-card">
+                  <div class="bmc-header">
+                    <div class="bmc-code" style="font-size:0.95rem;"><?= h($rv['room_name'] ?: 'General Stay') ?></div>
+                    <div><?= starRating($rv['rating']) ?></div>
+                  </div>
+                  <p style="font-size:0.86rem;color:var(--text-muted);font-style:italic;line-height:1.55;margin-bottom:8px;">"<?= h($rv['comment']) ?>"</p>
+                  <div style="font-size:0.75rem;color:var(--text-muted);"><?= formatDate($rv['created_at']) ?></div>
+                </div>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
         </div>
       </div>
 
@@ -155,8 +172,8 @@ $myReviews = dbRows("
   </main>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/user.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/user.js')) ?>"></script>
 <?php require_once __DIR__ . '/../components/ai-chatbot.php'; ?>
 </body>
 </html>

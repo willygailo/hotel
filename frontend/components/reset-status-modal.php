@@ -405,10 +405,25 @@ if (!function_exists('renderPasswordResetStatusModal')) {
         btnEl.innerHTML = defaultHtml;
       }, 2200);
     };
+    const fallbackCopy = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        if (document.execCommand('copy')) onCopied();
+      } finally {
+        document.body.removeChild(ta);
+      }
+    };
     if (typeof copyToClipboard === 'function') {
       copyToClipboard(text, onCopied);
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(onCopied).catch(() => {});
+    } else if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(onCopied).catch(fallbackCopy);
+    } else {
+      fallbackCopy();
     }
   }
 
@@ -784,7 +799,11 @@ if (!function_exists('renderPasswordResetStatusModal')) {
     }
   };
 
-  startPolling();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startPolling);
+  } else {
+    startPolling();
+  }
 })();
 </script>
         <?php

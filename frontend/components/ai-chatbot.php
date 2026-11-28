@@ -13,9 +13,10 @@ $aiEndpoint = SITE_URL . '/ai/chatbot.php';
 <?php
 $aiCssVer = @filemtime(__DIR__ . '/../assets/css/ai-chat.css') ?: '1';
 $aiJsVer  = @filemtime(__DIR__ . '/../assets/js/ai-chat.js') ?: '1';
-?>
-<!-- AI Chatbot Stylesheet -->
+if (empty($GLOBALS['mh_ai_chat_css_loaded'])): ?>
+<!-- AI Chatbot Stylesheet (fallback when not preloaded in head) -->
 <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/ai-chat.css?v=<?= $aiCssVer ?>">
+<?php endif; ?>
 
 <!-- AI Chatbot Floating Widget -->
 <div class="ai-fab" id="aiFab">
@@ -146,4 +147,4 @@ window.HOTEL_AI_CONFIG = <?= json_encode([
 ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 </script>
 <!-- AI Chatbot Client Script -->
-<script src="<?= ASSETS_URL ?>/js/ai-chat.js?v=<?= $aiJsVer ?>"></script>
+<script defer src="<?= ASSETS_URL ?>/js/ai-chat.js?v=<?= $aiJsVer ?>"></script>

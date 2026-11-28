@@ -97,10 +97,9 @@ $unreadNotifs = unreadNotifCount(currentUserId());
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Room Recommendation — Marvelous Hotel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/user.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -194,7 +193,7 @@ $unreadNotifs = unreadNotifCount(currentUserId());
           </div>
         </form>
         <?php if ($dateError !== ''): ?>
-          <div class="alert alert-danger" style="margin-top:14px;margin-bottom:0;"><?= h($dateError) ?></div>
+          <div class="flash-message flash-error" style="margin-top:14px;margin-bottom:0;"><i class="fa-solid fa-circle-exclamation"></i><span><?= h($dateError) ?></span></div>
         <?php endif; ?>
       </div>
 
@@ -247,7 +246,7 @@ $unreadNotifs = unreadNotifCount(currentUserId());
           ?>
             <div class="room-card">
               <div class="room-card-img">
-                <img src="<?= roomThumbUrl($rec['thumbnail']) ?>" alt="<?= h($rec['name']) ?>" onerror="this.src='../frontend/assets/images/rooms/default-room.jpg'">
+                <img src="<?= roomThumbUrl($rec['thumbnail']) ?>" alt="<?= h($rec['name']) ?>" loading="lazy" decoding="async" onerror="this.src='../frontend/assets/images/rooms/default-room.jpg'">
                 <div class="room-card-badge">
                   <span class="badge badge-gold" style="font-size:0.74rem;padding:4px 9px;font-weight:700;box-shadow:0 4px 10px rgba(0,0,0,0.6);">
                     <?= $matchBadge ?>
@@ -301,8 +300,8 @@ $unreadNotifs = unreadNotifCount(currentUserId());
   </main>
 </div>
 
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/user.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/user.js')) ?>"></script>
 <?php require_once __DIR__ . '/../components/ai-chatbot.php'; ?>
 </body>
 </html>

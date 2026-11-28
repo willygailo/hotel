@@ -33,6 +33,15 @@ $payments = dbRows("
     WHERE p.booking_id = ? 
     ORDER BY p.id DESC
 ", [$bId]);
+$hasActivePayment = false;
+foreach ($payments as $pRow) {
+    if (in_array($pRow['status'] ?? '', ['pending', 'verified'], true)) {
+        $hasActivePayment = true;
+        break;
+    }
+}
+$checkInTimeLabel  = date('g:i A', strtotime('2000-01-01 ' . getSetting('check_in_time', '14:00')));
+$checkOutTimeLabel = date('g:i A', strtotime('2000-01-01 ' . getSetting('check_out_time', '12:00')));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -40,10 +49,9 @@ $payments = dbRows("
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Booking Details #<?= h($booking['booking_code']) ?> — Marvelous Hotel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="../frontend/assets/css/base.css">
-  <link rel="stylesheet" href="../frontend/assets/css/user.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(true); ?>
+  <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
+  <link rel="stylesheet" href="<?= h(assetUrl('css/user.css')) ?>">
 </head>
 <body style="background:var(--navy);">
 
@@ -59,11 +67,13 @@ $payments = dbRows("
     </header>
 
     <div class="page-content">
+      <?= renderFlash() ?>
+
       <div style="margin-bottom:20px;">
         <a href="my-bookings.php" class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left"></i> Back to My Bookings</a>
       </div>
 
-      <div class="glass-card" style="max-width:760px;padding:32px;">
+      <div class="glass-card booking-form-card" style="max-width:760px;">
         <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:24px;">
           <div>
             <h2 style="font-family:var(--font-serif);font-size:1.6rem;color:#fff;">Booking Voucher</h2>
@@ -101,8 +111,8 @@ $payments = dbRows("
           </div>
           <div>
             <h4 style="color:var(--gold);font-size:0.85rem;text-transform:uppercase;margin-bottom:8px;">Stay Dates</h4>
-            <div style="font-size:0.95rem;color:#fff;">Check-in: <strong><?= formatDate($booking['check_in']) ?></strong> (2:00 PM)</div>
-            <div style="font-size:0.95rem;color:#fff;">Check-out: <strong><?= formatDate($booking['check_out']) ?></strong> (12:00 PM)</div>
+            <div style="font-size:0.95rem;color:#fff;">Check-in: <strong><?= formatDate($booking['check_in']) ?></strong> (<?= h($checkInTimeLabel) ?>)</div>
+            <div style="font-size:0.95rem;color:#fff;">Check-out: <strong><?= formatDate($booking['check_out']) ?></strong> (<?= h($checkOutTimeLabel) ?>)</div>
             <div style="font-size:0.85rem;color:var(--text-muted);"><?= $booking['nights'] ?> Nights · <?= $booking['num_guests'] ?> Pax</div>
           </div>
         </div>
@@ -236,7 +246,11 @@ $payments = dbRows("
 
         <?php if ($booking['status'] === 'pending'): ?>
           <div style="text-align:right;margin-top:20px;">
-            <a href="payment.php?booking_id=<?= $booking['id'] ?>" class="btn btn-gold"><i class="fa-solid fa-credit-card"></i> Upload Payment</a>
+            <?php if ($hasActivePayment): ?>
+              <a href="payment-history.php" class="btn btn-ghost"><i class="fa-solid fa-hourglass-half" style="color:#facc15;"></i> Payment Under Verification &rarr;</a>
+            <?php else: ?>
+              <a href="payment.php?booking_id=<?= $booking['id'] ?>" class="btn btn-gold"><i class="fa-solid fa-credit-card"></i> Upload Payment</a>
+            <?php endif; ?>
           </div>
         <?php elseif (in_array($booking['status'], ['confirmed', 'checked_in', 'checked_out'])): ?>
           <div style="text-align:right;margin-top:20px;">
@@ -277,8 +291,8 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeVoucherRoomLightbox();
 });
 </script>
-<script src="../frontend/assets/js/core.js"></script>
-<script src="../frontend/assets/js/user.js"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/user.js')) ?>"></script>
 <?php require_once __DIR__ . '/../components/ai-chatbot.php'; ?>
 </body>
 </html>

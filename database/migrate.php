@@ -17,15 +17,8 @@ if (!defined('DB_HOST')) {
     define('DB_HOST', getenv('DB_HOST') ?: (getenv('MYSQLHOST') ?: '127.0.0.1'));
 }
 
-$coreConfig = __DIR__ . '/../backend/core/config.php';
-$coreDb     = __DIR__ . '/../backend/core/db.php';
-if (file_exists($coreConfig) && file_exists($coreDb)) {
-    require_once $coreConfig;
-    require_once $coreDb;
-} else {
-    require_once __DIR__ . '/../includes/config.php';
-    require_once __DIR__ . '/../includes/db.php';
-}
+require_once __DIR__ . '/../backend/core/config.php';
+require_once __DIR__ . '/../backend/core/db.php';
 
 dbExec("CREATE TABLE IF NOT EXISTS schema_migrations (
     migration  VARCHAR(191) NOT NULL PRIMARY KEY,

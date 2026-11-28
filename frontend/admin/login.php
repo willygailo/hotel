@@ -16,7 +16,7 @@ if (isLoggedIn() && isAdmin()) {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email    = trim($_POST['email'] ?? '');
+    $email    = strtolower(trim($_POST['email'] ?? ''));
     $password = $_POST['password'] ?? '';
     $token    = $_POST[CSRF_TOKEN_NAME] ?? '';
 
@@ -35,10 +35,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Session fixation defense: bagong session ID bago mag-login
                 session_regenerate_id(true);
                 $_SESSION['user_id']     = $user['id'];
-                $_SESSION['user_name']   = $user['first_name'] . ' ' . $user['last_name'];
+                $_SESSION['user_name']   = formatFullName($user);
                 $_SESSION['user_email']  = $user['email'];
                 $_SESSION['user_role']   = 'admin';
                 $_SESSION['user_avatar'] = $user['avatar'] ?: 'default-avatar.png';
+                $_SESSION['_status_checked_at'] = time();
 
                 dbExec("UPDATE users SET last_login = NOW() WHERE id = ?", [$user['id']]);
                 auditLog('Admin Logged In via Dedicated Portal', 'Admin Auth', "Admin {$user['email']} authenticated.");
@@ -61,15 +62,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Executive Login — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
   <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
   <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
 </head>
 <body style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#060919;">
+<?php require_once __DIR__ . '/../components/desktop-only-guard.php'; renderDesktopOnlyGuard('admin'); ?>
 
   <div class="glass-card" style="width:100%;max-width:440px;padding:36px;box-shadow:var(--shadow-deep);border:1px solid rgba(233,69,96,0.3);">
     <div style="text-align:center;margin-bottom:28px;">
@@ -77,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <h2 style="font-family:var(--font-serif);font-size:1.6rem;color:#fff;">Admin Executive Portal</h2>
       <p style="font-size:0.8rem;color:#ff899b;margin-top:4px;letter-spacing:1px;text-transform:uppercase;font-weight:700;">Restricted Management Server</p>
     </div>
+
+    <?= renderFlash() ?>
 
     <?php if (!empty($error)): ?>
       <div class="flash-message flash-error"><i class="fa-solid fa-circle-xmark"></i> <span><?= h($error) ?></span></div>
@@ -89,15 +89,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label class="form-label">Admin Gmail / Email Address <span class="required">*</span></label>
         <div class="form-icon-wrap">
           <i class="fa-solid fa-user-shield form-icon" style="color:var(--gold);"></i>
-          <input type="email" name="email" class="form-control" placeholder="admin@domain.com" value="<?= h($_POST['email'] ?? '') ?>" required autofocus>
+          <input type="email" name="email" class="form-control" placeholder="admin@domain.com" value="<?= h($_POST['email'] ?? '') ?>" required autofocus autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="email">
         </div>
       </div>
 
       <div class="form-group">
         <label class="form-label">Admin Master Password <span class="required">*</span></label>
-        <div class="form-icon-wrap">
+        <div class="form-icon-wrap" style="position:relative;">
           <i class="fa-solid fa-key form-icon" style="color:var(--gold);"></i>
-          <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+          <input type="password" name="password" id="adminPassInput" class="form-control" placeholder="••••••••" required style="padding-right:42px;" autocomplete="current-password">
+          <button type="button" onclick="(function(b){var i=document.getElementById('adminPassInput');if(i.type==='password'){i.type='text';b.innerHTML='<i class=\'fa-solid fa-eye-slash\'></i>';}else{i.type='password';b.innerHTML='<i class=\'fa-solid fa-eye\'></i>';}})(this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;padding:6px;z-index:2;" title="Show/Hide Password" aria-label="Show or hide password">
+            <i class="fa-solid fa-eye"></i>
+          </button>
         </div>
       </div>
 
@@ -111,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
-<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 </body>
 </html>

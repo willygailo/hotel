@@ -304,145 +304,65 @@ if [ -z "$TUNNEL_URL" ]; then
 fi
 
 MAIN_LINK="${TUNNEL_URL}${BASE_PATH}/"
-ROOMS_LINK="${TUNNEL_URL}${BASE_PATH}/rooms.php"
-USER_LOGIN="${TUNNEL_URL}${BASE_PATH}/auth/login.php"
-USER_PORTAL="${TUNNEL_URL}${BASE_PATH}/user/dashboard.php"
 STAFF_LOGIN="${TUNNEL_URL}${BASE_PATH}/staff/login.php"
 ADMIN_LOGIN="${TUNNEL_URL}${BASE_PATH}/admin/login.php"
-ADMIN_RESETS="${TUNNEL_URL}${BASE_PATH}/admin/users.php?tab=resets"
-FORGOT_PASSWORD="${TUNNEL_URL}${BASE_PATH}/auth/forgot-password.php"
-API_HEALTH="${TUNNEL_URL}${BASE_PATH}/backend/api/v1/health"
 if [ "$TARGET_PORT" = "80" ]; then
     LAN_LINK="http://${LOCAL_IP}${BASE_PATH}/"
 else
     LAN_LINK="http://${LOCAL_IP}:${TARGET_PORT}${BASE_PATH}/"
 fi
-GITHUB_REPO="https://github.com/gailowilly551-afk/hotel"
 
-# Write active links to LIVE_URL.txt for convenience
+# Write active links only (no credentials/passwords) to LIVE_URL.txt
 cat << EOF > "$HOTEL_DIR/LIVE_URL.txt"
-================================================================================
-🏨 MARVELOUS HOTEL & DORMITORY — LIVE CAPSTONE PRESENTATION LINKS
-Nilikha noong: $(date)
-Active Engine: $TUNNEL_ENGINE
-GitHub Repository: $GITHUB_REPO
-================================================================================
-
-🌐 1. PUBLIC CLOUD SHAREABLE LINK (Internet / Mobile Data):
-   👉 Main Hotel Page:   $MAIN_LINK
-   👉 Guest Login:       $USER_LOGIN
-   👉 User Dashboard:    $USER_PORTAL
-   👉 Forgot Password:   $FORGOT_PASSWORD
-   👉 Staff Login:       $STAFF_LOGIN
-   👉 Admin Login:       $ADMIN_LOGIN
-   👉 Admin Reset Hub:   $ADMIN_RESETS
-   👉 REST API (Slim 4): $API_HEALTH
-
-📶 2. LOCAL WI-FI / LAN LINK (Same Network):
-   👉 Local URL:         $LAN_LINK
-
---------------------------------------------------------------------------------
-📌 TEST ACCOUNTS & PASSWORDS:
-• 👑 Super Admin: admin@marveloushotel.com / password
-• 🛎️ Front Desk:  staff@marveloushotel.com / password
-• 👤 Guest (KYC):  lan@gmail.com / password
-================================================================================
+============================================================
+🏨 MARVELOUS HOTEL & DORMITORY — LIVE LINKS ($TUNNEL_ENGINE)
+============================================================
+🌐 Main Website (Phone / Laptop / PC): $MAIN_LINK
+🛎️ Staff Portal (Laptop / PC Only):    $STAFF_LOGIN
+👑 Admin Portal (Laptop / PC Only):    $ADMIN_LOGIN
+📶 Local Wi-Fi / LAN:                  $LAN_LINK
+============================================================
 EOF
 chmod 666 "$HOTEL_DIR/LIVE_URL.txt" 2>/dev/null || true
 
-# 9. Display Presentation Dashboard
+# 9. Display Clean Links + QR Code Only (No Extra Clutter / No Passwords)
 clear 2>/dev/null || true
-echo "================================================================================"
-echo "🎉 🏨 MARVELOUS HOTEL & DORMITORY — LIVE CAPSTONE PRESENTATION IS ACTIVE!"
-echo "================================================================================"
-echo "⚡ Active Engine: $TUNNEL_ENGINE"
-echo "🐙 GitHub Repository: $GITHUB_REPO"
+echo "============================================================"
+echo "🏨 MARVELOUS HOTEL & DORMITORY — LIVE LINKS ($TUNNEL_ENGINE)"
+echo "============================================================"
 echo ""
-echo "🔗 1. PUBLIC SHAREABLE CLOUD LINK (Kahit anong internet o phone data):"
-echo "   👉 $MAIN_LINK"
+echo "🌐 Main Website (Phone / Laptop / PC):"
+echo "   $MAIN_LINK"
+echo ""
+echo "🛎️ Staff Portal (Laptop / PC Only):"
+echo "   $STAFF_LOGIN"
+echo ""
+echo "👑 Admin Portal (Laptop / PC Only):"
+echo "   $ADMIN_LOGIN"
 echo ""
 if [ "$LOCAL_IP" != "127.0.0.1" ]; then
-echo "📶 2. LOCAL WI-FI / LAN LINK (Para sa mga phone/laptop sa parehong Wi-Fi):"
-echo "   👉 $LAN_LINK"
+echo "📶 Local Wi-Fi / LAN:"
+echo "   $LAN_LINK"
 echo ""
 fi
 
-# Print QR code if qrencode is installed
+# Print QR code for Main Hotel Website if qrencode is installed
 if command -v qrencode &>/dev/null; then
-    echo "📱 I-SCAN ANG QR CODE GAMIT ANG PHONE CAMERA O QR SCANNER:"
+    echo "📱 Scan QR Code (Main Hotel Website):"
     qrencode -t UTF8 "$MAIN_LINK"
-    echo ""
 fi
 
-echo "--------------------------------------------------------------------------------"
-echo "📌 MGA DIRECT PORTAL LINKS, ROLES, AT TEST CREDENTIALS:"
-echo "--------------------------------------------------------------------------------"
-echo ""
-echo "1. 🌐👤 GUEST & PUBLIC PORTAL (Hotel Website, Rooms Catalog, Booking & Payments):"
-echo "   Main Page:       $MAIN_LINK"
-echo "   Browse Rooms:    $ROOMS_LINK"
-echo "   Guest Login:     $USER_LOGIN"
-echo "   Dashboard:       $USER_PORTAL"
-echo "   Forgot Password: $FORGOT_PASSWORD"
-echo "   Test Account:    lan@gmail.com (Verified Guest)"
-echo "   Password:        password"
-echo "   Features:        • 3-Tier Stack: Tailwind CSS + Alpine.js (frontend/) | Slim 4 REST API (backend/) | MySQL SQL (database/)"
-echo "                    • Real-Time Room Availability Indicator & Live Slim 4 Availability Check"
-echo "                    • Full KYC Identity Verification Requirement before booking"
-echo "                    • Instant Payment Methods Pop-up Modal (PayMaya QR & GCash)"
-echo "                    • Live Stay & Pricing Calculator (Nights x Rate)"
-echo "                    • Unified 1-click Reservation + Payment Proof Submission"
-echo "                    • Booking Voucher with Exact Activity Timestamps (Date/Time/Year)"
-echo "                    • AI Concierge Chatbot assistant & dynamic room search"
-echo "                    • Live Password Reset Popup (Auto-notifies on Admin update, Show/Hide & Copy, 1-Time View)"
-echo "                    • Real Gmail SMTP Password Reset Request & 1-Hour Token Dispatch"
-echo ""
-echo "2. 🛎️ STAFF / FRONTDESK PORTAL (Daily Operations & Delegated Approvals):"
-echo "   URL:             $STAFF_LOGIN"
-echo "   Email:           staff@marveloushotel.com"
-echo "   Password:        password"
-echo "   Features:        • Frontdesk Check-in / Check-out with automatic timestamps"
-echo "                    • Live Housekeeping & Rooms Status Board (Dirty/Clean/Maintenance)"
-echo "                    • Delegated Payment Verification (Receipt Lightbox & Approval)"
-echo "   Security:        User account management is strictly restricted to Super Admin."
-echo ""
-echo "3. 👑 SUPER ADMIN PORTAL (Full Executive Control & System Audit):"
-echo "   URL:             $ADMIN_LOGIN"
-echo "   Reset Hub:       $ADMIN_RESETS"
-echo "   Email:           admin@marveloushotel.com"
-echo "   Password:        password"
-echo "   Features:        • Master Bookings Registry with Decision Timestamps Audit"
-echo "                    • Interactive Visual Timeline Modal per reservation"
-echo "                    • User & Staff Account Management (Full Edit & Delete)"
-echo "                    • KYC Guest ID Verification Inspection & Adjudication"
-echo "                    • Live Password Reset Dispatcher (Instant Guest Popup + Viewed/Waiting Tracking)"
-echo "                    • Payment Verification Hub with Receipt Lightbox"
-echo "                    • Full Security Audit Logs & AI System Configuration"
-echo "                    • Live Gmail SMTP Control Center & Outbound Test Dispatcher"
-echo ""
-echo "--------------------------------------------------------------------------------"
-echo "📂 Naka-save din ang kumpletong links sa: $HOTEL_DIR/LIVE_URL.txt"
-echo "--------------------------------------------------------------------------------"
+echo "============================================================"
 
 if [ "$IS_DAEMON" -eq 1 ]; then
     echo "$TUNNEL_PID" > /tmp/hotel_tunnel.pid
     disown "$TUNNEL_PID" 2>/dev/null || true
     trap - SIGINT SIGTERM
-    echo "🚀 [DAEMON MODE NAKA-ENABLE] Tumatakbo ang tunnel sa background!"
-    echo "💡 LIGTAS ISARA ANG TERMINAL. Mananatiling buhay ang link hangga't hindi ini-stop."
-    echo "🛑 Kapag tapos na ang demo, patayin gamit ang: ./share-capstone.sh --stop"
-    echo "================================================================================"
+    echo "🚀 Background mode active. Stop: ./share-capstone.sh --stop"
     exit 0
 fi
 
-echo "💡 PAALALA PARA SA CAPSTONE DEFENSE / LIVE DEMO:"
-echo "• Huwag isasara ang terminal na ito habang nagpe-presenta sa panel."
-echo "• O patakbuhin gamit ang: ./share-capstone.sh --daemon para hindi mamatay kahit isara ang terminal."
-echo "• Lahat ng pagbabago sa code o database ay LIVE agad sa cloud link!"
-echo "• Kung nasa parehong Wi-Fi ang dalawang phone/laptop, gamitin ang LOCAL WI-FI / LAN LINK para instant speed!"
-echo "• Pindutin ang [CTRL + C] upang ihinto ang live cloud tunnel."
-echo "================================================================================"
-echo "⏳ Tumatakbo ang live server... (Press Ctrl+C to Stop)"
+echo "⏳ Live (Press Ctrl+C to stop)"
 
 if [ -n "$TUNNEL_PID" ]; then
     wait "$TUNNEL_PID"

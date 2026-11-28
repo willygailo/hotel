@@ -250,11 +250,7 @@ $adminHotelCount = count($rooms) - $adminDormCount;
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Manage Rooms — Admin Portal</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
   <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
   <link rel="stylesheet" href="<?= h(assetUrl('css/admin.css')) ?>">
   <style>
@@ -316,7 +312,7 @@ $adminHotelCount = count($rooms) - $adminDormCount;
   <main class="dashboard-main">
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:12px;">
-        <button class="admin-mobile-toggle" data-sidebar-toggle><i class="fa-solid fa-bars"></i></button>
+        <button type="button" class="sidebar-collapse-btn" data-sidebar-collapse title="Toggle Compact Sidebar" aria-label="Toggle Compact Sidebar" aria-expanded="true"><i class="fa-solid fa-bars-staggered"></i></button>
         <div class="topbar-title">Room and Dormitory Management</div>
       </div>
     </header>
@@ -415,7 +411,7 @@ $adminHotelCount = count($rooms) - $adminDormCount;
                 <img id="addRoomThumbPreview" src="<?= h(assetUrl('images/rooms/default-room.jpg')) ?>" alt="New room preview" style="width:68px;height:46px;border-radius:8px;object-fit:cover;border:1px solid rgba(201,168,76,0.35);background:#0b132b;">
                 <small style="color:var(--text-muted);font-size:0.73rem;">JPG, PNG, WebP (Max 15MB)</small>
               </div>
-              <input type="file" name="thumbnail" id="addRoomThumbInput" class="form-control" accept="image/*" onchange="previewAddRoomThumb(this); optimizeImageInput(this, { maxDim: 1600, quality: 0.85, statusElId: 'addRoomThumbStatus' })">
+              <input type="file" name="thumbnail" id="addRoomThumbInput" class="form-control" accept="image/*" onchange="previewAddRoomThumb(this); if (typeof optimizeImageInput === 'function') optimizeImageInput(this, { maxDim: 1600, quality: 0.85, statusElId: 'addRoomThumbStatus' })">
               <small id="addRoomThumbStatus" style="display:none;color:var(--gold);font-size:0.74rem;margin-top:3px;"></small>
             </div>
             <div style="grid-column:1/-1;">
@@ -639,7 +635,7 @@ $adminHotelCount = count($rooms) - $adminDormCount;
             <img id="editRoomThumbPreview" src="<?= h(assetUrl('images/rooms/default-room.jpg')) ?>" alt="Current room photo" style="width:72px;height:48px;border-radius:8px;object-fit:cover;border:1px solid rgba(201,168,76,0.35);background:#0b132b;">
             <small style="color:var(--text-muted);font-size:0.74rem;">Current room photo</small>
           </div>
-          <input type="file" name="thumbnail" id="editRoomThumbInput" class="form-control" accept="image/*" onchange="previewEditRoomThumb(this); optimizeImageInput(this, { maxDim: 1600, quality: 0.85, statusElId: 'editRoomThumbStatus' })">
+          <input type="file" name="thumbnail" id="editRoomThumbInput" class="form-control" accept="image/*" onchange="previewEditRoomThumb(this); if (typeof optimizeImageInput === 'function') optimizeImageInput(this, { maxDim: 1600, quality: 0.85, statusElId: 'editRoomThumbStatus' })">
           <small id="editRoomThumbStatus" style="display:none;color:var(--gold);font-size:0.74rem;margin-top:3px;"></small>
         </div>
         <div style="grid-column:1/-1;">
@@ -659,8 +655,8 @@ $adminHotelCount = count($rooms) - $adminDormCount;
   </div>
 </div>
 
-<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
-<script src="<?= h(assetUrl('js/admin.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/admin.js')) ?>"></script>
 <script>
 const ROOM_PRESET_URLS = <?= json_encode(
     array_combine(

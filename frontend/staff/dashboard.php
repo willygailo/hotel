@@ -85,6 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_booking'])) {
                     [$declineReason, $bookingId]
                 );
                 if ($updated > 0) {
+                    rejectPendingPaymentsForBooking($bookingId, 'Auto-rejected: booking declined by Frontdesk Staff');
                     auditLog('Staff Rejected Booking', 'Staff Module', "Booking #{$bk['booking_code']} rejected by Staff ID $staffId. Reason: {$declineReason}");
                     createNotification(
                         (int)$bk['user_id'],
@@ -170,11 +171,7 @@ $pendingList = dbRows("
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Staff Dashboard — Marvelous Hotel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <?php require_once __DIR__ . '/../components/page-head.php'; renderPerformanceHeadLinks(false); ?>
   <link rel="stylesheet" href="<?= h(assetUrl('css/base.css')) ?>">
   <link rel="stylesheet" href="<?= h(assetUrl('css/staff.css')) ?>">
 </head>
@@ -186,7 +183,7 @@ $pendingList = dbRows("
   <main class="dashboard-main">
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:12px;">
-        <button class="staff-mobile-toggle" data-sidebar-toggle><i class="fa-solid fa-bars"></i></button>
+        <button type="button" class="sidebar-collapse-btn" data-sidebar-collapse title="Toggle Compact Sidebar" aria-label="Toggle Compact Sidebar" aria-expanded="true"><i class="fa-solid fa-bars-staggered"></i></button>
         <div class="topbar-title">Frontdesk Staff Operations</div>
       </div>
       <div class="topbar-actions">
@@ -203,11 +200,6 @@ $pendingList = dbRows("
           <span>Kasalukuyang <strong>temporary password</strong> ang gamit mo. Pumunta sa <a href="account.php">Account &amp; Password</a> upang mag-set ng sariling password.</span>
         </div>
       <?php endif; ?>
-
-      <div class="desktop-workstation-note">
-        <i class="fa-solid fa-desktop"></i>
-        <span><strong>Workstation Mode:</strong> Ang Staff Frontdesk Portal ay dinisenyo para sa Laptop at Desktop PC screens (Chrome, Edge, Firefox) para sa mabilisang arrivals, check-in, at payment verification.</span>
-      </div>
 
       <div class="page-header">
         <div>
@@ -475,8 +467,8 @@ $pendingList = dbRows("
   </div>
 </div>
 
-<script src="<?= h(assetUrl('js/core.js')) ?>"></script>
-<script src="<?= h(assetUrl('js/staff.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/core.js')) ?>"></script>
+<script defer src="<?= h(assetUrl('js/staff.js')) ?>"></script>
 <script>
 function loadStaffAiBriefing(forceRefresh = false) {
   const loading = document.getElementById('staffAiLoading');

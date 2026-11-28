@@ -10,6 +10,9 @@ class RoomService
      */
     public function calculateStayQuote(float $weekdayRate, float $weekendRate, string $checkIn, string $checkOut): array
     {
+        if (\function_exists('calculateStayQuote')) {
+            return \calculateStayQuote($weekdayRate, $weekendRate, $checkIn, $checkOut);
+        }
         $nights = \calculateNights($checkIn, $checkOut);
         $total = 0.0;
         $weekendNights = 0;

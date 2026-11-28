@@ -857,6 +857,85 @@ function sanitizeAiHtml(string $html): string {
     return nl2br(trim($clean));
 }
 
+// ---- Safe Redirect Helper (prevents Open Redirect while supporting relative app routes) ----
+function getSafeRedirectUrl(?string $url, string $default = ''): string {
+    if ($default === '') {
+        $default = (defined('SITE_URL') ? SITE_URL : '') . '/index.php';
+    }
+    $raw = trim((string)($url ?? ''));
+    if ($raw === '') {
+        return $default;
+    }
+    $sanitized = filter_var($raw, FILTER_SANITIZE_URL);
+    if (!is_string($sanitized) || $sanitized === '') {
+        return $default;
+    }
+    // Reject protocol schemes (http:, https:, javascript:, data:), protocol-relative //, backslashes, or CR/LF
+    if (preg_match('#^(?:[a-z][a-z0-9+.-]*:|//)#i', $sanitized) || strpbrk($sanitized, "\\\r\n") !== false) {
+        return $default;
+    }
+    // Root-relative (/hotel/...) or explicit parent-relative (../...)
+    if (preg_match('#^(/[^/]|(?:\.\./)+)#', $sanitized)) {
+        return $sanitized;
+    }
+    // App-relative paths like "user/booking.php?room_id=1" or "index.php#reviews-section"
+    if (preg_match('~^[a-z0-9_./-]+\.php(?:[?#].*)?$~i', $sanitized)) {
+        return (defined('SITE_URL') ? rtrim(SITE_URL, '/') . '/' : '/') . ltrim($sanitized, '/');
+    }
+    return $default;
+}
+
+// ---- Shared Stay Quote Calculator (supports weekday + weekend_rate consistently across UI & API) ----
+function calculateStayQuote(float $weekdayRate, ?float $weekendRate, string $checkIn, string $checkOut): array {
+    $nights = calculateNights($checkIn, $checkOut);
+    $wknd = ($weekendRate !== null && $weekendRate > 0) ? (float)$weekendRate : $weekdayRate;
+    $total = 0.0;
+    $weekendNights = 0;
+
+    try {
+        $cursor = new DateTime($checkIn);
+        for ($i = 0; $i < $nights; $i++) {
+            $dayStr = $cursor->format('Y-m-d');
+            if ($wknd > 0 && isWeekend($dayStr)) {
+                $total += $wknd;
+                $weekendNights++;
+            } else {
+                $total += $weekdayRate;
+            }
+            $cursor->modify('+1 day');
+        }
+    } catch (Throwable $e) {
+        $total = $nights * $weekdayRate;
+    }
+
+    return [
+        'nights'          => $nights,
+        'weekday_nights'  => $nights - $weekendNights,
+        'weekend_nights'  => $weekendNights,
+        'weekday_rate'    => round($weekdayRate, 2),
+        'weekend_rate'    => round($wknd, 2),
+        'estimated_total' => round($total, 2),
+        'formatted_total' => formatCurrency($total),
+    ];
+}
+
+// ---- Auto-reject dangling pending payments when a parent booking is cancelled or declined ----
+function rejectPendingPaymentsForBooking(int $bookingId, string $reasonNote = 'Parent booking was cancelled or declined'): int {
+    if ($bookingId <= 0 || !function_exists('dbExec')) {
+        return 0;
+    }
+    return dbExec(
+        "UPDATE payments
+         SET status = 'rejected',
+             notes = CASE
+                 WHEN notes IS NULL OR notes = '' THEN ?
+                 ELSE CONCAT(notes, ' | ', ?)
+             END
+         WHERE booking_id = ? AND status = 'pending'",
+        [$reasonNote, $reasonNote, $bookingId]
+    );
+}
+
 // ---- Atomic payment verification / rejection shared by Admin & Staff ----
 function processPaymentDecision(int $payId, string $decision, int $actorId, string $actorContext = 'Admin'): array {
     if (!in_array($decision, ['verify', 'reject'], true)) {
@@ -907,7 +986,16 @@ function processPaymentDecision(int $payId, string $decision, int $actorId, stri
         $actorShort = $isAdminActor ? "Admin #$actorId" : "Staff #$actorId";
 
         if ($decision === 'verify') {
-            if (in_array($pay['booking_status'], ['pending', 'cancelled', 'rejected'], true)) {
+            if (in_array($pay['booking_status'], ['cancelled', 'rejected'], true)) {
+                if ($startedTx && $pdo->inTransaction()) $pdo->rollBack();
+                return [
+                    'ok' => false,
+                    'flash_type' => 'error',
+                    'message' => "Cannot approve Payment #$payId: Booking #{$pay['booking_code']} is already " . strtoupper((string)$pay['booking_status']) . ". Reject this receipt or reinstate the booking first."
+                ];
+            }
+
+            if ($pay['booking_status'] === 'pending') {
                 $conflict = findConflictingBooking((int)$pay['room_id'], $pay['check_in'], $pay['check_out'], (int)$pay['booking_id']);
                 if ($conflict) {
                     if ($startedTx && $pdo->inTransaction()) $pdo->rollBack();
@@ -920,14 +1008,15 @@ function processPaymentDecision(int $payId, string $decision, int $actorId, stri
             }
 
             dbExec("UPDATE payments SET status = 'verified', verified_by = ?, verified_at = NOW() WHERE id = ?", [$actorId, $payId]);
-            dbExec("UPDATE bookings SET status = 'confirmed', accepted_by = COALESCE(accepted_by, ?), accepted_at = COALESCE(accepted_at, NOW()), cancelled_reason = NULL WHERE id = ? AND status IN ('pending', 'confirmed', 'cancelled', 'rejected')", [$actorId, $pay['booking_id']]);
+            dbExec("UPDATE bookings SET status = 'confirmed', accepted_by = COALESCE(accepted_by, ?), accepted_at = COALESCE(accepted_at, NOW()), cancelled_reason = NULL WHERE id = ? AND status IN ('pending', 'confirmed')", [$actorId, $pay['booking_id']]);
             if ($startedTx && $pdo->inTransaction()) $pdo->commit();
 
             createNotification(
                 (int)$pay['user_id'],
                 $isAdminActor ? 'Payment Verified & Booking Confirmed' : 'Payment Verified by Staff',
                 "Your payment for Booking #{$pay['booking_code']} has been verified by $actorTitle.",
-                'payment'
+                'payment',
+                'my-bookings.php'
             );
             auditLog(
                 $isAdminActor ? 'Verified Payment' : 'Staff Verified Payment',
@@ -957,7 +1046,8 @@ function processPaymentDecision(int $payId, string $decision, int $actorId, stri
             (int)$pay['user_id'],
             'Payment Receipt Rejected',
             "There was a problem verifying your receipt for Booking #{$pay['booking_code']}. Please contact the Frontdesk or submit a clear copy.",
-            'alert'
+            'alert',
+            'payment-history.php'
         );
         auditLog(
             $isAdminActor ? 'Rejected Payment' : 'Staff Rejected Payment',
@@ -996,20 +1086,23 @@ function submitUserReview(int $userId, int $bookingId, int $rating, string $comm
     $bookingCode     = '';
 
     if ($bookingId > 0) {
-        $bk = dbRow("SELECT id, room_id, booking_code FROM bookings WHERE id = ? AND user_id = ?", [$bookingId, $userId]);
+        $bk = dbRow("SELECT id, room_id, booking_code, status FROM bookings WHERE id = ? AND user_id = ?", [$bookingId, $userId]);
         if (!$bk) {
             return ['ok' => false, 'flash_type' => 'error', 'message' => 'Invalid booking selected for review.'];
         }
+        if (!in_array($bk['status'] ?? '', ['confirmed', 'checked_in', 'checked_out'], true)) {
+            return ['ok' => false, 'flash_type' => 'error', 'message' => 'Only confirmed, checked-in, or completed stays can be reviewed.'];
+        }
         $existingReview = dbRow("SELECT id FROM reviews WHERE booking_id = ? LIMIT 1", [$bookingId]);
         if ($existingReview) {
-            return ['ok' => false, 'flash_type' => 'error', 'message' => "Nakapagsumite ka na ng review para sa Booking #{$bk['booking_code']}."];
+            return ['ok' => false, 'flash_type' => 'error', 'message' => "You have already submitted a review for Booking #{$bk['booking_code']}."];
         }
         $targetBookingId = (int)$bk['id'];
         $targetRoomId    = (int)$bk['room_id'];
         $bookingCode     = $bk['booking_code'];
     } else {
-        // General Stay review: optionally tag the user's most recent room if any
-        $latestBk = dbRow("SELECT room_id FROM bookings WHERE user_id = ? ORDER BY id DESC LIMIT 1", [$userId]);
+        // General Stay review: optionally tag the user's most recent completed/confirmed room if any
+        $latestBk = dbRow("SELECT room_id FROM bookings WHERE user_id = ? AND status IN ('confirmed', 'checked_in', 'checked_out') ORDER BY id DESC LIMIT 1", [$userId]);
         if ($latestBk) {
             $targetRoomId = (int)$latestBk['room_id'];
         }
@@ -1027,7 +1120,7 @@ function submitUserReview(int $userId, int $bookingId, int $rating, string $comm
         auditLog($actionLabel, 'User Module', "Review submitted by User #$userId" . $detailSuffix);
     }
 
-    return ['ok' => true, 'flash_type' => 'success', 'message' => 'Maraming salamat! Naipasa na ang iyong review at makikita na ito sa Customer Reviews.'];
+    return ['ok' => true, 'flash_type' => 'success', 'message' => 'Thank you! Your review has been published and is now live in Customer Reviews.'];
 }
 
 /**

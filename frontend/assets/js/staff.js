@@ -4,10 +4,11 @@
    ============================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Universal Live Table Search ([data-table-search] -> data-table-target)
+  // 1. Universal Live Table Search (Cached + Debounced for 0ms workstation typing lag)
   const searchInputs = document.querySelectorAll('[data-table-search]');
   searchInputs.forEach(input => {
     const targetSelector = input.getAttribute('data-table-target') || '.table';
+    let debounceTimer = null;
     const applyFilter = () => {
       const term = (input.value || '').toLowerCase().trim();
       const rows = document.querySelectorAll(`${targetSelector} tbody tr`);
@@ -17,8 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
       rows.forEach(row => {
         if (row.hasAttribute('data-empty-row') || row.hasAttribute('data-no-match-row')) return;
         dataRowsCount++;
-        const text = (row.innerText || '').toLowerCase();
-        const show = term === '' || text.includes(term);
+        if (row.dataset.searchCache === undefined) {
+          row.dataset.searchCache = (row.textContent || '').toLowerCase().replace(/\s+/g, ' ');
+        }
+        const show = term === '' || row.dataset.searchCache.includes(term);
         row.style.display = show ? '' : 'none';
         if (show) visibleCount++;
       });
@@ -29,13 +32,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
 
-    input.addEventListener('input', applyFilter);
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => window.requestAnimationFrame(applyFilter), 90);
+    });
   });
 
-  // 2. Live Room Status Filter + Search (rooms-status.php)
+  // 2. Live Room Status Filter + Cached Search (rooms-status.php)
   const filterBtns = document.querySelectorAll('[data-status-filter]');
   const roomSearchInput = document.getElementById('roomSearchInput');
   let activeStatusFilter = 'all';
+  let roomDebounce = null;
 
   const applyRoomCardFilters = () => {
     const term = roomSearchInput ? (roomSearchInput.value || '').toLowerCase().trim() : '';
@@ -43,8 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let visible = 0;
 
     cards.forEach(card => {
+      if (card.dataset.searchCache === undefined) {
+        card.dataset.searchCache = (card.textContent || '').toLowerCase().replace(/\s+/g, ' ');
+      }
       const matchesStatus = (activeStatusFilter === 'all' || card.classList.contains(activeStatusFilter));
-      const matchesSearch = (term === '' || (card.innerText || '').toLowerCase().includes(term));
+      const matchesSearch = (term === '' || card.dataset.searchCache.includes(term));
       const show = matchesStatus && matchesSearch;
       card.style.display = show ? '' : 'none';
       if (show) visible++;
@@ -66,7 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   if (roomSearchInput) {
-    roomSearchInput.addEventListener('input', applyRoomCardFilters);
+    roomSearchInput.addEventListener('input', () => {
+      clearTimeout(roomDebounce);
+      roomDebounce = setTimeout(() => window.requestAnimationFrame(applyRoomCardFilters), 90);
+    });
   }
 
   // 3. Check-in / Check-out Guarded Form Confirmation
@@ -108,6 +121,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('keydown', (e) => {
+    // Workstation shortcut: press '/' to jump straight to search input
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = (document.activeElement?.tagName || '').toLowerCase();
+      if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+        const firstSearch = document.querySelector('[data-table-search], #roomSearchInput');
+        if (firstSearch) {
+          e.preventDefault();
+          firstSearch.focus();
+          firstSearch.select();
+        }
+      }
+      return;
+    }
     if (e.key === 'Escape') {
       document.querySelectorAll('.staff-modal-overlay, .inspector-modal').forEach(modal => {
         if (modal.style.display && modal.style.display !== 'none') {
